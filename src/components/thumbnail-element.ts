@@ -93,9 +93,9 @@ export class ThumbnailElement extends LitElement {
 
     const geometry = new THREE.TorusGeometry( 2, 1, 10, 50 ); 
     const material = new THREE.MeshPhongMaterial({
-			color: 0x68b7e9,
+			color: 0xFFC0CB,
       emissive: 0x4f7e8b,
-      shininess: 10,
+      shininess: 50,
       specular: 0xffffff
     });
 
