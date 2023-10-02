@@ -6,5 +6,5 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   integrations: [lit(), mdx()],
   site: 'https://yongsk0066.github.io',
-  base: '/'
+  base: '/',
 });

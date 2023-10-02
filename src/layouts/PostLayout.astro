@@ -1,0 +1,18 @@
+---
+import Common from '../components/common/Common.astro';
+import { Gnb } from '../components/gnb-element';
+import Layout from './Layout.astro';
+// 1. frontmatter prop은 프론트매터 및 기타 데이터에 대한 접근을 제공합니다.
+const { frontmatter } = Astro.props;
+---
+
+<Layout>
+  <Fragment slot="header">
+    <title>{frontmatter.title}</title>
+    <meta name="description" content={frontmatter.description} />
+  </Fragment>
+
+  <h1>{frontmatter.title} by {frontmatter.author}</h1>
+  <slot />
+  <p>Written on: {frontmatter.date}</p>
+</Layout>
