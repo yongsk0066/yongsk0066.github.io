@@ -6,13 +6,34 @@ import Layout from './Layout.astro';
 const { frontmatter } = Astro.props;
 ---
 
+<style is:global>
+  h1 {
+    color: red;
+  }
+  main {
+    width: 80%;
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 60px 0;
+  }
+  div.title {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    margin-top: 20px;
+  }
+</style>
+
 <Layout>
   <Fragment slot="header">
     <title>{frontmatter.title}</title>
     <meta name="description" content={frontmatter.description} />
   </Fragment>
-
-  <h1>{frontmatter.title} by {frontmatter.author}</h1>
-  <slot />
-  <p>Written on: {frontmatter.date}</p>
+  <main>
+    <!-- <h1>{frontmatter.title} by {frontmatter.author}</h1> -->
+    <slot />
+    <p>Written on: {frontmatter.date}</p>
+  </main>
 </Layout>

@@ -15,6 +15,7 @@ export class Gnb extends LitElement {
       padding: 16px;
       box-sizing: border-box;
       color: white;
+      font-size: 24px;
     }
   `;
 

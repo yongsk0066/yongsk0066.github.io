@@ -1,9 +1,14 @@
 ---
 layout: ../../layouts/PostLayout.astro
-title: '안녕하세요'
+title: 'Donut'
 author: 'Yongseok'
 date: '24 Sep 2023'
 ---
+
+import { ThumbnailElement } from '../../components/thumbnail-element';
+
+<ThumbnailElement client:only />
+<div class="title">{frontmatter.title}</div>
 
 # 제목1
 
@@ -14,7 +19,7 @@ date: '24 Sep 2023'
 #### 제목4
 
 ```jsx
-import { MyElement } from '../../components/my-element';
+import { ThumbnailElement } from '../../components/thumbnail-element';
 
-<MyElement />;
+<ThumbnailElement />;
 ```
