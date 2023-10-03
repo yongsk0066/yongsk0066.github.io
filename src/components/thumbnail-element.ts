@@ -32,6 +32,9 @@ const defaultLightingPlugin: LightingPlugin = {
   },
 };
 
+const INITIAL_ROTATION = Math.PI / 6;
+const ROTATE_SPEED = Math.PI / 200;
+
 @customElement('thumbnail-element')
 export class ThumbnailElement extends BaseAnimateElement {
 
@@ -62,17 +65,17 @@ export class ThumbnailElement extends BaseAnimateElement {
     this.animateScene();
   }
 
-  disconnectedCallback(): void {
-    window.removeEventListener('resize', this.handleResize.bind(this));
-  }
-
   addObject() {
     if (!this.scene || !this.clock || !this.camera || !this.renderer) return;
     this.parentObject = new THREE.Object3D();
     this.scene.add(this.parentObject);
-    this.parentObject.rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 6);
-    
-    // add objects to scene (Child Object)
+    this.parentObject.rotateOnAxis(new THREE.Vector3(1, 0, 0), INITIAL_ROTATION);
+    this.addTorus();
+    this.setCameraPosition();
+  }
+
+  addTorus(){
+    if (!this.parentObject) return;
     const geometry = new THREE.TorusGeometry( 2, 1, 10, 50 ); 
     const material = new THREE.MeshPhongMaterial({
 			color: 0xFFC0CB,
@@ -82,8 +85,10 @@ export class ThumbnailElement extends BaseAnimateElement {
     });
     const torus = new THREE.Mesh(geometry, material)
     this.parentObject.add(torus);
+  }
 
-    // set camera position
+  setCameraPosition() {
+    if (!this.camera) return;
     this.camera.position.y = 0;
     this.camera.position.z = 8;
   }
@@ -91,7 +96,7 @@ export class ThumbnailElement extends BaseAnimateElement {
   animateScene() {
     if (!this.composer || !this.parentObject || !this.scene || !this.camera || !this.renderer || !this.clock) return;
     requestAnimationFrame(this.animateScene);
-    this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 200);
+    this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), ROTATE_SPEED);
     this.composer.render();
   }
 
