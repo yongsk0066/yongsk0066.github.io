@@ -3,10 +3,21 @@ import { LitElement, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+
+// Define interfaces for plugins
+export interface RenderPlugin {
+  apply: (composer: EffectComposer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) => void;
+}
+
+export interface LightingPlugin {
+  apply: (scene: THREE.Scene) => void;
+}
 
 interface BaseAnimateOptions {
   showAxisHelper?: boolean;
+  renderPlugin?: RenderPlugin;
+  lightingPlugin?: LightingPlugin;
 }
 
 @customElement('base-animate-element')
@@ -97,32 +108,34 @@ export class BaseAnimateElement extends LitElement {
     return this;
   }
 
+  private applyDefaultRendering(composer: EffectComposer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+    // Your default rendering logic here.
+    // For example, you can add basic passes to the composer.
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+  }
+
   protected initComposer() {
     if (!this.scene || !this.clock || !this.camera || !this.renderer) return this;
     this.composer = new EffectComposer(this.renderer);
-    const renderPixelatedPass = new RenderPixelatedPass(16, this.scene, this.camera,{
-      normalEdgeStrength: 1,
-      depthEdgeStrength: 1,
-    });
-    this.composer.addPass(renderPixelatedPass);
+    if (this.options.renderPlugin) {
+      this.options.renderPlugin.apply(this.composer, this.scene, this.camera);
+    } else {
+      this.applyDefaultRendering(this.composer, this.scene, this.camera);
+    }
     return this;
   }
 
   protected initLighting() {
     if (!this.scene) return this;
-    this.scene.add(new THREE.AmbientLight(0x757f8e, 3));
-    const directionalLight = new THREE.DirectionalLight(0xfffecd, 1.5);
-    directionalLight.position.set(100, 100, 100);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.set(2048, 2048);
-    this.scene.add(directionalLight);
-    const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, .02, 2);
-    spotLight.position.set(2, 2, 0);
-    const target = spotLight.target;
-    this.scene.add(target);
-    target.position.set(0, 0, 0);
-    spotLight.castShadow = true;
-    this.scene.add(spotLight);
+    if (this.options.lightingPlugin) {
+      this.options.lightingPlugin.apply(this.scene);
+    } else {
+      this.scene.add(new THREE.AmbientLight(0x757f8e, 3));
+      const directionalLight = new THREE.DirectionalLight(0xfffecd, 1.5);
+      directionalLight.position.set(100, 100, 100);
+      this.scene.add(directionalLight);
+    }
     return this;
   }
 

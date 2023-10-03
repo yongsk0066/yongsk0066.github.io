@@ -1,9 +1,36 @@
 import { css, html } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import * as THREE from 'three';
-import { BaseAnimateElement } from './common/animate/base-animate-element';
+import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
+import { BaseAnimateElement, type LightingPlugin, type RenderPlugin } from './common/animate/base-animate-element';
 
+const defaultRenderPlugin: RenderPlugin = {
+  apply: (composer, scene, camera) => {
+    const renderPixelatedPass = new RenderPixelatedPass(16, scene, camera, {
+      normalEdgeStrength: 1,
+      depthEdgeStrength: 1,
+    });
+    composer.addPass(renderPixelatedPass);
+  },
+};
 
+const defaultLightingPlugin: LightingPlugin = {
+  apply: (scene) => {
+    scene.add(new THREE.AmbientLight(0x757f8e, 3));
+    const directionalLight = new THREE.DirectionalLight(0xfffecd, 1.5);
+    directionalLight.position.set(100, 100, 100);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.set(2048, 2048);
+    scene.add(directionalLight);
+    const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, .02, 2);
+    spotLight.position.set(2, 2, 0);
+    const target = spotLight.target;
+    scene.add(target);
+    target.position.set(0, 0, 0);
+    spotLight.castShadow = true;
+    scene.add(spotLight);
+  },
+};
 
 @customElement('thumbnail-element')
 export class ThumbnailElement extends BaseAnimateElement {
@@ -23,6 +50,8 @@ export class ThumbnailElement extends BaseAnimateElement {
   constructor() {
     super({
       showAxisHelper:true,
+      renderPlugin: defaultRenderPlugin,
+      lightingPlugin: defaultLightingPlugin,
     });
     this.animateScene = this.animateScene.bind(this);
   }
@@ -60,10 +89,10 @@ export class ThumbnailElement extends BaseAnimateElement {
   }
 
   animateScene() {
-    if (!this.parentObject || !this.scene || !this.camera || !this.renderer || !this.clock) return;
+    if (!this.composer || !this.parentObject || !this.scene || !this.camera || !this.renderer || !this.clock) return;
     requestAnimationFrame(this.animateScene);
     this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 200);
-    this.composer?.render();
+    this.composer.render();
   }
 
   render() {
