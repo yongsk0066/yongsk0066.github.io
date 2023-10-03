@@ -1,6 +1,5 @@
 import { LitElement, css, html } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { stopGoEased } from 'src/utils/animate/animate';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPixelatedPass } from 'three/addons/postprocessing/RenderPixelatedPass.js';
@@ -30,23 +29,28 @@ export class ThumbnailElement extends LitElement {
   camera?: THREE.PerspectiveCamera
   clock?: THREE.Clock;
   renderer?: THREE.WebGLRenderer;
-  torus?: THREE.Mesh;
   composer?: EffectComposer;
   parentObject?: THREE.Object3D;
 
   
   constructor() {
     super();
+    this.clock = new THREE.Clock();
     this.animateScene = this.animateScene.bind(this);
-
+  }
+  getContainer(){
+    return this.shadowRoot?.querySelector('div');
   }
 
-
-
   firstUpdated() {
-    this.init();
+    if(!this.initialize()) return;
+    this.addObject();
     this.animateScene();
     window.addEventListener('resize', this.handleResize.bind(this)); // Register resize event listener
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('resize', this.handleResize.bind(this));
   }
 
   handleResize() {
@@ -56,78 +60,66 @@ export class ThumbnailElement extends LitElement {
     const width = container.clientWidth;
     const height = container.clientHeight;
   
-    // Update camera aspect ratio and recompute the projection matrix.
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   
-    // Update renderer and composer sizes.
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
   }
-  
 
-  init() {
+  initialize(){
+    return this.initScene() && this.initCamera() && this.initRenderer() && this.initComposer() && this.initLighting();
+  }
+
+
+  initScene() {
     this.scene = new THREE.Scene();
-    this.clock = new THREE.Clock();
-    
-    const container = this.shadowRoot?.querySelector('div');
+    this.parentObject = new THREE.Object3D();
+    this.scene.add(this.parentObject);
+
+    // add objects to scene (Helper)
+    const axisHelper = new THREE.AxesHelper( 5 );
+    this.scene.add( axisHelper );
+    return true;
+  }
+
+  initCamera() {
+    const container = this.getContainer();
     const width = container?.clientWidth || 0;
     const height = container?.clientHeight || 0;
-    
     this.camera = new THREE.PerspectiveCamera(16, width / height, 0.1, 1000);
+    return true;
+  }
+
+  initRenderer() {
+    const container = this.getContainer();
+    const width = container?.clientWidth || 0;
+    const height = container?.clientHeight || 0;
     this.renderer = new THREE.WebGLRenderer();
     this.renderer.setSize(width, height);
     container?.appendChild(this.renderer.domElement);
-    
-    // Setup EffectComposer and RenderPixelatedPass
+    return true;
+  }
+
+  initComposer() {
+    if (!this.scene || !this.clock || !this.camera || !this.renderer) return;
     this.composer = new EffectComposer(this.renderer);
     const renderPixelatedPass = new RenderPixelatedPass(16, this.scene, this.camera,{
+      normalEdgeStrength: 1,
       depthEdgeStrength: 1,
     });
     this.composer.addPass(renderPixelatedPass);
+    return true;
+  }
 
-    this.parentObject = new THREE.Object3D();
-    this.scene.add(this.parentObject);
-    
-
-
-    const geometry = new THREE.TorusGeometry( 2, 1, 10, 50 ); 
-    const material = new THREE.MeshPhongMaterial({
-			color: 0xFFC0CB,
-      emissive: 0x4f7e8b,
-      shininess: 50,
-      specular: 0xffffff
-    });
-
-    this.torus = new THREE.Mesh(geometry, material); // 'cube' object will now represent an icosahedron
-    this.parentObject.add(this.torus);
-
-
-
-
-
-    // const axisHelper = new THREE.AxesHelper( 5 );
-    // this.scene.add( axisHelper );
-
-
-    this.parentObject.rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 6);
-
-    // this.camera.position.x = 6;
-    this.camera.position.y = 0;
-    this.camera.position.z = 8;
-    // this.camera.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-
-
-
-
+  initLighting() {
+    if (!this.scene) return;
     this.scene.add(new THREE.AmbientLight(0x757f8e, 3));
-  
     const directionalLight = new THREE.DirectionalLight(0xfffecd, 1.5);
     directionalLight.position.set(100, 100, 100);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.set(2048, 2048);
     this.scene.add(directionalLight);
-  
     const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, .02, 2);
     spotLight.position.set(2, 2, 0);
     const target = spotLight.target;
@@ -135,28 +127,35 @@ export class ThumbnailElement extends LitElement {
     target.position.set(0, 0, 0);
     spotLight.castShadow = true;
     this.scene.add(spotLight);
+    return true;
+  }
+
+
+  addObject() {
+    if (!this.scene || !this.clock || !this.camera || !this.renderer || !this.parentObject) return;
+
+    this.parentObject.rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 6);
+    
+    // add objects to scene (Child Object)
+    const geometry = new THREE.TorusGeometry( 2, 1, 10, 50 ); 
+    const material = new THREE.MeshPhongMaterial({
+			color: 0xFFC0CB,
+      emissive: 0x4f7e8b,
+      shininess: 50,
+      specular: 0xffffff,
+    });
+    const torus = new THREE.Mesh(geometry, material)
+    this.parentObject.add(torus);
+
+    // set camera position
+    this.camera.position.y = 0;
+    this.camera.position.z = 8;
   }
 
   animateScene() {
-    if (!this.parentObject || !this.scene || !this.camera || !this.renderer || !this.torus || !this.clock) return;
-
+    if (!this.parentObject || !this.scene || !this.camera || !this.renderer || !this.clock) return;
     requestAnimationFrame(this.animateScene);
-
-    // this.cube.rotateOnAxis(new THREE.Vector3(0, 1, 0), Math.PI / 100);
-    // this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 100);
-
-
-    // const t = this.clock.getElapsedTime();
-    
-    // if(this.torus.material instanceof THREE.MeshPhongMaterial) {
-    //   this.torus.material.emissiveIntensity = Math.sin(t * 3) * .5 + .5;
-    // }
-    // this.cube.position.y = .7 + Math.sin(t * 2) * .05;
-    // this.parentObject.rotation.y = stopGoEased(t, 2, 4) * 2 * Math.PI;
-    // this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 100);
     this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), Math.PI / 200);
-    // const rendererSize = this.renderer.getSize(new THREE.Vector2());
-
     this.composer?.render();
   }
 
