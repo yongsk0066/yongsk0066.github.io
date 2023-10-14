@@ -1,6 +1,6 @@
 ---
-import Common from '../components/common/Common.astro';
-import { Gnb } from '../components/gnb-element';
+import Common from "../components/common/Common.astro";
+import { Gnb } from "../components/gnb-element";
 ---
 
 <!doctype html>
@@ -21,8 +21,11 @@ import { Gnb } from '../components/gnb-element';
         );
       }
       html {
-        font-family: system-ui, sans-serif;
-        background-size: 224px;
+        height: 100%;
+      }
+
+      body {
+        height: 100%;
       }
     </style>
     <slot name="header" />

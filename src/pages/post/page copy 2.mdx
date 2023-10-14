@@ -1,0 +1,29 @@
+---
+layout: ../../layouts/PostLayout.astro
+title: "안녕하세요"
+author: "Yongseok"
+date: "24 Oct 2023"
+---
+
+import { ThumbnailElement } from "../../components/thumbnail-element";
+
+<ThumbnailElement client:only />
+<div class="title">{frontmatter.title}</div>
+
+# Head 1
+
+## Head 2
+
+### Head 3
+
+#### Head 4
+
+> hello
+
+`hello world`
+
+```jsx
+import { ThumbnailElement } from "../../components/thumbnail-element";
+
+<ThumbnailElement />;
+```

@@ -1,7 +1,7 @@
-import {LitElement, css, html} from 'lit';
-import {customElement, property} from 'lit/decorators.js';
+import { LitElement, css, html } from "lit";
+import { customElement, property } from "lit/decorators.js";
 
-@customElement('common-body')
+@customElement("common-body")
 export class CommonBody extends LitElement {
   // Define scoped styles right with your component, in plain CSS
   static styles = css`
@@ -12,10 +12,9 @@ export class CommonBody extends LitElement {
     }
   `;
 
-
   // Render the UI as a function of component state
   render() {
-    return html`<main class="main" >
+    return html`<main class="main">
       <slot></slot>
     </main>`;
   }

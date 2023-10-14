@@ -1,14 +1,16 @@
 ---
-import Layout from '../layouts/Layout.astro';
-const posts = await Astro.glob('../pages/post/*.mdx');
+import Layout from "../layouts/Layout.astro";
+const posts = await Astro.glob("../pages/post/*.mdx");
 ---
 
 <Layout title="용석 블로그">
   <main>
     {
       posts.map((post) => (
-        <li>
+        <li class="post_item">
           <a href={post.url}>{post.frontmatter.title}</a>
+          <div class="symbol">{post.frontmatter.author[0]}</div>
+          <div class="date">{post.frontmatter.date}</div>
         </li>
       ))
     }
@@ -19,10 +21,48 @@ const posts = await Astro.glob('../pages/post/*.mdx');
   main {
     margin: auto;
     padding: 1rem;
-    width: 800px;
+    width: 1000px;
     max-width: calc(100% - 2rem);
     color: white;
     font-size: 20px;
     line-height: 1.6;
+  }
+  li.post_item {
+    background-color: black;
+    list-style: none;
+    font-weight: 800;
+    padding: 8px;
+    line-height: 64px;
+    font-size: 64px;
+    display: flex;
+
+    > a {
+      color: white;
+      text-decoration: none;
+      border-top: 2px solid white;
+    }
+
+    > .symbol {
+      display: inline-block;
+      margin-left: 32px;
+      background-color: #fccc0a;
+      aspect-ratio: 1 /1;
+      width: 64px;
+      height: 64px;
+      text-align: center;
+      line-height: 64px;
+      font-size: 50px;
+      border-radius: 50%;
+      color: black;
+    }
+
+    > .date {
+      margin-left: auto;
+      line-height: 64px;
+      text-align: right;
+    }
+  }
+
+  li.post_item a {
   }
 </style>
