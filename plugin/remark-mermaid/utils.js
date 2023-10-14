@@ -14,7 +14,7 @@ const PLUGIN_NAME = 'remark-mermaid';
  * @param  {string} destination
  * @return {string}
  */
-export const render = async (source, destination) => {
+export const render = async (source, destination, vFile) => {
   const unique = createHmac('sha1', PLUGIN_NAME).update(source).digest('hex');
   const mmdcExecutable = which.sync('mmdc');
   const mmdPath = path.join(destination, `${unique}.mmd`);
@@ -29,8 +29,7 @@ export const render = async (source, destination) => {
   } finally {
     await fs.unlink(mmdPath);
   }
-
-  return `/src/assets/images/${svgFilename}`;
+  return `/assets/images/${svgFilename}`;
 };
 
 /**
@@ -65,7 +64,7 @@ export const renderFromFile = (inputFile, destination) => {
  * @return {string}
  */
 export const getDestinationDir = (vFile) => {
-  return path.join(path.resolve(), '/src/assets/images')
+  return path.join(path.resolve(), '/public/assets/images')
   // return vFile.data.destinationDir ?? vFile.dirname;
 }
 
