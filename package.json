@@ -12,6 +12,7 @@
   "dependencies": {
     "@astrojs/lit": "^3.0.1",
     "@astrojs/mdx": "^1.1.0",
+    "@astrojs/rss": "^3.0.0",
     "@lit-labs/ssr-client": "^1.1.4",
     "@mermaid-js/mermaid-cli": "^10.5.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
