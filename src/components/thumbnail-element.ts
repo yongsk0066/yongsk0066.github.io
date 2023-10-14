@@ -1,12 +1,12 @@
-import { css, html } from 'lit';
-import { customElement } from 'lit/decorators.js';
-import * as THREE from 'three';
-import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
+import { css, html } from "lit";
+import { customElement } from "lit/decorators.js";
+import * as THREE from "three";
+import { RenderPixelatedPass } from "three/examples/jsm/postprocessing/RenderPixelatedPass.js";
 import {
   BaseAnimateElement,
   type LightingPlugin,
   type RenderPlugin,
-} from './common/animate/base-animate-element';
+} from "./common/animate/base-animate-element";
 
 const defaultRenderPlugin: RenderPlugin = {
   apply: (composer, scene, camera) => {
@@ -26,7 +26,14 @@ const defaultLightingPlugin: LightingPlugin = {
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.set(2048, 2048);
     scene.add(directionalLight);
-    const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, 0.02, 2);
+    const spotLight = new THREE.SpotLight(
+      0xffc100,
+      10,
+      10,
+      Math.PI / 16,
+      0.02,
+      2
+    );
     spotLight.position.set(2, 2, 0);
     const target = spotLight.target;
     scene.add(target);
@@ -39,7 +46,7 @@ const defaultLightingPlugin: LightingPlugin = {
 const INITIAL_ROTATION = Math.PI / 6;
 const ROTATE_SPEED = Math.PI / 200;
 
-@customElement('thumbnail-element')
+@customElement("thumbnail-element")
 export class ThumbnailElement extends BaseAnimateElement {
   static styles = css`
     div {
@@ -72,7 +79,10 @@ export class ThumbnailElement extends BaseAnimateElement {
     if (!this.scene || !this.clock || !this.camera || !this.renderer) return;
     this.parentObject = new THREE.Object3D();
     this.scene.add(this.parentObject);
-    this.parentObject.rotateOnAxis(new THREE.Vector3(1, 0, 0), INITIAL_ROTATION);
+    this.parentObject.rotateOnAxis(
+      new THREE.Vector3(1, 0, 0),
+      INITIAL_ROTATION
+    );
     this.addTorus();
     this.setCameraPosition();
   }
@@ -107,7 +117,10 @@ export class ThumbnailElement extends BaseAnimateElement {
     )
       return;
     requestAnimationFrame(this.animateScene);
-    this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), ROTATE_SPEED);
+    this.parentObject.rotateOnWorldAxis(
+      new THREE.Vector3(0, 1, 0),
+      ROTATE_SPEED
+    );
     this.composer.render();
   }
 

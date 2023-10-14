@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import { visit } from 'unist-util-visit';
-import { render, renderFromFile, getDestinationDir, createMermaidDiv } from './utils';
+import { createMermaidDiv, getDestinationDir, render, renderFromFile } from './utils';
 
 const PLUGIN_NAME = 'remark-mermaid';
 
@@ -11,14 +11,6 @@ const PLUGIN_NAME = 'remark-mermaid';
  * @return {boolean}
  */
 const isMermaid = (title) => title === 'mermaid:';
-
-const readMermaidFile = async (vFile, url) => {
-  try {
-    return await fs.readFile(`${vFile.dirname}/${url}`, { encoding: 'utf-8' });
-  } catch (error) {
-    throw new Error(`Unable to read mermaid file: ${error.message}`);
-  }
-};
 
 /**
  * Given a node which contains a `url` property (eg. Link or Image), follow
@@ -190,7 +182,7 @@ const visitImage = (ast, vFile, isSimple) => {
 const mermaid = (options = {}) => {
   const simpleMode = options.simple ?? false;
 
-  return (ast, vFile, next) => {
+  const transformer =  async (ast, vFile, next) => {
     visitCodeBlock(ast, vFile, simpleMode);
     visitLink(ast, vFile, simpleMode);
     visitImage(ast, vFile, simpleMode);
@@ -201,6 +193,7 @@ const mermaid = (options = {}) => {
 
     return ast;
   };
+  return transformer;
 }
 
 export default mermaid;

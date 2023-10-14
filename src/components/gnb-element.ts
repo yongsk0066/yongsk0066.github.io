@@ -1,7 +1,7 @@
-import {LitElement, css, html} from 'lit';
-import {customElement, property} from 'lit/decorators.js';
+import { LitElement, css, html } from "lit";
+import { customElement, property } from "lit/decorators.js";
 
-@customElement('gnb-element')
+@customElement("gnb-element")
 export class Gnb extends LitElement {
   // Define scoped styles right with your component, in plain CSS
   static styles = css`
@@ -11,7 +11,7 @@ export class Gnb extends LitElement {
     .gnb {
       background-color: black;
       height: 64px;
-      display:flex;
+      display: flex;
       padding: 16px;
       box-sizing: border-box;
       color: white;
@@ -19,9 +19,8 @@ export class Gnb extends LitElement {
     }
   `;
 
-
   // Render the UI as a function of component state
   render() {
-    return html`<nav class="gnb" >YONGSEOK BLOG</nav>`;
+    return html`<nav class="gnb">YONGSEOK BLOG</nav>`;
   }
 }
