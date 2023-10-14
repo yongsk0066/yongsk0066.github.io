@@ -1,8 +1,5 @@
 ---
-import Common from '../components/common/Common.astro';
-import { Gnb } from '../components/gnb-element';
-import Layout from './Layout.astro';
-// 1. frontmatter prop은 프론트매터 및 기타 데이터에 대한 접근을 제공합니다.
+import Layout from "./Layout.astro";
 const { frontmatter } = Astro.props;
 ---
 
@@ -31,6 +28,21 @@ const { frontmatter } = Astro.props;
     padding: 20px;
     border-radius: 5px;
     overflow-x: scroll;
+  }
+
+  aside {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-radius: 5px;
+    line-height: normal;
+  }
+  span.katex {
+    margin: 0 auto;
+    display: block;
+    width: fit-content;
   }
 </style>
 

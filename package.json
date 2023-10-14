@@ -12,10 +12,22 @@
   "dependencies": {
     "@astrojs/lit": "^3.0.0",
     "@astrojs/mdx": "^1.1.0",
+    "@mermaid-js/mermaid-cli": "^10.5.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
     "astro": "^3.1.2",
+    "fs-extra": "^11.1.1",
     "lit": "^2.7.0",
-    "three": "^0.157.0"
+    "rehype-katex": "^7.0.0",
+    "rehype-mathjax": "^5.0.0",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "three": "^0.157.0",
+    "to-vfile": "^8.0.0",
+    "unified": "^11.0.3",
+    "unist-util-visit": "^5.0.0",
+    "vfile": "^6.0.1",
+    "which": "^4.0.0"
   },
   "devDependencies": {
     "@types/three": "^0.156.0",

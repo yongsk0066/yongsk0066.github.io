@@ -2,7 +2,11 @@ import { css, html } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import * as THREE from 'three';
 import { RenderPixelatedPass } from 'three/examples/jsm/postprocessing/RenderPixelatedPass.js';
-import { BaseAnimateElement, type LightingPlugin, type RenderPlugin } from './common/animate/base-animate-element';
+import {
+  BaseAnimateElement,
+  type LightingPlugin,
+  type RenderPlugin,
+} from './common/animate/base-animate-element';
 
 const defaultRenderPlugin: RenderPlugin = {
   apply: (composer, scene, camera) => {
@@ -22,7 +26,7 @@ const defaultLightingPlugin: LightingPlugin = {
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.set(2048, 2048);
     scene.add(directionalLight);
-    const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, .02, 2);
+    const spotLight = new THREE.SpotLight(0xffc100, 10, 10, Math.PI / 16, 0.02, 2);
     spotLight.position.set(2, 2, 0);
     const target = spotLight.target;
     scene.add(target);
@@ -37,7 +41,6 @@ const ROTATE_SPEED = Math.PI / 200;
 
 @customElement('thumbnail-element')
 export class ThumbnailElement extends BaseAnimateElement {
-
   static styles = css`
     div {
       width: 100%;
@@ -52,7 +55,7 @@ export class ThumbnailElement extends BaseAnimateElement {
 
   constructor() {
     super({
-      showAxisHelper:true,
+      showAxisHelper: true,
       renderPlugin: defaultRenderPlugin,
       lightingPlugin: defaultLightingPlugin,
     });
@@ -74,16 +77,16 @@ export class ThumbnailElement extends BaseAnimateElement {
     this.setCameraPosition();
   }
 
-  addTorus(){
+  addTorus() {
     if (!this.parentObject) return;
-    const geometry = new THREE.TorusGeometry( 2, 1, 10, 50 ); 
+    const geometry = new THREE.TorusGeometry(2, 1, 10, 50);
     const material = new THREE.MeshPhongMaterial({
-			color: 0xFFC0CB,
+      color: 0xffc0cb,
       emissive: 0x4f7e8b,
       shininess: 50,
       specular: 0xffffff,
     });
-    const torus = new THREE.Mesh(geometry, material)
+    const torus = new THREE.Mesh(geometry, material);
     this.parentObject.add(torus);
   }
 
@@ -94,14 +97,21 @@ export class ThumbnailElement extends BaseAnimateElement {
   }
 
   animateScene() {
-    if (!this.composer || !this.parentObject || !this.scene || !this.camera || !this.renderer || !this.clock) return;
+    if (
+      !this.composer ||
+      !this.parentObject ||
+      !this.scene ||
+      !this.camera ||
+      !this.renderer ||
+      !this.clock
+    )
+      return;
     requestAnimationFrame(this.animateScene);
     this.parentObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), ROTATE_SPEED);
     this.composer.render();
   }
 
   render() {
-    return html`
-    <div data-container="3d-scene"></div>`;
+    return html` <div data-container="3d-scene"></div>`;
   }
 }
