@@ -1,8 +1,8 @@
 import rss from '@astrojs/rss';
-import { getCollection } from 'astro:content';
+import { getCollection } from 'astro:post';
 
 export async function GET(context) {
-  const posts = await getCollection('post');
+  const posts = await getCollection('');
 
   return rss({
     title: 'YONGSEOK’s Blog',
