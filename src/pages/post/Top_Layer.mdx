@@ -16,6 +16,8 @@ categories: ["S"]
 
 ### 추가 자료
 
+- [Explainer: improved CSS-triggered entry and exit animations](https://github.com/chrishtr/rendering/blob/master/entry-exit-animations.md#example-code)
+
 - [Chrome Platform Status - @starting-style Rule](https://chromestatus.com/feature/4515377717968896)
 
 - [Chrome Platform Status - overlay property](https://chromestatus.com/feature/5138724910792704)
@@ -89,6 +91,7 @@ dialog[open] {
 
 ### 해결법
 
+- `transition-behavior : allow-discrete;` 가 추가됨
 - display 속성과 불연속적인 속성들을 애니메이션 가능하도록 함
 
 ```css
@@ -105,7 +108,7 @@ dialog[open] {
 
 ### 애니메이션 중 Layer 문제
 
-- 애니메이션 중에는, 앨리먼트가 더이상 top layer가 아님.
+- 애니메이션 진행중에는, 엘리먼트가 더이상 top layer가 아님.
   - 다른 top layer 나 z-index 가 애니메이션을 막음.
 - user-agent 스타일이 적용되지 않을 것임.
   - 위치가 갑자기 이동하거나, backdrop이 동작하지 않는 경우가 발생
@@ -128,3 +131,50 @@ dialog[open] {
   opacity: 1;
 }
 ```
+
+## @starting-style
+
+[css-transition-2 - defining-before-change-style](https://drafts.csswg.org/css-transitions-2/#defining-before-change-style)
+
+### 핵심 개념
+
+- @starting-style은 그룹화 규칙(grouping rule). 이전 스타일 변경 전 스타일을 설정하지 않은 요소의 스타일을 계산할 때 사용.
+- @starting-style은 일부 요소에만 적용. 즉, 이전 스타일 변경 이벤트 동안 렌더링되지 않거나 DOM의 일부가 아니었던 요소에만 적용.
+- 요소가 주어진 스타일 변경 사건에 대한 변경 전 스타일을 가지고 있지 않으면 시작 스타일이 변경 전 스타일 대신 사용.
+
+### 예시
+
+초기 렌더링시 h1 의 background-color를 투명에서 green으로 전환.
+
+```css
+h1 {
+  transition: background-color 1.5s;
+  background-color: green;
+}
+@starting-style {
+  h1 {
+    background-color: transparent;
+  }
+}
+```
+
+## overlay 속성
+
+[css-overflow-4 - overlay](https://drafts.csswg.org/css-position-4/#overlay)
+
+`overlay` 속성은 요소가 Top Layer에 있을 때, 실제로 그 요소가 Top Layer에서 렌더링되는지 여부를 결정
+
+### 속성 값
+
+none: 요소는 Top Layer에서 렌더링되지 않습니다.
+auto: 요소가 Top Layer에 있다면, Top Layer에서 렌더링.
+
+### 특징
+
+- overlay는 다소 특이한 속성으로, 사용자 에이전트만 설정할 수 있으며, 작성자는 이를 설정할 수 없음.
+- transition 을 통해 overlay의 값의 변경 타이밍을 조절 할 수 있음.
+- overlay의 auto 값은 연속적으로 애니메이션되지 않고, 이산적인 스텝(즉시 변경)으로 작동한다.
+  - 애니메이션의 진행률을 나타내는 p 값에 따라 overlay의 동작이 결정된다:
+    p 값이 0과 1 사이일 때: 요소는 Top Layer에 렌더링된다 (즉, overlay 값은 auto로 유지된다).
+    p 값이 0 또는 1이 아닌 다른 값일 때: overlay의 값은 애니메이션의 시작 또는 종료 시점에 따라 결정된다.
+    이러한 동작 방식 덕분에, 요소는 애니메이션의 대부분의 시간 동안 Top Layer에 위치하게 된다.
