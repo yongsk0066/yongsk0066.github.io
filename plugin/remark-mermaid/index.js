@@ -1,8 +1,12 @@
+import { render as litRender } from '@lit-labs/ssr';
+import { collectResult } from '@lit-labs/ssr/lib/render-result.js';
 import fs from 'fs/promises';
 import { visit } from 'unist-util-visit';
 import { createMermaidDiv, getDestinationDir, render, renderFromFile } from './utils';
-
 const PLUGIN_NAME = 'remark-mermaid';
+
+
+import { html } from 'lit';
 
 /**
  * Is this title `mermaid:`?
@@ -126,6 +130,42 @@ const visitCodeBlock = async (ast, vFile, isSimple) => {
   });
 }
 
+const visitCodeToggleBlock = async (ast, vFile, isSimple) => {
+  return visit(ast, 'code', async (node, index, parent) => {
+    const { lang, value, position } = node;
+    const destinationDir = getDestinationDir(vFile);
+    let newNode;
+
+    // If this codeblock is not mermaid, bail.
+    if (lang !== 'mermaid') {
+      return node;
+    }
+
+    // Generate SVG from Mermaid code
+    let svgPath;
+    try {
+      svgPath = await render(value, destinationDir, vFile);
+      vFile.info(`${lang} code block replaced with graph`, position, PLUGIN_NAME);
+    } catch (error) {
+      vFile.message(error, position, PLUGIN_NAME);
+      return node;
+    }
+
+    const result =  litRender(html`<mermaid-toggle code="${encodeURIComponent(value)}" svgPath="${encodeURIComponent(svgPath)}"></mermaid-toggle>`, { ssr: true });
+    const renderedString = await collectResult(result);
+    console.log("renderedString", renderedString)
+    newNode = {
+      type: 'html',
+      value: renderedString,
+    };
+
+    parent.children.splice(index, 1, newNode);
+
+    return node;
+  });
+}
+
+
 /**
  * If links have a title attribute called `mermaid:`, follow the link and
  * depending on `isSimple`, either generate and link to the graph, or simply
@@ -184,6 +224,7 @@ const mermaid = (options = {}) => {
 
   const transformer =  async (ast, vFile, next) => {
     visitCodeBlock(ast, vFile, simpleMode);
+    // visitCodeToggleBlock(ast, vFile, simpleMode);
     visitLink(ast, vFile, simpleMode);
     visitImage(ast, vFile, simpleMode);
 

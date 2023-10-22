@@ -1,0 +1,130 @@
+---
+layout: ../../layouts/PostLayout.astro
+title: "Top Layer 애니메이션"
+author: "Yongseok"
+date: "22 Oct 2023"
+categories: ["S"]
+---
+
+# Top Layer Animation
+
+## 자료
+
+<aside>
+### 메인 자료
+- [Lightning Talks - Session 1 [BlinkOn 18]](https://youtu.be/ycWhFbKSDEI?si=oHgPVwuUx9paC2oU&t=1728)
+
+### 추가 자료
+
+- [Chrome Platform Status - @starting-style Rule](https://chromestatus.com/feature/4515377717968896)
+
+- [Chrome Platform Status - overlay property](https://chromestatus.com/feature/5138724910792704)
+
+- [Four new CSS features for smooth entry and exit animations - Chrome for Developers](https://developer.chrome.com/blog/entry-exit-animations/)
+
+</aside>
+
+## Top Layer
+
+- 모든 엘리먼트 위에 랜더링 되는 엘리먼트
+- 지원되는 엘리먼트
+  - `<dialog>`
+  - popover속성 `<div popover=auto>`
+
+목표는 이 엘리먼트들을 animatable 하게 만드는 것
+
+## 진입 애니메이션
+
+### 문제
+
+`display: none` 부터 시작되는 애니메이션은 동작하지 않는다. 왜냐하면 계산되는 스타일이 없기 때문에, 예시처럼 0에서 부터 1로 보간을 할 수 가 없다.
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* 적용되지 않음. :not([open])이 dislpay:none을 적용중이라서 */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### 해결법
+
+`@starting-style` 룰을 통해 초기 값을 설정해줄 수 있도록 함.
+
+```css
+dialog {
+  transition: opacity 1s;
+}
+
+dialog[open] {
+  @starting-style {
+    opacity: 0;
+  }
+  opacity: 1;
+}
+```
+
+## 닫기 애니메이션
+
+### 문제
+
+- display 속성은 애니메이션 적용 불가
+- 불연속적인 속성에는 트렌지션을 적용할 수 없음.
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* 적용되지 않음. 위와 비슷한 이유로 [open] 이 제거되는 순간 display:none이 돼버려서 */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### 해결법
+
+- display 속성과 불연속적인 속성들을 애니메이션 가능하도록 함
+
+```css
+dialog {
+	/* transition-behavior : allow-discrete; */
+	transition: opacity 1s, **display 1s allow-discrete;**
+	opacity: 0;
+}
+
+dialog[open] {
+	opacity:1;
+}
+```
+
+### 애니메이션 중 Layer 문제
+
+- 애니메이션 중에는, 앨리먼트가 더이상 top layer가 아님.
+  - 다른 top layer 나 z-index 가 애니메이션을 막음.
+- user-agent 스타일이 적용되지 않을 것임.
+  - 위치가 갑자기 이동하거나, backdrop이 동작하지 않는 경우가 발생
+
+### 해결법
+
+- 새로운 overlay 속성 추가
+  - 애니메이션 중에 Top Layer에 위치할 수 있도록함.
+
+```css
+dialog {
+  transition:
+    opacity 1s,
+    * * overlay 1s allow-discrete * *,
+    display 1s allow-discrete;
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```

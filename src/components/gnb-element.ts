@@ -16,11 +16,18 @@ export class Gnb extends LitElement {
       box-sizing: border-box;
       color: white;
       font-size: 24px;
+
+      > a {
+        color: white;
+        text-decoration: none;
+      }
     }
   `;
 
   // Render the UI as a function of component state
   render() {
-    return html`<nav class="gnb">YONGSEOK BLOG</nav>`;
+    return html`<nav class="gnb">
+      <a href="/"> YONGSEOK BLOG</a>
+    </nav>`;
   }
 }

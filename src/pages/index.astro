@@ -5,23 +5,25 @@ const posts = await Astro.glob("../pages/post/*.mdx");
 
 <Layout title="용석 블로그">
   <main>
-    {
-      posts.map((post) => (
-        <a href={post.url}>
-          <li class="post_item">
-            <span class="title">{post.frontmatter.title}</span>
-            <div class="symbol_container">
-              <div class="symbol">{post.frontmatter.author[0]}</div>
-              {post.frontmatter.categories &&
-                post.frontmatter.categories.map((c: string) => (
-                  <div class={`symbol ${c}`}>{c}</div>
-                ))}
-            </div>
-            <div class="date">{post.frontmatter.date}</div>
-          </li>
-        </a>
-      ))
-    }
+    <div class="post__container">
+      {
+        posts.map((post) => (
+          <a href={post.url}>
+            <li class="post_item">
+              <span class="title">{post.frontmatter.title}</span>
+              <div class="symbol_container">
+                <div class="symbol">{post.frontmatter.author[0]}</div>
+                {post.frontmatter.categories &&
+                  post.frontmatter.categories.map((c: string) => (
+                    <div class={`symbol ${c}`}>{c}</div>
+                  ))}
+              </div>
+              <div class="date">{post.frontmatter.date}</div>
+            </li>
+          </a>
+        ))
+      }
+    </div>
   </main>
 </Layout>
 
@@ -34,6 +36,11 @@ const posts = await Astro.glob("../pages/post/*.mdx");
     color: white;
     font-size: 20px;
     line-height: 1.6;
+  }
+  .post__container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
   }
 
   a {

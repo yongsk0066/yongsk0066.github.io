@@ -1,5 +1,6 @@
 ---
 import Layout from "./Layout.astro";
+import "@styles/markdown/markdown.css";
 const { frontmatter } = Astro.props;
 ---
 
@@ -10,10 +11,7 @@ const { frontmatter } = Astro.props;
     width: 80%;
     max-width: 1000px;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
     padding: 60px 0;
-    gap: 20px;
   }
   div.title {
     font-size: 3rem;
@@ -29,16 +27,14 @@ const { frontmatter } = Astro.props;
     border-radius: 5px;
     overflow-x: scroll;
   }
-
   aside {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 20px;
+    padding: 0 20px;
     background-color: #f5f5f5;
     border-radius: 5px;
-    line-height: normal;
   }
+
   span.katex {
     margin: 0 auto;
     display: block;
@@ -51,7 +47,7 @@ const { frontmatter } = Astro.props;
     <title>{frontmatter.title}</title>
     <meta name="description" content={frontmatter.description} />
   </Fragment>
-  <main>
+  <main class="prose">
     <!-- <h1>{frontmatter.title} by {frontmatter.author}</h1> -->
     <slot />
     <p>Written on: {frontmatter.date}</p>
