@@ -11,23 +11,6 @@
   --font-color: var(--font-color-light);
 }
 
-/* Dark Mode */
-/* @media (prefers-color-scheme: light) {
-  :root {
-      --primary-color: var(--primary-color-dark);
-      --secondary-color: var(--secondary-color-dark);
-      --font-color: var(--font-color-dark);
-  }
-} */
-
-/* Light Mode */
-/* @media (prefers-color-scheme: dark) {
-  :root {
-      --primary-color: var(--primary-color-light);
-      --secondary-color: var(--secondary-color-light);
-      --font-color: var(--font-color-light);
-  }
-} */
 
 
 /* Basic Styles */
