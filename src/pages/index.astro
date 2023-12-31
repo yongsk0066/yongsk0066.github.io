@@ -11,13 +11,6 @@ const posts = await Astro.glob("../pages/post/*.mdx");
           <a href={post.url}>
             <li class="post_item">
               <span class="title">{post.frontmatter.title}</span>
-              <div class="symbol_container">
-                <div class="symbol">{post.frontmatter.author[0]}</div>
-                {post.frontmatter.categories &&
-                  post.frontmatter.categories.map((c: string) => (
-                    <div class={`symbol ${c}`}>{c}</div>
-                  ))}
-              </div>
               <div class="date">{post.frontmatter.date}</div>
             </li>
           </a>
@@ -44,17 +37,16 @@ const posts = await Astro.glob("../pages/post/*.mdx");
   }
 
   a {
-    color: white;
+    color: black;
     text-decoration: none;
   }
 
   li.post_item {
-    background-color: black;
     list-style: none;
     font-weight: 800;
     padding: 8px;
-    line-height: 64px;
-    font-size: 64px;
+    line-height: 24px;
+    font-size: 16px;
     display: flex;
 
     .title {
@@ -66,14 +58,14 @@ const posts = await Astro.glob("../pages/post/*.mdx");
       gap: 8px;
     }
 
-    .symbol {
+    /* .symbol {
       background-color: #fccc0a;
       aspect-ratio: 1 /1;
-      width: 64px;
-      height: 64px;
+      width: 24px;
+      height: 24px;
       text-align: center;
-      line-height: 64px;
-      font-size: 50px;
+      line-height: 24px;
+      font-size: 16px;
       border-radius: 50%;
       color: black;
 
@@ -81,11 +73,11 @@ const posts = await Astro.glob("../pages/post/*.mdx");
         background-color: #0039a6;
         color: white;
       }
-    }
+    } */
 
     .date {
       margin-left: auto;
-      line-height: 64px;
+      line-height: 24px;
       text-align: right;
     }
   }
