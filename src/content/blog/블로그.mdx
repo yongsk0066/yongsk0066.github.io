@@ -7,8 +7,9 @@ heroImage: "/blog-placeholder-3.jpg"
 ---
 
 import { ThumbnailElement } from '../../components/thumbnail-element';
+import { YouTube } from '../../components/lit/youtube/youtube-element';
 
-<ThumbnailElement client:load />
+<ThumbnailElement client:only="lit" />
 
 # Astro 4.0
 
@@ -22,3 +23,58 @@ import { ThumbnailElement } from '../../components/thumbnail-element';
 
 하지만 블로그 업데이트를 하고나니, 모두 동작하지 않았다. 아마도 같이 올린 Lit 3.0의 탓일 것이다. 원인을 알고 싶지만, 알고 싶지 않아져 버렸다. 아마 이번 추석쯤 되어야 다시 고칠 마음이 생길 지도 모른다
 이 포스트 위에 현재 보이지 않고 공허한 공간이 있다면 아직 고쳐지지 않은 것이다.
+
+
+
+# Lit
+
+애증의 Lit. 가랑비에도 덜덜 떨고 있는 강아지 마냥 느껴져 컴포넌트 하나 만들어 보냈다.
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" client:only="lit" ></YouTube>
+겨울 답지 않게 비가 내리던 날과 같이 듣던 노래. <br/>
+세상 참.. 기술의 발전으로 집에서 짐레이너의 노래를 들을 수 있다니. 경험의 영역이 넓어지는 것 같다.
+
+## 코드
+
+컴포넌트 사용법은 아래와 같다.
+```mdx
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" ></YouTube>
+```
+
+```typescript 
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+    // style 코드는 취향에 맞게 넣어보자
+  `;
+
+  @property()
+  src?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/; // 정규식은 귀찮아 chatgpt에게 일임
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <iframe
+        class="aspect-video"
+        src="https://www.youtube.com/embed/${this.videoId}"
+        title="YouTube Video Player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      ></iframe>
+    `;
+  }
+}
+```
+
+

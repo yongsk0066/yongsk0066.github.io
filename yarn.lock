@@ -590,7 +590,7 @@
     lit "^3.0.0"
     lit-html "^3.0.0"
 
-"@lit-labs/ssr-client@^1.1.5":
+"@lit-labs/ssr-client@^1.1.5", "@lit-labs/ssr-client@^1.1.6":
   version "1.1.6"
   resolved "https://registry.yarnpkg.com/@lit-labs/ssr-client/-/ssr-client-1.1.6.tgz#d7aa2d68b18317057e193d18a8d81a2e347004f5"
   integrity sha512-MHOHSDGmlum66PP2a6ATLHHwTFvYl+s7R4NYBp8E1NqHDA5UEuEIA1o/E4NoDinc3Ow56yz9Cvh89DvFDif5Pg==
@@ -604,7 +604,7 @@
   resolved "https://registry.yarnpkg.com/@lit-labs/ssr-dom-shim/-/ssr-dom-shim-1.1.2.tgz#d693d972974a354034454ec1317eb6afd0b00312"
   integrity sha512-jnOD+/+dSrfTWYfSXBXlo5l5f0q1UuJo3tkbMDCYA2lKUYq79jaxqtGEvnRoh049nt1vdo1+45RinipU6FGY2g==
 
-"@lit-labs/ssr@^3.2.0":
+"@lit-labs/ssr@^3.2.0", "@lit-labs/ssr@^3.2.1":
   version "3.2.1"
   resolved "https://registry.yarnpkg.com/@lit-labs/ssr/-/ssr-3.2.1.tgz#ee6230776387b02844c8d8d4a3084c9534f76898"
   integrity sha512-y8LHFdRFYLXJ44kddCjeaKM/NVqcz1Z0TQHic7Siawxr07d4YZKYtghqnX1bbe2Oa8+qFW7NKFv54CIB7BzrZQ==

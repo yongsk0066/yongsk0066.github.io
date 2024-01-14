@@ -1,6 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
+    "useDefineForClassFields": false,
     "experimentalDecorators": true,
     "baseUrl": ".",
     "paths": {
