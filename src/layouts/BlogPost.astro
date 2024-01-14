@@ -16,7 +16,7 @@ const { title, description, pubDate, updatedDate, heroImage, categories } =
     <BaseHead title={title} description={description} />
     <style>
       main {
-        width: calc(100% - 2em);
+        width: 100%;
         max-width: 100%;
         margin: 0;
       }
@@ -55,6 +55,14 @@ const { title, description, pubDate, updatedDate, heroImage, categories } =
 
       .categories {
         margin-bottom: 0.5em;
+      }
+
+      @media (max-width: 720px) {
+        .prose {
+          width: 100%;
+          max-width: 100%;
+          padding: 0;
+        }
       }
     </style>
   </head>
