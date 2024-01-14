@@ -55,6 +55,7 @@ export class ThumbnailElement extends BaseAnimateElement {
       aspect-ratio: 5 / 3;
       border-radius: 16px;
       overflow: hidden;
+      background-color: #f5f5f5;
     }
   `;
 

@@ -1,181 +1,24 @@
 ---
-title: "Top Layer 애니메이션"
-description: "Top Layer 애니메이션"
+title: "블로그"
+description: ""
 author: "Yongseok"
-date: "Oct 22 2023"
-pubDate: "Oct 22 2023"
+pubDate: "Jan 14 2024"
 heroImage: "/blog-placeholder-3.jpg"
 ---
 
-# Top Layer Animation
+import { ThumbnailElement } from '../../components/thumbnail-element';
 
-## 자료
+<ThumbnailElement client:load />
 
-<aside>
-### 메인 자료
-- [Lightning Talks - Session 1 [BlinkOn 18]](https://youtu.be/ycWhFbKSDEI?si=oHgPVwuUx9paC2oU&t=1728)
+# Astro 4.0
 
-### 추가 자료
+[Astro 4.0](https://astro.build/blog/astro-4/)이 릴리즈 되었다는 소식을 들었다. 블로그도 업데이트 할겸 겸사겸사 업데이트를 했다.
+아일랜드 아키텍쳐.. 기타 ... 등등.. Astro가 가진 장점들에 대해서는 깊게 파악하고 선택한 것은 아니였다. (후에 살펴보려고 미래의 나에게 과제로 남겨두는 것이다.)
 
-- [Explainer: improved CSS-triggered entry and exit animations](https://github.com/chrishtr/rendering/blob/master/entry-exit-animations.md#example-code)
+당시 [Lit](https://lit.dev/)에 대한 호기심이 있었고, Astro가 Lit을 지원한다는 것이 가장 큰 이유였다. (Lit은 딱히 구애를 받지 않고 사용할 수 있으나, 모체가 되는 편한 프레임워크가 있으면 좋겠다는 생각이 있었다.)
+아마 23년 추석 부근... Lit과 3D에 큰 관심이 있었고, 새 맥북과 함께 블랜더도 공부할겸, 블랜더로 만든 오브젝트를 Lit으로 렌더링하는 것을 목표로 했었다. 
 
-- [Chrome Platform Status - @starting-style Rule](https://chromestatus.com/feature/4515377717968896)
+그 결과로 열심히 만든 것이 회전하는 픽셀화된 도넛이었다. 
 
-- [Chrome Platform Status - overlay property](https://chromestatus.com/feature/5138724910792704)
-
-- [Four new CSS features for smooth entry and exit animations - Chrome for Developers](https://developer.chrome.com/blog/entry-exit-animations/)
-
-</aside>
-
-## Top Layer
-
-- 모든 엘리먼트 위에 랜더링 되는 엘리먼트
-- 지원되는 엘리먼트
-  - `<dialog>`
-  - popover속성 `<div popover=auto>`
-
-목표는 이 엘리먼트들을 animatable 하게 만드는 것
-
-## 진입 애니메이션
-
-### 문제
-
-`display: none` 부터 시작되는 애니메이션은 동작하지 않는다. 왜냐하면 계산되는 스타일이 없기 때문에, 예시처럼 0에서 부터 1로 보간을 할 수 가 없다.
-
-```css
-dialog {
-  transition: opacity 1s;
-  /* 적용되지 않음. :not([open])이 dislpay:none을 적용중이라서 */
-  opacity: 0;
-}
-
-dialog[open] {
-  opacity: 1;
-}
-```
-
-### 해결법
-
-`@starting-style` 룰을 통해 초기 값을 설정해줄 수 있도록 함.
-
-```css
-dialog {
-  transition: opacity 1s;
-}
-
-dialog[open] {
-  @starting-style {
-    opacity: 0;
-  }
-  opacity: 1;
-}
-```
-
-## 닫기 애니메이션
-
-### 문제
-
-- display 속성은 애니메이션 적용 불가
-- 불연속적인 속성에는 트렌지션을 적용할 수 없음.
-
-```css
-dialog {
-  transition: opacity 1s;
-  /* 적용되지 않음. 위와 비슷한 이유로 [open] 이 제거되는 순간 display:none이 돼버려서 */
-  opacity: 0;
-}
-
-dialog[open] {
-  opacity: 1;
-}
-```
-
-### 해결법
-
-- `transition-behavior : allow-discrete;` 가 추가됨
-- display 속성과 불연속적인 속성들을 애니메이션 가능하도록 함
-
-```css
-dialog {
-	/* transition-behavior : allow-discrete; */
-	transition: opacity 1s, **display 1s allow-discrete;**
-	opacity: 0;
-}
-
-dialog[open] {
-	opacity:1;
-}
-```
-
-### 애니메이션 중 Layer 문제
-
-- 애니메이션 진행중에는, 엘리먼트가 더이상 top layer가 아님.
-  - 다른 top layer 나 z-index 가 애니메이션을 막음.
-- user-agent 스타일이 적용되지 않을 것임.
-  - 위치가 갑자기 이동하거나, backdrop이 동작하지 않는 경우가 발생
-
-### 해결법
-
-- 새로운 overlay 속성 추가
-  - 애니메이션 중에 Top Layer에 위치할 수 있도록함.
-
-```css
-dialog {
-  transition:
-    opacity 1s,
-    * * overlay 1s allow-discrete * *,
-    display 1s allow-discrete;
-  opacity: 0;
-}
-
-dialog[open] {
-  opacity: 1;
-}
-```
-
-## @starting-style
-
-[css-transition-2 - defining-before-change-style](https://drafts.csswg.org/css-transitions-2/#defining-before-change-style)
-
-### 핵심 개념
-
-- @starting-style은 그룹화 규칙(grouping rule). 이전 스타일 변경 전 스타일을 설정하지 않은 요소의 스타일을 계산할 때 사용.
-- @starting-style은 일부 요소에만 적용. 즉, 이전 스타일 변경 이벤트 동안 렌더링되지 않거나 DOM의 일부가 아니었던 요소에만 적용.
-- 요소가 주어진 스타일 변경 사건에 대한 변경 전 스타일을 가지고 있지 않으면 시작 스타일이 변경 전 스타일 대신 사용.
-
-### 예시
-
-초기 렌더링시 h1 의 background-color를 투명에서 green으로 전환.
-
-```css
-h1 {
-  transition: background-color 1.5s;
-  background-color: green;
-}
-@starting-style {
-  h1 {
-    background-color: transparent;
-  }
-}
-```
-
-## overlay 속성
-
-[css-overflow-4 - overlay](https://drafts.csswg.org/css-position-4/#overlay)
-
-`overlay` 속성은 요소가 Top Layer에 있을 때, 실제로 그 요소가 Top Layer에서 렌더링되는지 여부를 결정
-
-### 속성 값
-
-none: 요소는 Top Layer에서 렌더링되지 않습니다.
-auto: 요소가 Top Layer에 있다면, Top Layer에서 렌더링.
-
-### 특징
-
-- overlay는 다소 특이한 속성으로, 사용자 에이전트만 설정할 수 있으며, 작성자는 이를 설정할 수 없음.
-- transition 을 통해 overlay의 값의 변경 타이밍을 조절 할 수 있음.
-- overlay의 auto 값은 연속적으로 애니메이션되지 않고, 이산적인 스텝(즉시 변경)으로 cd .
-  - 애니메이션의 진행률을 나타내는 p 값에 따라 overlay의 동작이 결정:
-    p 값이 0과 1 사이일 때: 요소는 Top Layer에 렌더링된다 (즉, overlay 값은 auto로 유지된다).
-    p 값이 0 또는 1이 아닌 다른 값일 때: overlay의 값은 애니메이션의 시작 또는 종료 시점에 따라 결정된다.
-    이러한 동작 방식 덕분에, 요소는 애니메이션의 대부분의 시간 동안 Top Layer에 위치하게 된다.
+하지만 블로그 업데이트를 하고나니, 모두 동작하지 않았다. 아마도 같이 올린 Lit 3.0의 탓일 것이다. 원인을 알고 싶지만, 알고 싶지 않아져 버렸다. 아마 이번 추석쯤 되어야 다시 고칠 마음이 생길 지도 모른다
+이 포스트 위에 현재 보이지 않고 공허한 공간이 있다면 아직 고쳐지지 않은 것이다.
