@@ -26,6 +26,8 @@ export class YouTube extends LitElement {
       display: block;
       text-align: center;
       margin-top: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--color-text-secondary);
     }
 
     iframe {
