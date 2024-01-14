@@ -4,7 +4,8 @@ import { customElement, property } from "lit/decorators.js";
 @customElement("google-map-element")
 export class GoogleMap extends LitElement {
   static styles = css`
-    :host {
+    figure {
+      margin: 0;
       width: 100%;
       display: flex;
       flex-direction: column;
@@ -17,12 +18,13 @@ export class GoogleMap extends LitElement {
       aspect-ratio: 16 / 9;
       border: none;
       background: black;
-      border-radius: 16px;
+      border-radius: 0.5rem;
       box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
       overflow: hidden;
+      margin: 0;
     }
 
-    caption {
+    figcaption {
       display: block;
       text-align: center;
       margin-top: 0.4rem;
@@ -45,20 +47,18 @@ export class GoogleMap extends LitElement {
 
   render() {
     return html`
-      <div class="iframe__wrapper">
-        <iframe
-          src="${this.src}"
-          title="YouTube Video Player"
-          allowfullscreen=""
-          loading="lazy"
-          referrerpolicy="no-referrer-when-downgrade"
-        ></iframe>
-      </div>
-      ${this.caption
-        ? html`<caption>
-            ${this.caption}
-          </caption>`
-        : ""}
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src="${this.src}"
+            title="YouTube Video Player"
+            allowfullscreen=""
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
     `;
   }
 }
