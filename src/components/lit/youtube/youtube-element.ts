@@ -12,6 +12,7 @@ export class YouTube extends LitElement {
       aspect-ratio: 16 / 9;
       box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
       background: black;
+      margin: 1rem 0;
     }
     iframe {
       width: 100%;
