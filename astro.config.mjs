@@ -5,11 +5,16 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeMathjax from "rehype-mathjax";
 import mermaid from "./plugin/remark-mermaid";
+import sitemap from '@astrojs/sitemap';
 
 import tailwind from "@astrojs/tailwind";
 
 // https://astro.build/config
 export default defineConfig({
+  i18n:{
+    defaultLocale: 'ko',
+    locales: ['ko', 'en']
+  },
   integrations: [lit(), mdx({
     optimize: true,
     remarkPlugins: [remarkMath, mermaid],
@@ -19,7 +24,9 @@ export default defineConfig({
     })
     // rehypeMathjax
     ]
-  }), tailwind()],
+  }), tailwind(),
+  sitemap()
+],
   site: 'https://yongsk0066.github.io',
   base: '/'
 });

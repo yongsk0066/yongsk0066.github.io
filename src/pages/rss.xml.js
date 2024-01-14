@@ -1,12 +1,16 @@
 import rss from '@astrojs/rss';
-
+import { getCollection } from 'astro:content';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
 
 export async function GET(context) {
-  return rss({
-    title: 'YONGSEOK’s Blog',
-    description: 'YONGSEOK’s Blog description',
-    site: context.site,
-    items: [],
-    customData: `<language>ko-KR</language>`,
-  });
+	const posts = await getCollection('blog');
+	return rss({
+		title: SITE_TITLE,
+		description: SITE_DESCRIPTION,
+		site: context.site,
+		items: posts.map((post) => ({
+			...post.data,
+			link: `/blog/${post.slug}/`,
+		})),
+	});
 }
