@@ -8,7 +8,7 @@ heroImage: "/blog-placeholder-5.jpg"
 ---
 
 import { ThumbnailElement } from '../../components/thumbnail-element';
-import { YouTube } from '../../components/lit/youtube/youtube-element';
+import { YouTube } from '../../components/lit/youtube-element';
 
 <ThumbnailElement client:only="lit" />
 
@@ -24,6 +24,8 @@ import { YouTube } from '../../components/lit/youtube/youtube-element';
 
 하지만 블로그 업데이트를 하고나니, 모두 동작하지 않았다. 아마도 같이 올린 Lit 3.0의 탓일 것이다. 원인을 알고 싶지만, 알고 싶지 않아져 버렸다. 아마 이번 추석쯤 되어야 다시 고칠 마음이 생길 지도 모른다
 이 포스트 위에 현재 보이지 않고 공허한 공간이 있다면 아직 고쳐지지 않은 것이다.
+
+2024.01.16 - 문제의 원인은 하드웨어 가속을 꺼둔 탓이였음.
 
 
 

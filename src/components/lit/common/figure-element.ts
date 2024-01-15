@@ -1,8 +1,7 @@
-import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { LitElement, css, html } from "lit";
+import { property } from "lit/decorators.js";
 
-@customElement("youtube-element")
-export class YouTube extends LitElement {
+export abstract class FigureElement extends LitElement {
   static styles = css`
     figure {
       margin: 0;
@@ -45,25 +44,23 @@ export class YouTube extends LitElement {
   @property()
   caption?: string;
 
-  get videoId() {
-    return this.extractVideoId(this.src);
-  }
+  abstract get iframeSrc(): string;
 
-  extractVideoId(url?: string) {
-    if (!url) return "";
-    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
-    const match = url.match(regExp);
-    return match ? match[1] : "";
-  }
+  // iframe 속성들을 반환하는 추상 메소드
+  abstract get iframeAttributes(): Record<string, string>;
 
   render() {
+    const attrs = this.iframeAttributes;
     return html`
       <figure>
         <div class="iframe__wrapper">
           <iframe
-            src="https://www.youtube.com/embed/${this.videoId}"
-            title="YouTube Video Player"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            src=${this.iframeSrc}
+            .title=${attrs.title || ""}
+            .allow=${attrs.allow || ""}
+            .allowfullscreen=${attrs.allowfullscreen || ""}
+            .loading=${attrs.loading || ""}
+            .referrerpolicy=${attrs.referrerpolicy || ""}
           ></iframe>
         </div>
         ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
