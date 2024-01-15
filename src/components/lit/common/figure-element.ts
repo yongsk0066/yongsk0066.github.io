@@ -46,8 +46,7 @@ export abstract class FigureElement extends LitElement {
 
   abstract get iframeSrc(): string;
 
-  // iframe 속성들을 반환하는 추상 메소드
-  abstract get iframeAttributes(): Record<string, string>;
+  abstract get iframeAttributes(): Partial<HTMLIFrameElement>;
 
   render() {
     const attrs = this.iframeAttributes;
@@ -58,9 +57,9 @@ export abstract class FigureElement extends LitElement {
             src=${this.iframeSrc}
             .title=${attrs.title || ""}
             .allow=${attrs.allow || ""}
-            .allowfullscreen=${attrs.allowfullscreen || ""}
+            .allowfullscreen=${attrs.allowFullscreen || ""}
             .loading=${attrs.loading || ""}
-            .referrerpolicy=${attrs.referrerpolicy || ""}
+            .referrerpolicy=${attrs.referrerPolicy || ""}
           ></iframe>
         </div>
         ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}

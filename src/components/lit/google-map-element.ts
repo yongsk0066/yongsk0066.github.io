@@ -7,12 +7,12 @@ export class GoogleMap extends FigureElement {
     return this.src || "";
   }
 
-  get iframeAttributes() {
+  get iframeAttributes(): Partial<HTMLIFrameElement> {
     return {
       title: "Google Maps",
-      allowfullscreen: "true",
+      allowFullscreen: true,
       loading: "lazy",
-      referrerpolicy: "no-referrer-when-downgrade",
+      referrerPolicy: "no-referrer-when-downgrade",
     };
   }
 }

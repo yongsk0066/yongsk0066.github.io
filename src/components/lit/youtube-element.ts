@@ -7,14 +7,13 @@ export class YouTube extends FigureElement {
     return `https://www.youtube.com/embed/${this.extractVideoId(this.src)}`;
   }
 
-  get iframeAttributes() {
+  get iframeAttributes(): Partial<HTMLIFrameElement> {
     return {
       title: "YouTube Video Player",
       allow:
         "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
-      allowfullscreen: "",
       loading: "lazy",
-      referrerpolicy: "no-referrer-when-downgrade",
+      referrerPolicy: "no-referrer-when-downgrade",
     };
   }
 
