@@ -1,0 +1,155 @@
+---
+title: "붕어빵"
+description: ""
+author: "Yongseok"
+pubDate: "Jan 17 2024"
+categories: ["blog, lit"]
+heroImage: "/blog-placeholder-2.jpg"
+---
+
+import { YouTube } from '../../components/lit/youtube-element';
+
+# 집앞에 붕어빵 포장마차가 하나 있는데
+
+가격이 한마리에 1,000원이다. 
+
+# 그제 만든 컴포넌트를 정리해보자
+
+처음엔 YouTube 임베드를 위해 적당히 래핑해서 쓰는 lit 컴포넌트를 만들었었다.
+유튜브 링크를 받을 src와 캡션을 받기위한 caption,이 두 개의 프로퍼티를 받는다.
+
+```typescript
+// src/components/lit/youtube-element.ts
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+      // ... 생략
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src="https://www.youtube.com/embed/${this.videoId}"
+            title="YouTube Video Player"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+다른 글을 쓰다 보니 비슷한 형태의 GoogleMap을 임베드하기 위한 컴포넌트도 필요했다.
+그래서 이번에는 YouTube 컴포넌트를 조금 더 일반화해서 추상클래스로 만들어보았다.
+
+동일하게 src와 caption을 받는다. 그리고 iframe의 속성을 받기 위해 iframeAttributes를 받는다.
+
+
+```typescript
+// src/components/lit/figure-element.ts
+import { LitElement, css, html } from "lit";
+import { property } from "lit/decorators.js";
+
+export abstract class FigureElement extends LitElement {
+  static styles = css`
+    // ... 생략
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  abstract get iframeSrc(): string;
+
+  abstract get iframeAttributes(): Partial<HTMLIFrameElement>;
+
+  render() {
+    const attrs = this.iframeAttributes;
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src=${this.iframeSrc}
+            .title=${attrs.title || ""}
+            .allow=${attrs.allow || ""}
+            .allowfullscreen=${attrs.allowFullscreen || ""}
+            .loading=${attrs.loading || ""}
+            .referrerpolicy=${attrs.referrerPolicy || ""}
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+이렇게 만들어서 아래 처럼 YouTube 컴포넌트를 다시 만들어보았다.
+
+```typescript
+import { customElement } from "lit/decorators.js";
+import { FigureElement } from "./common/figure-element";
+
+@customElement("youtube-element")
+export class YouTube extends FigureElement {
+  get iframeSrc() {
+    return `https://www.youtube.com/embed/${this.extractVideoId(this.src)}`;
+  }
+
+  get iframeAttributes(): Partial<HTMLIFrameElement> {
+    return {
+      title: "YouTube Video Player",
+      allow:
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+      loading: "lazy",
+      referrerPolicy: "no-referrer-when-downgrade",
+    };
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+}
+```
+
+코드 자체는 간결해진 것같은데, 이 컴포넌트만 보고는 어떤 기능을 하는지 알기가 어렵다.
+랜더링되는 주체가 가려져 있어 더더욱 그렇다. react는 jsx 형태로라도 랜더링을 한다는 느낌을 주곤 하는데,
+이런식으로 lit 컴포넌트를 만들면 랜더링되는 주체가 불분명해진다는 느낌을 받는다.
+
+어떻게 하면 좀 더 이쁜 lit 컴포넌트가 될까..
+
+
+
+
+<YouTube src="https://youtu.be/-om5KeRqfq4?si=H-PkLgafhbh2wIgC" 
+  caption="Creep - Radiohead"
+/>

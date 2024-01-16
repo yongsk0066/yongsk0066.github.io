@@ -4,7 +4,6 @@ import { property } from "lit/decorators.js";
 export abstract class FigureElement extends LitElement {
   static styles = css`
     figure {
-      margin: 0;
       width: 100%;
       display: flex;
       flex-direction: column;
