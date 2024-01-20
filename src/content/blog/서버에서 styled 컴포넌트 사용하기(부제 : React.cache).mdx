@@ -1,0 +1,512 @@
+---
+title: "서버에서 styled 컴포넌트 사용하기(부제 : React.cache)"
+description: ""
+author: "Yongseok"
+pubDate: "Jan 20 2024"
+categories: ["style"]
+heroImage: "/blog-placeholder-4.jpg"
+---
+
+import { YouTube } from '../../components/lit/youtube-element';
+
+> 제목은 이런데, 사실 찐 styled-components를 사용하는 내용은 아니다.
+
+
+<YouTube src="https://youtu.be/eF7mP_Qq9ck?si=Cv1wQ70glhd0IT1v" />
+
+## dream-css-tool
+[dream-css-tool](https://github.com/joshwcomeau/dream-css-tool)라는 시도를 하고 계신 분을 발견했다.
+styled 같은 방식으로 서버컴포넌트에서도 동작하게끔 만드는 시도를 하고 있었다.
+
+우선 사용법 부터 보자. 아래와 같이 사용할 수 있다.
+
+1. 우선 StyleRegistry를 루트에 감싸준다. (여기선 next app dir이라 layout에 감싸줌)
+
+```js
+import type { Metadata } from 'next';
+
+import StyleRegistry from '@/components/StyleRegistry';
+
+export const metadata: Metadata = {
+  title: 'Dream CSS tool',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <StyleRegistry>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </StyleRegistry>
+  );
+}
+```
+
+2. styled를 사용한다.
+기존 우리가 styled를 쓰던 방식처럼 컴포넌트를 작성한다.
+
+```js
+import React from 'react';
+import styled from '../styled.js';
+
+export default function StaticButton() {
+  return <Button>Static Button</Button>;
+}
+
+const Button = styled('button')`
+  display: block;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 4px;
+  background: hsl(270deg 100% 30%);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+`;
+```
+
+전체 코드가 아직 몇 줄 되지 않아, 
+간단히 코드를 살펴보자. 아래는 주요 부분의 코드 원문이다. (일단 주석까지 퍼옴)
+
+
+```javascript
+// styled.js
+import React from 'react';
+
+import { cache } from './components/StyleRegistry';
+
+// TODO: Ideally, this API would use dot notation (styled.div) in
+// addition to function calls (styled('div')). We should be able to
+// use Proxies for this, like Framer Motion does.
+export default function styled(Tag) {
+  return (css) => {
+    return function StyledComponent(props) {
+      let collectedStyles =  cache();
+
+      // Instead of using the filename, I'm using the `useId` hook to
+      // generate a unique ID for each styled-component.
+      const id = React.useId().replace(/:/g, '');
+      const generatedClassName = `styled-${id}`;
+
+      const styleContent = `.${generatedClassName} { ${css} }`;
+
+      collectedStyles.push(styleContent);
+      return <Tag className={generatedClassName} {...props} />;
+    };
+  };
+}
+```
+
+
+```javascript
+// StyleRegistry.js
+import React from 'react';
+
+import StyleInserter from './StyleInserter';
+
+export const cache = React.cache(() => {
+  return [];
+});
+
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+
+  return (
+    <>
+      <StyleInserter styles={collectedStyles} />
+      {children}
+    </>
+  );
+}
+
+export default StyleRegistry;
+```
+```javascript
+// StyleInserter.js
+'use client';
+
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+function StyleInserter({ styles }) {
+  useServerInsertedHTML(() => {
+    return <style>{styles.join('\n')}</style>;
+  });
+
+  return null;
+}
+
+export default StyleInserter;
+```
+
+
+부분 부분 뜯어보자
+
+```javascript
+// StyledRegistry.js
+export const cache = React.cache(() => {
+  return [];
+});
+```
+```js
+// styled.js
+// ...
+let collectedStyles =  cache();
+// ...
+```
+styled의 첫 부분을 보면 StyleRegistry에서 React.cache를 사용해서 만들어진 cache를 가져온다.
+
+```javascript 
+// styled.js
+// ...
+const id = React.useId().replace(/:/g, '');
+const generatedClassName = `styled-${id}`;
+
+const styleContent = `.${generatedClassName} { ${css} }`;
+
+collectedStyles.push(styleContent);
+return <Tag className={generatedClassName} {...props} />;
+```
+
+이때, 고유한 id를 만들어서, className을 만들고, css를 만들어 cache에 넣는다.
+그리고 해당 className을 가진 컴포넌트를 리턴한다.
+
+
+```javascript
+// StyleRegistry.js (server)
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+
+  return (
+    <>
+      <StyleInserter styles={collectedStyles} />
+      {children}
+    </>
+  );
+}
+```
+StyleRegistry에서는 cache를 가져와서, 모인 css를 StyleInserter에 넘겨준다.
+
+```javascript
+// StyleInserter.js
+'use client';
+
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+function StyleInserter({ styles }) {
+
+  useServerInsertedHTML(() => {
+    return <style>{styles.join('\n')}</style>;
+  });
+
+  return null;
+}
+
+export default StyleInserter;
+```
+런타임에서는 useServerInsertedHTML을 사용해서, 받은 css를 style 태그로 만들어서 넣어준다.
+이렇게 되면, 서버 컴포넌트에서도 동작하는 styled 컴포넌트를 만들 수 있다.
+
+하지만 큰 문제가 있다.
+
+```jsx
+// src/components/CountButton.js
+'use client';
+
+import React from 'react';
+import styled from '../styled.js';
+
+export default function CountButton() {
+  const [count, setCount] = React.useState(0);
+  return (
+    <Button onClick={() => setCount(count + 1)}>
+      Clicks: {count}
+    </Button>
+  );
+}
+
+// Currently, this doesn't work, because `cache()` can't be used in
+// Client Components. It throws an error, and none of the styles get
+// created.
+const Button = styled('button', 'client')`
+  padding: 1rem 2rem;
+  color: red;
+  font-size: 1rem;
+`;
+```
+
+클라이언트 컴포넌트에서는 cache를 사용할 수 없다.
+근데  cache만 사용할 수 없을 뿐 cache의 역할을 생략하거나 대체 하면 될 것 같다.
+
+
+## 클라이언트 컴포넌트에서도 동작하게끔 수정하기
+
+> 성능적으로 문제가 있을 수 있으니, 실제로 사용할 때는 주의해서 사용해야 한다.
+
+cache를 사용하지 않고 그냥 바로 css를 넣어주는 방식으로 수정해보자.
+
+```js
+// clientStyled.js
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+export default function styled(Tag) {
+  return (css) => {
+    return function StyledComponent(props) {
+      const id = React.useId().replace(/:/g, '');
+      const generatedClassName = `styled-${id}`;
+
+      const styleContent = `.${generatedClassName} { ${css} }`;
+      useServerInsertedHTML(() => {
+        return <style>{styleContent}</style>;
+      });
+      return <Tag className={generatedClassName} {...props} />;
+    };
+  };
+}
+```
+그 뒤 그냥 인자를 하나더 받아서 분기를 쳐줬다.
+발원지를 체크할 수 있는 방법이 있을 것 같긴 한데... 일단은 이렇게 하자.
+
+
+```js
+// styled.js
+import React from 'react';
+
+import serverStyled from './serverStyled';
+import clientStyled from './clientStyled';
+
+
+export default function styled(Tag, from = 'server') {
+  if (from === 'client'){
+    return clientStyled(Tag);
+  }
+  return serverStyled(Tag);
+} 
+```
+
+이렇게 되면 클라이언트에서 실행시 'client'를 넘겨주면 동작하긴 한다. 
+만들고 보니 결국 'use client' 꼴이 된게 아닌가 하는 아쉬움이 남는다.
+
+
+## React.cache
+
+https://react.dev/reference/react/cache
+
+https://github.com/facebook/react/blob/main/packages/react/src/ReactCacheServer.js
+
+간단히 cache의 동작 방식을 살펴보자.
+함수를 넘기면 cache 레이어가 래핑된 함수를 반환한다.
+그뒤 반환된 함수를 apply 하기전에 캐시 레이어를 두고 캐시 레이어에서 캐싱된 결과를 반환하는 방식이라고 보면된다.
+
+
+
+```ts
+import ReactCurrentCache from './ReactCurrentCache';
+
+const UNTERMINATED = 0; // 미완료 상태를 나타내는 상수
+const TERMINATED = 1; // 완료 상태를 나타내는 상수
+const ERRORED = 2; // 에러 상태를 나타내는 상수
+
+type UnterminatedCacheNode<T> = {
+  s: 0, // 상태 (미완료)
+  v: void, // 값 (미완료 상태에서는 값이 없음)
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // 객체 캐시 (WeakMap 사용)
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // 원시 타입 캐시 (Map 사용)
+};
+
+type TerminatedCacheNode<T> = {
+  s: 1, // 상태 (완료)
+  v: T, // 값 (캐시된 결과)
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // 객체 캐시
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // 원시 타입 캐시
+};
+
+type ErroredCacheNode<T> = {
+  s: 2, // 상태 (에러)
+  v: mixed, // 값 (에러 객체)
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // 객체 캐시
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // 원시 타입 캐시
+};
+
+type CacheNode<T> =
+  | TerminatedCacheNode<T>
+  | UnterminatedCacheNode<T>
+  | ErroredCacheNode<T>;
+
+function createCacheRoot<T>(): WeakMap<Function | Object, CacheNode<T>> {
+  return new WeakMap(); // 새로운 WeakMap으로 캐시 루트 생성
+}
+
+function createCacheNode<T>(): CacheNode<T> {
+  return {
+    s: UNTERMINATED, // 기본 상태는 미완료
+    v: undefined, // 초기 값은 undefined
+    o: null, // 객체 캐시 초기화
+    p: null, // 원시 타입 캐시 초기화
+  };
+}
+
+/*
+  * 캐시 노드를 생성하고, 캐시 루트에 캐시 노드를 저장하는 함수
+  * 
+  * @param fn 캐시 노드를 생성할 함수
+  * @returns 캐시 노드
+  * @example
+  * const styleCache = cache(() => []);
+  */
+export function cache<A: Iterable<mixed>, T>(fn: (...A) => T): (...A) => T {
+  return function () {
+    const dispatcher = ReactCurrentCache.current; // 현재 캐시 디스패처 가져오기
+    if (!dispatcher) {
+      // 디스패처가 없으면 캐싱 없이 함수 실행 (클라이언트 컴포넌트에서 실행될 경우)
+      return fn.apply(null, arguments);
+    }
+    // 캐시 루트 가져오기
+    const fnMap: WeakMap<any, CacheNode<T>> = dispatcher.getCacheForType(
+      createCacheRoot,
+    ); // 캐시 루트가 없으면 새로 생성
+
+
+    const fnNode = fnMap.get(fn); // 함수에 대한 캐시 노드 가져오기
+    let cacheNode: CacheNode<T>; // 캐시 노드
+    if (fnNode === undefined) { 
+      cacheNode = createCacheNode(); // 캐시 노드가 없으면 새로 생성
+      fnMap.set(fn, cacheNode); // 함수에 캐시 노드 설정
+    } else {
+      cacheNode = fnNode; // 존재하는 캐시 노드 사용 
+    }
+    for (let i = 0, l = arguments.length; i < l; i++) { // 함수가 받은 모든 인자들에 대해 순회
+      const arg = arguments[i]; // 현재 처리중인 인자
+
+      if (
+        typeof arg === 'function' ||
+        (typeof arg === 'object' && arg !== null)
+        // 현재 인자가 객체 또는 함수인 경우
+        let objectCache = cacheNode.o; // 객체를 위한 캐시 맵 (WeakMap)
+        if (objectCache === null) {
+          cacheNode.o = objectCache = new WeakMap(); // 객체 캐시 맵이 없으면 새로 생성
+        }
+        const objectNode = objectCache.get(arg); // 현재 객체 인자에 대한 캐시 노드 조회
+        if (objectNode === undefined) {
+          cacheNode = createCacheNode(); // 캐시 노드가 없으면 새로 생성
+          objectCache.set(arg, cacheNode); // 새 캐시 노드를 객체 캐시 맵에 추가
+        } else {
+          cacheNode = objectNode; // 존재하는 캐시 노드 사용
+        }
+      } else {
+        // 현재 인자가 원시 타입인 경우
+        let primitiveCache = cacheNode.p; // 원시 타입을 위한 캐시 맵 (Map)
+        if (primitiveCache === null) {
+          cacheNode.p = primitiveCache = new Map(); // 원시 타입 캐시 맵이 없으면 새로 생성
+        }
+        const primitiveNode = primitiveCache.get(arg); // 현재 원시 타입 인자에 대한 캐시 노드 조회
+        if (primitiveNode === undefined) {
+          cacheNode = createCacheNode(); // 캐시 노드가 없으면 새로 생성
+          primitiveCache.set(arg, cacheNode); // 새 캐시 노드를 원시 타입 캐시 맵에 추가
+        } else {
+          cacheNode = primitiveNode; // 존재하는 캐시 노드 사용
+        }
+      }
+    }
+
+    if (cacheNode.s === TERMINATED) { // 캐시된 결과가 있으면
+      return cacheNode.v; // 캐시된 결과 반환
+    }
+    if (cacheNode.s === ERRORED) { // 캐시된 에러가 있으면
+      throw cacheNode.v; // 캐시된 에러 재발생
+    }
+    try {
+      // 캐시된 결과가 없으면 함수 실행 및 결과 캐싱
+      const result = fn.apply(null, arguments); // 함수 실행
+      const terminatedNode: TerminatedCacheNode<T> = (cacheNode: any); // 캐시 노드를 완료 상태로 변경
+      terminatedNode.s = TERMINATED; // 완료 상태로 변경
+      terminatedNode.v = result; // 캐시된 결과 설정
+      return result; // 결과 반환
+    } catch (error) { 
+      // 에러 발생 시 에러 캐싱
+      const erroredNode: ErroredCacheNode<T> = (cacheNode: any);
+      erroredNode.s = ERRORED;
+      erroredNode.v = error;
+      throw error;
+    }
+  };
+}
+```
+
+간단 한 예시를 들어보면 아래와 같다. 
+
+```js
+import { cache } from 'react';
+
+// 예시로 사용할 계산 함수
+function expensiveCalculation(x, y) {
+  console.log('Calculating result...');
+  return x + y;
+}
+
+// cache 함수를 사용하여 계산 함수를 래핑
+const cachedCalculation = cache(expensiveCalculation);
+
+// 첫 번째 호출 - 계산 함수가 실행됩니다.
+const result1 = cachedCalculation(2, 3); // 로그: "Calculating result..."
+
+// 두 번째 호출 - 같은 인수로 호출되므로 캐시된 결과 반환
+const result2 = cachedCalculation(2, 3); // 결과는 5이며 로그는 나타나지 않음
+
+// 다른 인수로 호출 - 다시 계산 함수가 실행됩니다.
+const result3 = cachedCalculation(4, 5); // 로그: "Calculating result..."
+
+console.log(result1); // 5
+console.log(result2); // 5
+console.log(result3); // 9
+```
+
+이런 예시를 통해서는 캐시의 역할이 이해가 바로 되는데, dream-css-tool에서의 용도는 살짝 다르다.
+매번 연산을 절약한다는 느낌 보다는, cache를 이용해서 참조값을 유지하는 방식으로 사용하고 있다.
+
+```js
+// StyledRegistry.js
+export const cache = React.cache(() => {
+  return [];
+});
+// ...
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+...
+```
+
+```js
+// styled.js
+import { cache } from './components/StyleRegistry';
+
+...
+let collectedStyles =  cache();
+
+collectedStyles.push(styleContent);
+...
+```
+
+간단히 아래 같은 방식으로 동작한다고 보면 된다.
+
+```js
+const arr1 = [1, 2, 3];
+
+const arr2 = arr1;
+
+// arr1과 arr2가 동일한 배열을 참조하고 있는지 확인
+console.log(arr1 === arr2); // true
+
+// arr1 배열에 요소를 추가하면 arr2에서도 동일한 변경이 반영됩니다.
+arr1.push(4);
+console.log(arr2); // [1, 2, 3, 4]
+```
+
+## 결론
+
+작성중이다.
