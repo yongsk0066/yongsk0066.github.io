@@ -17,6 +17,12 @@
 
 	--color-text-primary: rgb(var(--black));
 	--color-text-secondary: rgb(var(--gray));
+
+	--tag-color-blue: #002d9c;
+	--tag-background-blue: #d0e2ff;
+
+	--tag-color-green: #044317;
+	--tag-background-green: #a7f0ba;
 }
 @font-face {
 	font-family: 'Atkinson';

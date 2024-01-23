@@ -14,4 +14,16 @@ const blog = defineCollection({
   }),
 });
 
-export const collections = { blog };
+const question = defineCollection({
+  type: "content",
+  schema: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    isSolved: z.boolean(),
+    pubDate: z.coerce.date(),
+    solvedDate: z.coerce.date().optional(),
+    categories: z.array(z.string()).optional(),
+  }),
+});
+
+export const collections = { blog, question };
