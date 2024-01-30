@@ -1,0 +1,25 @@
+---
+title: "Axios 요청을 Cancel해보자 [2]"
+description: ""
+author: "Yongseok"
+pubDate: "Jan 31 2024"
+categories: ["axios"]
+heroImage: "/blog-placeholder-4.jpg"
+---
+
+import { YouTube } from '../../components/lit/youtube-element';
+
+<YouTube src="https://youtu.be/AKflm82wVLk?si=i0Gx3DLVGIUpIS5b" />
+
+## Axios 요청을 Cancel해보자 [2]
+
+[Axios 요청을 Cancel해보자 [1]](http://localhost:4321/blog/axios-%EC%9A%94%EC%B2%AD%EC%9D%84-cancel%ED%95%B4%EB%B3%B4%EC%9E%90-1/) 에서는 
+cancelToken이 요청의 config로 들어갈 때, 어떻게 subscribe 되는지를 알아보았다.
+
+이번에는 CancelToken의 구현과 함께, 어떻게 직접적으로 cancel되는 것인지를 알아보자.
+
+먼저 CancelToken의 구현체를 살펴보자.
+https://github.com/axios/axios/blob/a52e4d9af51205959ef924f87bcf90c605e08a1e/lib/cancel/CancelToken.js#L12
+```js
+// lib/cancel/CancelToken.js
+```
