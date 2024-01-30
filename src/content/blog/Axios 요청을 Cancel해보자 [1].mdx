@@ -9,7 +9,7 @@ heroImage: "/blog-placeholder-4.jpg"
 
 import { YouTube } from '../../components/lit/youtube-element';
 
-<YouTube src="https://youtu.be/6DIsa_SLifQ?si=KOJ71RrsPG5DQWF7" />
+<YouTube src="https://youtu.be/K1pBEpFMDuY?si=m3eoY_QgiaANQGd5" />
 
 ## Axios 요청을 Cancel해보자
 
@@ -61,6 +61,8 @@ class Axios {
 requst 메서드를 보면 configOrUrl, config를 인자로 받는다.
 그리고 this._request 메서드를 호출한다.
 _request를 살펴보자.
+
+---
 
 ## _requset 메서드
 
@@ -116,6 +118,7 @@ while (i < len) { // 인덱스가 길이보다 작으면
   }
 }
 ```
+
 ### dispatchRequest 실행 (실제 요청을 보내는 메서드)
 
 ```js
@@ -145,6 +148,8 @@ return promise; // promise를 리턴한다.
 두 인터셉터가 요청 앞뒤로 실행되는 것을 볼 수 있다.
 
 그렇다면 이제 dispatchRequest를 살펴보자.
+
+---
 
 ## dispatchRequest
 
@@ -272,6 +277,9 @@ function onAdapterRejection(reason) {
 
 이쯤 오면 대충 어디서 요청이 리턴되고 reject 되는지 알 수 있다.
 
+이제 어댑터를 살펴보자.
+
+---
 
 ## Adapter (어댑터)
 
@@ -294,4 +302,115 @@ export default {
 }
 
 ```
-적절한 어댑터를 찾아 반환하고 없으면 AxiosError를 던진다.
+적절한 어댑터를 찾아 반환하고 없으면 AxiosError를 던진다. \
+브라우저라는 가정하에 `xhrAdapter`로 가보자.
+
+---
+
+## xhrAdapter
+
+```js
+// lib/adapters/xhr.js
+const isXHRAdapterSupported = typeof XMLHttpRequest !== 'undefined';
+
+export default isXHRAdapterSupported && function (config) {
+    return new Promise(function dispatchXhrRequest(resolve, reject) {
+      ...
+```
+XMLHttpRequest 인지 확인하고, 맞으면 함수를 리턴한다.
+
+```js
+  ...
+  // XMLHttpRequest 인스턴스를 생성한다.
+  let request = new XMLHttpRequest();
+  ...
+```
+
+쭉쭉 내려가보자. (이 사이는 이것저것 요청을 위한 세팅들을 한다.)
+우리가 찾고 있던 cancelToken이 어디로 흘러갔는지 보자.
+
+```js
+    ...
+    if (config.cancelToken || config.signal) {
+      // Handle cancellation
+      onCanceled = cancel => {
+        if (!request) {
+          return;
+        }
+        reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+        request.abort();
+        request = null;
+      };
+
+      config.cancelToken && config.cancelToken.subscribe(onCanceled);
+      if (config.signal) {
+        config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+      }
+    }
+    ...
+
+    request.send(requestData || null);
+  });
+}
+```
+
+오! 우리가 config에서 넣어준 cancelToken이 여기서 사용되고 있다. \
+자세하게 뜯어보자.
+
+요청에 `cancelToken`이나 `signal`이 있으면, 취소 로직을 설정한다.
+```js
+  if (config.cancelToken || config.signal) {
+    //...
+  }
+```
+onCanceled는 요청이 취소되었을 때 실행되는 함수이다.\
+request를 확인하고, reject을 하게 된다. \
+이때 cancel이 없거나 cancel.type이 있으면 CanceledError를 던지고, 아니면 cancel을 직접 던진다. \
+그래고 request를 abort하고, request를 null로 설정한다.
+
+```js
+  onCanceled = cancel => {
+    if (!request) {
+      return;
+    }
+    reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+    request.abort();
+    request = null;
+  };
+```
+
+cancelToken이 있으면 onCanceled를 구독하고, \
+signal이 있으면 signal에 abort 이벤트를 등록한다.
+
+```js
+  config.cancelToken && config.cancelToken.subscribe(onCanceled);
+  if (config.signal) {
+    config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+  }
+```
+
+중간에 넘어간 부분이 있는데, unsubscribe를 하는 부분이다. 
+```js
+  function done() {
+    if (config.cancelToken) {
+      config.cancelToken.unsubscribe(onCanceled);
+    }
+
+    if (config.signal) {
+      config.signal.removeEventListener('abort', onCanceled);
+    }
+  }
+```
+요청이 끝나면 unsubscribe를 해준다.
+
+
+여기까지를 통해서 직접적으로 cancelToken의 token이 요청의 config로 들어가서 어디까지 내려가고 \
+어떻게 cancel이 구독되는지 찾아볼 수 있었다.
+
+cancel과 거의 같이 다니는 무언가가 있다...! \
+signal이라는 것이다. \
+signal에 대해서는 다음에 또 설명해보고자 한다.
+
+당이 떨어져서 글이 끝나갈 수록 말이 제대로 안써진다...\
+2편에서는 CancelToken에 대해서 알아보고, \
+3편에서는 signal에 대해서 알아보고자 한다.
