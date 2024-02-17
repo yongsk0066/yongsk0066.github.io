@@ -60,11 +60,14 @@ export class AsciiElement extends LitElement {
     #text-grid {
       font-size: 20px;
       @media (max-width: 768px) {
-        zoom: 0.7;
+        zoom: 0.6;
       }
     }
     ul {
       list-style: none;
+      @media (max-width: 768px) {
+        zoom: 0.6;
+      }
     }
 
     .option {
