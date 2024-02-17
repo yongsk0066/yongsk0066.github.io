@@ -8,28 +8,7 @@ import {
   type TransformKey,
   type TransformProps,
 } from "./transforms";
-
-const text = `
-/helloWorld Sed ut peperspiciatis unde omnis iste natusrspiciatis unde omnis iste natus error sit.
-/helloWorld voluptatetem accusantium doloremque laudantium,m accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore verita.
-/helloWorld eaque ipspsa quae ab illo inventorea quae ab illo inventore veritatis et quasieaque ipsa quae ab illo inventore verita.
-/helloWorld architectcto beatae vitae dicta sunto beatae vitae dicta sunt explicabo Nemo enim ipsam voluptatem.
-/helloWorld quia voluluptas sit aspernatur aut oditptas sit aspernatur aut odit aut fugit, sed quia e porro quisquam e.
-/helloWorld consequununtur magni dolores eos quitur magni dolores eos qui e porro quisquam e.
-/helloWorld voluptatetem accusantium doloremque laudantium,m accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore verita.
-/helloWorld eaque ipspsa quae ab illo inventorea quae ab illo inventore veritatis et quasieaque ipsa quae ab illo inventore verita.
-/helloWorld architectcto beatae vitae dicta sunto beatae vitae dicta sunt explicabo Nemo enim ipsam voluptatem.
-/helloWorld quia voluluptas sit aspernatur aut oditptas sit aspernatur aut odit aut fugit, sed quia e porro quisquam e.
-/helloWorld consequununtur magni dolores eos qutur magni dolores eos qu.
-/helloWorld ratione v voluptatem sequi nesciunt Neque porrooluptatem sequi nesciunt Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
-/helloWorld Ut enim a ad minima veniam, quisd minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur,.
-/helloWorld vel illumum qui dolorem eum fugiat qui dolorem eum fugiat quo voluptas nulla pariatur?.
-/helloWorld Sed ut peperspiciatis unde omnis iste natusrspiciatis unde omnis iste natus error site porro quisquam ee porro quisquam e .
-/helloWorld But I musust explain to you howt explain to you how all this mistaken idea of denouncing pleasure and praising pain was born and I will give you a complete account of the system, and expound the actual teachings of the great explorer of the truth, the master-builder of human happiness.
-/helloWorld No one rerejects, dislikes, orjects, dislikes, or avoids pleasure itself, because it is pleasure, but because those who do not know how to pursue pleasure rationally encounter consequences that are extremely painful.
-/helloWorld Nor againin is there anyone who is there anyone who loves or pursues or desires to obtain pain of itself, because it is pain, but because occasionally circumstances occur in which toil and pain can procure him some great pleasure.
-/helloWorld To take a a trivial example, which trivial example, which of us ever undertakes laborious physical exercise, except to obtain some advantage from it? But who has any right to find fault with a man who chooses to enjoy a pleasure that has no annoying consequences, or one who avoids a pain that produces no resultant pleasure?.  
-`;
+import { korText, text } from "./const";
 
 @customElement("ascii-element")
 export class AsciiElement extends LitElement {
@@ -65,14 +44,15 @@ export class AsciiElement extends LitElement {
     ul {
       list-style: none;
       @media (max-width: 768px) {
-        zoom: 0.6;
+        zoom: 0.7;
       }
+      margin-right: 8px;
     }
 
     .option {
-      font-size: 32px;
+      font-size: 24px;
       @media (max-width: 768px) {
-        font-size: 24px;
+        font-size: 18px;
       }
     }
   `;
@@ -143,7 +123,7 @@ export class AsciiElement extends LitElement {
     return sum / this.fpsHistory.length || 0;
   }
 
-  transfomer(props: TransformProps): [number, number] {
+  transformer(props: TransformProps): [number, number] {
     return this.transforms.reduce(
       (acc, transform) => {
         const resolvedTransform: Transform =
@@ -161,7 +141,7 @@ export class AsciiElement extends LitElement {
     );
     for (let y = 0; y < this.rows; y++) {
       for (let x = 0; x < this.cols; x++) {
-        const [nx, ny] = this.transfomer({
+        const [nx, ny] = this.transformer({
           x: x / this.cols,
           y: y / this.rows,
           cx: 0.5,

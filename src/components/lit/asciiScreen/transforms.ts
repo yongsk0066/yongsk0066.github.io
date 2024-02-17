@@ -49,12 +49,23 @@ export const rotate: Transform = ({ x, y, cx, cy, time }) => {
   return [tx, ty];
 };
 
+export const hurricane: Transform = ({ x, y, cx, cy, time }) => {
+  const angle = time * 0.1;
+  const dx = x - cx;
+  const dy = y - cy;
+  const dist = Math.sqrt(dx ** 2 + dy ** 2);
+  const tx = cx + dx * Math.cos(angle) - dy * Math.sin(angle) * dist * 0.01;
+  const ty = cy + dx * Math.sin(angle) + dy * Math.cos(angle) * dist * 0.01;
+  return [tx, ty];
+};
+
 export const transformMap = {
   spiral,
   wave,
   zoom,
   shake,
   rotate,
+  hurricane,
 };
 
 export type TransformKey = keyof typeof transformMap;
