@@ -50,16 +50,14 @@ export class AsciiElement extends LitElement {
     }
 
     .row {
-      line-height: 24px;
-    }
-    .cell {
-      width: 12px;
-      height: 20px;
       line-height: 20px;
       display: inline-block;
+      white-space: pre;
     }
+
     #text-grid {
       font-size: 20px;
+      overflow: hidden;
       @media (max-width: 768px) {
         zoom: 0.6;
       }
@@ -188,10 +186,7 @@ export class AsciiElement extends LitElement {
     return html`
       <div id="text-grid">
         ${this.cellMap.map(
-          (row) =>
-            html`<div class="row">
-              ${row.map((cell) => html`<div class="cell">${cell}</div>`)}
-            </div>`
+          (row) => html`<div class="row">${row.join("")}</div>`
         )}
       </div>
       ${this.transforms.length &&
