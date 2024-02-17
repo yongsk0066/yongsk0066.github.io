@@ -46,6 +46,7 @@ export class AsciiElement extends LitElement {
       border-radius: 0.5rem;
       overflow: hidden;
       margin: 16px 0;
+      transform: translate(0);
     }
 
     .row {
