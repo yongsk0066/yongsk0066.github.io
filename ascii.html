@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      body {
+        background-color: rgb(9, 3, 44);
+        color: rgb(96, 124, 198);
+        font-size: 20px;
+      }
+      .cell {
+        width: 12px;
+        height: 20px;
+        display: inline-block;
+      }
+      #text-grid {
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="text-grid"></div>
+    <script>
+      const str = `
+              /dream Sed ut peperspiciatis unde omnis iste natusrspiciatis unde omnis iste natus error sit.
+              /dream voluptatetem accusantium doloremque laudantium,m accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore verita.
+              /dream eaque ipspsa quae ab illo inventorea quae ab illo inventore veritatis et quasieaque ipsa quae ab illo inventore verita.
+              /dream architectcto beatae vitae dicta sunto beatae vitae dicta sunt explicabo Nemo enim ipsam voluptatem.
+              /dream quia voluluptas sit aspernatur aut oditptas sit aspernatur aut odit aut fugit, sed quia e porro quisquam e.
+              /dream consequununtur magni dolores eos quitur magni dolores eos qui e porro quisquam e.
+              /dream voluptatetem accusantium doloremque laudantium,m accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore verita.
+              /dream eaque ipspsa quae ab illo inventorea quae ab illo inventore veritatis et quasieaque ipsa quae ab illo inventore verita.
+              /dream architectcto beatae vitae dicta sunto beatae vitae dicta sunt explicabo Nemo enim ipsam voluptatem.
+              /dream quia voluluptas sit aspernatur aut oditptas sit aspernatur aut odit aut fugit, sed quia e porro quisquam e.
+              /dream consequununtur magni dolores eos qutur magni dolores eos qu.
+              /dream ratione v voluptatem sequi nesciunt Neque porrooluptatem sequi nesciunt Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.
+              /dream Ut enim a ad minima veniam, quisd minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur,.
+              /dream vel illumum qui dolorem eum fugiat qui dolorem eum fugiat quo voluptas nulla pariatur?.
+              /dream Sed ut peperspiciatis unde omnis iste natusrspiciatis unde omnis iste natus error site porro quisquam ee porro quisquam e .
+              /dream But I musust explain to you howt explain to you how all this mistaken idea of denouncing pleasure and praising pain was born and I will give you a complete account of the system, and expound the actual teachings of the great explorer of the truth, the master-builder of human happiness.
+              /dream No one rerejects, dislikes, orjects, dislikes, or avoids pleasure itself, because it is pleasure, but because those who do not know how to pursue pleasure rationally encounter consequences that are extremely painful.
+              /dream Nor againin is there anyone who is there anyone who loves or pursues or desires to obtain pain of itself, because it is pain, but because occasionally circumstances occur in which toil and pain can procure him some great pleasure.
+              /dream To take a a trivial example, which trivial example, which of us ever undertakes laborious physical exercise, except to obtain some advantage from it? But who has any right to find fault with a man who chooses to enjoy a pleasure that has no annoying consequences, or one who avoids a pain that produces no resultant pleasure?.
+      `;
+      const sentences = str
+        .split(/[\n\r]/)
+        .filter((s) => s.length > 0)
+        .map((s) => s + " ");
+
+      function getCharAt(x, y) {
+        const si = y % sentences.length;
+        const ci = Math.min(x, sentences[si].length - 1);
+        return sentences[si][ci];
+      }
+      const rows = 30;
+      const cols = 100;
+
+      const cellMap = [];
+      const root = document.getElementById("text-grid");
+      for (let y = 0; y < rows; y++) {
+        const row = document.createElement("div");
+        root.appendChild(row);
+        cellMap.push([]);
+        for (let x = 0; x < cols; x++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          cell.innerHTML = getCharAt(x, y);
+          row.appendChild(cell);
+          cellMap[y].push(cell);
+        }
+      }
+
+      let animationBegin = null;
+      let currentTime = 0;
+      function animate() {
+        if (animationBegin === null) {
+          animationBegin = new Date();
+        }
+        currentTime = (new Date() - animationBegin) / 1000;
+        drawText();
+        requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+
+      function transform(x, y, cx, cy, time) {
+        // center of the canvas
+
+        const dx = x - cx;
+        const dy = y - cy;
+
+        const dist = Math.sqrt(dx ** 2 + dy ** 2);
+
+        const currAngle = Math.atan2(dy, dx);
+        const newAngle = currAngle - Math.sqrt(dist) * time * 0.1;
+
+        const tx = cx + Math.cos(newAngle) * dist;
+        const ty = cy + Math.sin(newAngle) * dist;
+        return [tx, ty];
+      }
+
+      const validateCor = (x, y, w, h) => {
+        return x >= 0 && x < w && y >= 0 && y < h;
+      };
+
+      function drawText() {
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            let [nx, ny] = transform(x / cols, y / rows, 0.5, 0.5, currentTime);
+            nx = Math.floor(nx * cols);
+            ny = Math.floor(ny * rows);
+            if (validateCor(nx, ny, cols, rows)) {
+              const newText = getCharAt(x, y);
+              if (cellMap[ny][nx].innerText !== newText) {
+                cellMap[ny][nx].innerText = newText;
+              }
+            }
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

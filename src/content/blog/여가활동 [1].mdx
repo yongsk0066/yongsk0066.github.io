@@ -1,0 +1,61 @@
+---
+title: "여가활동 [1]"
+description: ""
+author: "Yongseok"
+pubDate: "Feb 17 2024"
+categories: ["hobby"]
+heroImage: "/blog-placeholder-3.jpg"
+---
+
+
+import { YouTube } from '../../components/lit/youtube-element';
+
+import { AsciiElement } from '../../components/lit/asciiScreen/ascii-element';
+
+
+[미드저니 홈페이지](https://www.midjourney.com/home)가 너무 맘에들어서 무슨 라이브러리 썼나 찾아보다가. 클로닝한 영상을 찾게되었다.
+
+<YouTube src="https://youtu.be/YCJgQI71jEE?si=KOp-YtU2n-yCZR8z" />
+
+이분 작업을 보니깐 코드양이 그리 많지는 않아서, 나도 한번 클로닝을 해보았다.
+
+트랜스폼 로직만 조금 분리해내서 파이프라인형태로 넣을 수 있게 만들었다.
+만든뒤 lit element로 잘 말아주었다.
+
+요런 것들을 할 수있다.
+
+### 기본
+
+<AsciiElement 
+  transforms={[]}
+  client:only/>
+
+### 미드저니 스타일 spiral
+
+```tsx
+<AsciiElement 
+  transforms={['spiral']}
+  client:only/>
+```
+
+<AsciiElement 
+  transforms={['spiral']}
+  client:only/>
+
+### spiral -> shake
+
+```tsx
+<AsciiElement 
+  transforms={['spiral', 'zoom', 'wave']}
+  client:only/>
+```
+
+<AsciiElement 
+  transforms={['spiral', 'zoom', 'wave']}
+  client:only/>
+
+
+
+쭉쭉 몇개 더 첨부해보려 했는데, 더 넣으니 브라우저가 뻗으려한다... 그래서 여기까지만 하겠다. \
+잘 관리해서 쓰면 재미있을 것 같다.
+
