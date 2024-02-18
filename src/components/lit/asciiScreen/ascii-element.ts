@@ -17,7 +17,8 @@ export class AsciiElement extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
-      font-family: monospace;
+      font-family: "JetBrains Mono", monospace;
+      font-optical-sizing: auto;
       background-color: rgb(9, 3, 44);
       color: rgb(96, 124, 198);
       zoom: 0.5;
@@ -37,6 +38,7 @@ export class AsciiElement extends LitElement {
     #text-grid {
       font-size: 20px;
       overflow: hidden;
+
       @media (max-width: 768px) {
         zoom: 0.6;
       }

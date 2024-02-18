@@ -24,6 +24,35 @@
 	--tag-color-green: #044317;
 	--tag-background-green: #a7f0ba;
 }
+
+/* <link
+  rel="preload"
+  href="/fonts/JetBrainsMono-Bold.woff"
+  as="font"
+  type="font/woff"
+  crossorigin
+/>
+<link
+  rel="preload"
+  href="/fonts/JetBrainsMono-Regular.woff"
+  as="font"
+  type="font/woff"
+  crossorigin
+/>
+<link
+  rel="preload"
+  href="/fonts/JetBrainsMono-SemiBold.woff"
+  as="font"
+  type="font/woff"
+  crossorigin
+/>
+<link
+  rel="preload"
+  href="/fonts/JetBrainsMono-Medium.woff"
+  as="font"
+  type="font/woff"
+  crossorigin
+/> */
 @font-face {
 	font-family: 'Atkinson';
 	src: url('/fonts/atkinson-regular.woff') format('woff');
@@ -38,6 +67,41 @@
 	font-style: normal;
 	font-display: swap;
 }
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff');
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-SemiBold.woff2') format('woff');
+	font-weight: 600;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'JetBrains Mono';
+	src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+
+
+
 body {
 	font-family: 'Atkinson', sans-serif;
 	margin: 0;

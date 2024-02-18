@@ -59,6 +59,37 @@ export const hurricane: Transform = ({ x, y, cx, cy, time }) => {
   return [tx, ty];
 };
 
+export const celestialOrbit: Transform = ({ x, y, cx, cy, time }) => {
+  const dx = x - cx;
+  const dy = y - cy;
+  const dist = Math.sqrt(dx ** 2 + dy ** 2);
+  const initialAngle = Math.atan2(dy, dx);
+  const period = 2 * Math.PI; // 한 바퀴 도는데 필요한 시간
+  const orbitSpeed = 1; // 궤도 속도 조절 변수
+
+  // 타원 궤도의 장축과 단축을 설정하여 더 다양한 궤도 생성
+  const majorAxis = dist;
+  const minorAxis = dist * 0.6;
+  const angle = initialAngle + ((time * orbitSpeed) % period);
+
+  const tx = cx + Math.cos(angle) * majorAxis;
+  const ty = cy + Math.sin(angle) * minorAxis;
+  return [tx, ty];
+};
+
+export const fractalMotion: Transform = ({ x, y, cx, cy, time }) => {
+  const dx = x - cx;
+  const dy = y - cy;
+  const dist = Math.sqrt(dx ** 2 + dy ** 2);
+  const initialAngle = Math.atan2(dy, dx);
+  const fractalScale = Math.sin(time) * 0.5 + 1.5; // 프랙탈 스케일 조정
+  const angle = initialAngle + Math.sin(time * 0.5) * 2 * Math.PI; // 프랙탈 회전 동작
+
+  const tx = cx + Math.cos(angle) * dist * fractalScale;
+  const ty = cy + Math.sin(angle) * dist * fractalScale;
+  return [tx, ty];
+};
+
 export const transformMap = {
   spiral,
   wave,
@@ -66,6 +97,8 @@ export const transformMap = {
   shake,
   rotate,
   hurricane,
+  celestialOrbit,
+  fractalMotion,
 };
 
 export type TransformKey = keyof typeof transformMap;
