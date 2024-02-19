@@ -13,7 +13,7 @@ export const spiral: Transform = ({ x, y, cx, cy, time }) => {
   const dy = y - cy;
   const dist = Math.sqrt(dx ** 2 + dy ** 2);
   const currAngle = Math.atan2(dy, dx);
-  const newAngle = currAngle - Math.sqrt(dist) * time * 0.1;
+  const newAngle = currAngle - Math.sqrt(dist) * time * 0.5;
   const tx = cx + Math.cos(newAngle) * dist;
   const ty = cy + Math.sin(newAngle) * dist;
 
@@ -50,7 +50,7 @@ export const rotate: Transform = ({ x, y, cx, cy, time }) => {
 };
 
 export const hurricane: Transform = ({ x, y, cx, cy, time }) => {
-  const angle = time * 0.1;
+  const angle = time * 0.5;
   const dx = x - cx;
   const dy = y - cy;
   const dist = Math.sqrt(dx ** 2 + dy ** 2);

@@ -26,7 +26,6 @@ export class AsciiElement extends LitElement {
       border-radius: 0.5rem;
       overflow: hidden;
       margin: 16px 0;
-      transform: translate(0);
     }
 
     .row {
@@ -38,6 +37,9 @@ export class AsciiElement extends LitElement {
     #text-grid {
       font-size: 20px;
       overflow: hidden;
+      transform: translate(0);
+      display: flex;
+      flex-direction: column;
 
       @media (max-width: 768px) {
         zoom: 0.6;
@@ -71,7 +73,7 @@ export class AsciiElement extends LitElement {
   @state() private fpsHistory: number[] = []; // FPS 측정치 저장 배열
 
   private lastFrameTime: DOMHighResTimeStamp = 0; // 마지막 프레임 시간 기록
-  private rows = 30;
+  private rows = 40;
   private cols = 100;
   private sentences: string[] = [];
 
@@ -171,22 +173,25 @@ export class AsciiElement extends LitElement {
           (row) => html`<div class="row">${row.join("")}</div>`
         )}
       </div>
-      ${this.transforms.length &&
-      html`<ul>
-        <li class="option">-----</li>
-        ${repeat(
-          this.transforms,
-          (transform) => transform,
-          (transform) =>
-            html`<li class="option">
-              ${typeof transform === "function" ? transform.name : transform}
-            </li>`
-        )}
-        <li class="option">-----</li>
-        <li class="option">FPS:</li>
-        <li class="option">${this.averageFPS.toFixed(2)}</li>
-        <li class="option">-----</li>
-      </ul>`}
+      ${this.transforms.length
+        ? html`<ul>
+            <li class="option">-----</li>
+            ${repeat(
+              this.transforms,
+              (transform) => transform,
+              (transform) =>
+                html`<li class="option">
+                  ${typeof transform === "function"
+                    ? transform.name
+                    : transform}
+                </li>`
+            )}
+            <li class="option">-----</li>
+            <li class="option">FPS:</li>
+            <li class="option">${this.averageFPS.toFixed(2)}</li>
+            <li class="option">-----</li>
+          </ul>`
+        : null}
     `;
   }
 }
