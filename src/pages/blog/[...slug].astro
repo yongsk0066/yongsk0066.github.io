@@ -16,8 +16,6 @@ const post = Astro.props;
 const { Content } = await post.render();
 ---
 
-<ViewTransitions />
-
 <BlogPost {...post.data}>
   <Content />
 </BlogPost>
