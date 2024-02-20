@@ -10,8 +10,8 @@ import {
 } from "./transforms";
 import { korText, text } from "./const";
 
-@customElement("ascii-element")
-export class AsciiElement extends LitElement {
+@customElement("home-cover-element")
+export class HomeCoverElement extends LitElement {
   static styles = css`
     :host {
       display: flex;
@@ -21,11 +21,10 @@ export class AsciiElement extends LitElement {
       font-optical-sizing: auto;
       background-color: rgb(9, 3, 44);
       color: rgb(96, 124, 198);
-      zoom: 0.5;
-      aspect-ratio: 16 / 9;
       border-radius: 0.5rem;
       overflow: hidden;
-      margin: 16px 0;
+      width: 100%;
+      height: 100%;
     }
 
     .row {
@@ -36,7 +35,6 @@ export class AsciiElement extends LitElement {
 
     #text-grid {
       font-size: 20px;
-      overflow: hidden;
       transform: translate(0);
       display: flex;
       flex-direction: column;
@@ -62,18 +60,14 @@ export class AsciiElement extends LitElement {
   `;
 
   @property({ type: Array<TransformKey | Transform> })
-  transforms: (TransformKey | Transform)[] = [
-    (props: TransformProps) => [props.x, props.y],
-  ];
+  transforms: (TransformKey | Transform)[] = ["spiral"];
 
   @state() private cellMap: string[][] = [];
   @state() private animationBegin: number | null = null;
   @state() private currentTime: number = 0;
-  @state() private fpsHistory: number[] = []; // FPS 측정치 저장 배열
 
-  private lastFrameTime: DOMHighResTimeStamp = 0; // 마지막 프레임 시간 기록
-  private rows = 40;
-  private cols = 100;
+  private rows = 60;
+  private cols = 200;
   private sentences: string[] = [];
 
   connectedCallback(): void {
@@ -106,24 +100,9 @@ export class AsciiElement extends LitElement {
     if (this.animationBegin === null) {
       this.animationBegin = time;
     }
-    const delta = time - this.lastFrameTime;
-    this.lastFrameTime = time;
-    if (delta > 0) {
-      const fps = 1000 / delta;
-      this.fpsHistory.push(fps);
-      // 배열 길이를 최근 100개 측정치로 제한
-      if (this.fpsHistory.length > 100) {
-        this.fpsHistory.shift();
-      }
-    }
     this.currentTime = ((time - this.animationBegin) / 1000) * 1.5;
     this.drawText();
     requestAnimationFrame(this.animateText.bind(this));
-  }
-  get averageFPS(): number {
-    // FPS 평균 계산
-    const sum = this.fpsHistory.reduce((a, b) => a + b, 0);
-    return sum / this.fpsHistory.length || 0;
   }
 
   transformer(props: TransformProps): [number, number] {
@@ -172,31 +151,12 @@ export class AsciiElement extends LitElement {
           (row) => html`<div class="row">${row.join("")}</div>`
         )}
       </div>
-      ${this.transforms.length
-        ? html`<ul>
-            <li class="option">-----</li>
-            ${repeat(
-              this.transforms,
-              (transform) => transform,
-              (transform) =>
-                html`<li class="option">
-                  ${typeof transform === "function"
-                    ? transform.name
-                    : transform}
-                </li>`
-            )}
-            <li class="option">-----</li>
-            <li class="option">FPS:</li>
-            <li class="option">${this.averageFPS.toFixed(2)}</li>
-            <li class="option">-----</li>
-          </ul>`
-        : null}
     `;
   }
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    "ascii-element": AsciiElement;
+    "home-cover-element": HomeCoverElement;
   }
 }
