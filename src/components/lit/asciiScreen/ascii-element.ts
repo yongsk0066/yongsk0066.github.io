@@ -61,7 +61,7 @@ export class AsciiElement extends LitElement {
     }
   `;
 
-  @property({ type: Array })
+  @property({ type: Array<TransformKey | Transform> })
   transforms: (TransformKey | Transform)[] = [
     (props: TransformProps) => [props.x, props.y],
   ];
@@ -69,7 +69,6 @@ export class AsciiElement extends LitElement {
   @state() private cellMap: string[][] = [];
   @state() private animationBegin: number | null = null;
   @state() private currentTime: number = 0;
-  @state() private fps: number = 0;
   @state() private fpsHistory: number[] = []; // FPS 측정치 저장 배열
 
   private lastFrameTime: DOMHighResTimeStamp = 0; // 마지막 프레임 시간 기록
