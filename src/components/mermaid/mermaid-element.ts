@@ -23,7 +23,7 @@ export class Mermaid extends LitElement {
   svgUrl = "";
 
   @property({ type: Boolean })
-  showCode = false;
+  showCode = true;
 
   toggleView() {
     this.showCode = !this.showCode;

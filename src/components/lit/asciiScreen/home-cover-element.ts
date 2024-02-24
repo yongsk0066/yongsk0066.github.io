@@ -8,7 +8,7 @@ import {
   type TransformKey,
   type TransformProps,
 } from "./transforms";
-import { korText, text } from "./const";
+import { korText, overview, text } from "./const";
 import { keyframes } from "./animation";
 
 @customElement("home-cover-element")
@@ -98,7 +98,7 @@ export class HomeCoverElement extends LitElement {
   }
 
   initCells(): void {
-    this.sentences = text
+    this.sentences = overview
       .split(/[\n\r]/)
       .filter((s) => s.length > 0)
       .map((s) => s + " ");
@@ -168,45 +168,7 @@ export class HomeCoverElement extends LitElement {
   render() {
     return html`
       <div id="text-grid">
-        <div class="glass" style="{filter(url(#SphereMapTest))}">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            xmlns:xlink="http://www.w3.org/1999/xlink"
-            id="svg-root"
-            width="381"
-            height="166"
-            z-index="-1"
-          >
-            <title id="test-title">filters-dispMap-BE-16</title>
-            <desc id="test-desc">
-              Test which verifies the basic facilities of feDisplacementMap.
-            </desc>
-            <defs>
-              <filter
-                id="SphereMapTest"
-                filterUnits="objectBoundingBox"
-                x="-0.45"
-                y="-1.29"
-                width="1.6"
-                height="3.5"
-              >
-                <feImage
-                  id="mapa"
-                  result="Map"
-                  xlink:href="/sphere_wide_1.png"
-                />
-                <feDisplacementMap
-                  id="despMap"
-                  in="SourceGraphic"
-                  in2="map"
-                  scale="100"
-                  xChannelSelector="R"
-                  yChannelSelector="G"
-                />
-              </filter>
-            </defs>
-          </svg>
-        </div>
+        <div class="glass" style="{filter(url(#SphereMapTest))}"></div>
         ${this.cellMap.map(
           (row) => html`<div class="row">${row.join("")}</div>`
         )}

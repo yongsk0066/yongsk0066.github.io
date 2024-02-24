@@ -21,7 +21,7 @@ export default defineConfig({
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false
-    })
+    }),
     // rehypeMathjax
     ]
   }), tailwind(),

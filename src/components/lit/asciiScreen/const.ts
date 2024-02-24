@@ -34,3 +34,21 @@ export const korText = `
 /대한민국헌법 위원은 탄핵 또는 금고 이상의 형의 선고에 의하지 아니하고는 파면되지 아니한다. 
 /대한민국헌법 대한민국은 통일을 지향하며, 자유민주적 기본질서에 입각한 평화적 통일 정책을 수립하고 이를 추진한다.
 `;
+
+export const overview = `
+/helloWorld This section contains a non-normative overview of the ECMAScript language.
+/helloWorld ECMAScript is an object-oriented programming language for performing computations and manipulating computational objects within a host environment. 
+/helloWorld ECMAScript as defined here is not intended to be computationally self-sufficient; indeed, there are no provisions in this specification for input of external data or output of computed results. 
+/helloWorld Instead, it is expected that the computational environment of an ECMAScript program will provide not only the objects and other facilities described in this specification but also certain environment-specific objects, whose description and behaviour are beyond the scope of this specification except to indicate that they may provide certain properties that can be accessed and certain functions that can be called from an ECMAScript program.
+/helloWorld ECMAScript was originally designed to be used as a scripting language, but has become widely used as a general-purpose programming language.
+/helloWorld A scripting language is a programming language that is used to manipulate, customize, and automate the facilities of an existing system.
+/helloWorld In such systems, useful functionality is already available through a user interface, and the scripting language is a mechanism for exposing that functionality to program control.
+/helloWorld In this way, the existing system is said to provide a host environment of objects and facilities, which completes the capabilities of the scripting language.
+/helloWorld A scripting language is intended for use by both professional and non-professional programmers.
+/helloWorld ECMAScript was originally designed to be a Web scripting language, providing a mechanism to enliven Web pages in browsers and to perform server computation as part of a Web-based client-server architecture.
+/helloWorld ECMAScript is now used to provide core scripting capabilities for a variety of host environments.
+/helloWorld Therefore the core language is specified in this document apart from any particular host environment.
+/helloWorld ECMAScript usage has moved beyond simple scripting and it is now used for the full spectrum of programming tasks in many different environments and scales.
+/helloWorld As the usage of ECMAScript has expanded, so have the features and facilities it provides.
+/helloWorld ECMAScript is now a fully featured general-purpose programming language.
+`;

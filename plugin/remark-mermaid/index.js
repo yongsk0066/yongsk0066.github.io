@@ -132,9 +132,11 @@ const visitCodeBlock = async (ast, vFile, isSimple) => {
 
 const visitCodeToggleBlock = async (ast, vFile, isSimple) => {
   return visit(ast, 'code', async (node, index, parent) => {
+
     const { lang, value, position } = node;
     const destinationDir = getDestinationDir(vFile);
     let newNode;
+
 
     // If this codeblock is not mermaid, bail.
     if (lang !== 'mermaid') {
@@ -145,6 +147,7 @@ const visitCodeToggleBlock = async (ast, vFile, isSimple) => {
     let svgPath;
     try {
       svgPath = await render(value, destinationDir, vFile);
+
       vFile.info(`${lang} code block replaced with graph`, position, PLUGIN_NAME);
     } catch (error) {
       vFile.message(error, position, PLUGIN_NAME);
@@ -153,7 +156,6 @@ const visitCodeToggleBlock = async (ast, vFile, isSimple) => {
 
     const result =  litRender(html`<mermaid-toggle code="${encodeURIComponent(value)}" svgPath="${encodeURIComponent(svgPath)}"></mermaid-toggle>`, { ssr: true });
     const renderedString = await collectResult(result);
-    console.log("renderedString", renderedString)
     newNode = {
       type: 'html',
       value: renderedString,
@@ -224,7 +226,7 @@ const mermaid = (options = {}) => {
 
   const transformer =  async (ast, vFile, next) => {
     visitCodeBlock(ast, vFile, simpleMode);
-    // visitCodeToggleBlock(ast, vFile, simpleMode);
+    visitCodeToggleBlock(ast, vFile, simpleMode);
     visitLink(ast, vFile, simpleMode);
     visitImage(ast, vFile, simpleMode);
 
