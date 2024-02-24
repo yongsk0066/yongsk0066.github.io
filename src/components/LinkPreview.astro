@@ -7,12 +7,7 @@ import jsdom from "jsdom";
 const { src } = Astro.props;
 
 const response = await fetch(src);
-console.log(src);
-console.log(response.status);
-console.log(response.body);
-console.log(response.headers);
 const html = await response.text();
-console.log(html.slice(0, 200));
 const { document } = new jsdom.JSDOM(html)?.window;
 const title = document.querySelector("title")?.textContent;
 const description = document
@@ -21,7 +16,6 @@ const description = document
 const image = document
   .querySelector("meta[property='og:image']")
   ?.getAttribute("content");
-console.log({ title, description, image, src });
 ---
 
 <a class="link-preview" href={src} target="_blank" rel="noopener noreferrer">
