@@ -9,6 +9,7 @@ const { src } = Astro.props;
 const response = await fetch(src);
 console.log(src);
 console.log(response.status);
+console.log(response.body);
 const html = await response.text();
 const { document } = new jsdom.JSDOM(html)?.window;
 const title = document.querySelector("title")?.textContent;
