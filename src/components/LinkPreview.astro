@@ -10,7 +10,9 @@ const response = await fetch(src);
 console.log(src);
 console.log(response.status);
 console.log(response.body);
+console.log(response.headers);
 const html = await response.text();
+console.log(html.slice(0, 200));
 const { document } = new jsdom.JSDOM(html)?.window;
 const title = document.querySelector("title")?.textContent;
 const description = document
