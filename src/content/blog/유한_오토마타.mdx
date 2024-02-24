@@ -5,6 +5,15 @@ author: "Yongseok"
 pubDate: "Feb 24 2024"
 heroImage: "/infinite_automata.png"
 ---
+import LinkPreview from '../../components/LinkPreview.astro'
+
+시작은 정규표현식에 대한 궁금증에서 시작된다.\
+정규표현식을 크나큰 생각없이 사용하다가, 이게 무엇이길래? 여러 언어들에서 통용되고 있는것일까? 라는 생각이 들었다.\
+
+그래서 두권의 책을 구매하고, 기록을 남기기로 했다.
+
+<LinkPreview src="https://product.kyobobook.co.kr/detail/S000001875066" />
+<LinkPreview src="https://www.yes24.com/Product/Goods/95877099" />
 
 
 # 유한 오토마타(finite accepter)
@@ -152,10 +161,10 @@ stateDiagram-v2
 ### 정규언어가 아닌 경우
 
 1. **팔린드롬 언어**:
-$$*L*1={*w*∣*w*는 팔린드롬}$$
+$$L1={w|w는 팔린드롬}$$
 이 언어는 앞에서 읽으나 뒤에서 읽으나 같은 문자열(팔린드롬)로 구성되어 있습니다. 예를 들어, "abba", "madam", "a", "aa" 등은 이 언어에 포함되지만 "ab", "abc"는 포함되지 않습니다. DFA만으로는 중간 지점을 정확히 알아내고 뒤집힌 문자열을 비교하는 것이 불가능합니다.
 2. **포맷 매칭 언어**:
-$$*L*2={*a^nb^n*∣*n*≥0}$$
+$$L2={a^nb^n|n≥0}$$
 이 언어는 'a'가 n번, 그 다음에 'b'가 n번 오는 문자열들로 구성됩니다. 예를 들어, "ab", "aabb", "aaabbb" 등은 이 언어에 포함되지만, "aab", "aba", "aaabb"는 포함되지 않습니다. 이는 DFA가 'a'의 정확한 수를 세고, 그 다음에 같은 수의 'b'를 확인하는 것이 불가능하기 때문입니다.
     
 <aside>
@@ -163,7 +172,7 @@ $$*L*2={*a^nb^n*∣*n*≥0}$$
 </aside>
     
 3. **반대 언어**:
-$$*L*3={*ww*∣*w*∈{*a*,*b*}∗}$$
+$$L3={ww|*∈{a,b}*}$$
 문자열 w 뒤에 동일한 문자열 w가 오는 경우의 집합입니다. 예를 들어, "aabbcc", "aabc", "bbb" 등은 포함되지 않지만 "aabaab", "aaa", "babbab"는 포함됩니다. DFA로 문자열의 반복 부분을 정확하게 파악하고 인식하는 것은 어렵습니다.
     
 <aside>

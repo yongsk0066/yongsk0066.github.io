@@ -10,7 +10,7 @@ heroImage: "/how_to_solve_it_placeholder.png"
 
 
 import { YouTube } from '../../components/lit/youtube-element';
-import { LinkPreview } from '../../components/link-preview-element';
+import LinkPreview from '../../components/LinkPreview.astro'
 
 설에 집에 들렸다가 고등학교 2학년 때 즈음인가 사두었던 책을 발견했다. 
 국문으로는 `어떻게 문제를 풀 것인가? - 수학적 사고 방법 -` 라는 책이다. 
@@ -23,10 +23,9 @@ import { LinkPreview } from '../../components/link-preview-element';
 
 _국문으로도 있으나 3챕터의 순서가 조금 다르다. 허나 순서와 내용이 관련이 없으니 크게 상관은 없을 것 같다. 영문은 3챕터가 알파벳 순서로 되어있으나 국문은 옮긴이가 나름의 의미적 순서를 부여한 것 같다._
 [국문 링크](https://product.kyobobook.co.kr/detail/S000001261487)
-{/* 
+
 <LinkPreview 
-  client:only
-  url="https://product.kyobobook.co.kr/detail/S000001261487" /> */}
+  src="https://product.kyobobook.co.kr/detail/S000001261487" />
 
 
 # 어떻게 문제를 풀 것인가?
