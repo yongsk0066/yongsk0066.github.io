@@ -9,10 +9,13 @@ import {
   type TransformProps,
 } from "./transforms";
 import { korText, text } from "./const";
+import { keyframes } from "./animation";
 
 @customElement("home-cover-element")
 export class HomeCoverElement extends LitElement {
   static styles = css`
+    ${keyframes}
+
     :host {
       display: flex;
       justify-content: center;
@@ -27,6 +30,23 @@ export class HomeCoverElement extends LitElement {
       height: 100%;
     }
 
+    .glass {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      /* animation: flicker 1s infinite; */
+      opacity: 0.3;
+      filter: url(#sphereMapTest);
+    }
+
     .row {
       line-height: 20px;
       display: inline-block;
@@ -38,6 +58,7 @@ export class HomeCoverElement extends LitElement {
       transform: translate(0);
       display: flex;
       flex-direction: column;
+      animation: textShadow 1s infinite;
 
       @media (max-width: 768px) {
         zoom: 0.6;
@@ -147,6 +168,45 @@ export class HomeCoverElement extends LitElement {
   render() {
     return html`
       <div id="text-grid">
+        <div class="glass" style="{filter(url(#SphereMapTest))}">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            xmlns:xlink="http://www.w3.org/1999/xlink"
+            id="svg-root"
+            width="381"
+            height="166"
+            z-index="-1"
+          >
+            <title id="test-title">filters-dispMap-BE-16</title>
+            <desc id="test-desc">
+              Test which verifies the basic facilities of feDisplacementMap.
+            </desc>
+            <defs>
+              <filter
+                id="SphereMapTest"
+                filterUnits="objectBoundingBox"
+                x="-0.45"
+                y="-1.29"
+                width="1.6"
+                height="3.5"
+              >
+                <feImage
+                  id="mapa"
+                  result="Map"
+                  xlink:href="/sphere_wide_1.png"
+                />
+                <feDisplacementMap
+                  id="despMap"
+                  in="SourceGraphic"
+                  in2="map"
+                  scale="100"
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            </defs>
+          </svg>
+        </div>
         ${this.cellMap.map(
           (row) => html`<div class="row">${row.join("")}</div>`
         )}
