@@ -17,6 +17,7 @@ const description = document
 const image = document
   .querySelector("meta[property='og:image']")
   ?.getAttribute("content");
+console.log({ title, description, image, src });
 ---
 
 <a class="link-preview" href={src} target="_blank" rel="noopener noreferrer">
