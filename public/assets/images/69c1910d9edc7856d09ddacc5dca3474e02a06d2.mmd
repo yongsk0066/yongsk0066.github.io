@@ -1,0 +1,17 @@
+stateDiagram-v2
+		direction LR
+		classDef Accept stroke-width:3px
+    state q0
+		state q1
+		state q2
+		state q3
+    [*] --> q0
+		q0 --> q2 : a
+		q0 --> q1 : b
+		q1 --> q1 : a, b
+		q2 --> q2 : b
+		q2 --> q3 : a
+		q3 --> q2 : b
+		q3 --> q3 : a
+
+		class q3 Accept
