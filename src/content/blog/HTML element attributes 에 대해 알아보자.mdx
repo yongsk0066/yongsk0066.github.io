@@ -1,0 +1,236 @@
+---
+title: "HTML element attributes 에 대해 알아보자"
+description: ""
+author: "Yongseok"
+pubDate: "Mar 1 2024"
+categories: ["react", "typescript"]
+heroImage: "/blog-placeholder-3.jpg"
+---
+
+```ts
+React.HTMLAttributes<HTMLButtonElement>
+
+React.HTMLProps<HTMLButtonElement>
+
+JSX.IntrinsicElements['button']
+
+React.ButtonHTMLAttributes<HTMLButtonElement>
+
+React.ComponentProps<'button'>
+
+React.ComponentPropsWithRef<'button'>
+
+React.ComponentPropsWithoutRef<'button'>
+```
+
+
+위의 많은 타입들... 이것들은 모두 button에 대한 타입을 나타낸다. \
+작업하다보면 가끔 가다 확장해서 사용해야하는 케이스들이 있는데, 어떤 것을 사용해야할까?\
+하나 하나 살펴보자.
+
+
+## 1. `React.HTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+  // React-specific Attributes
+
+  // Standard HTML Attributes
+
+  // RDFa Attributes (RDFa에 대해서는 나중에 적어보자)
+}
+
+interface DOMAttributes<T> {
+  children?: ReactNode | undefined;
+  // ...
+  // event handlers... 
+}
+```
+제너릭으로 받아 DOMAttributes로 확장된다.\
+전반적으로 많은 HTML 속성을 포함하고 있지만, 특정 태그에 대한 구체적인 타입들을 제공하지 못한다.
+
+```tsx
+interface ButtonProps extends React.HTMLAttributes<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌ 에러: 'type' 속성은 HTMLButtonElement에 존재하지 않습니다.
+  const isSubmit = props.type === 'submit';
+  // ...
+}
+```
+
+## 2. `React.HTMLProps<HTMLButtonElement>`
+
+https://github.com/DefinitelyTyped/DefinitelyTyped/blob/2bcc7e759889c24eff2891949c18dcabfc38d888/types/react/index.d.ts#L2302
+```ts
+interface HTMLProps<T> extends AllHTMLAttributes<T>, ClassAttributes<T> {
+}
+
+interface AllHTMLAttributes<T> extends HTMLAttributes<T> {
+  //...
+  type?: string | undefined;
+  // ...
+}
+interface ClassAttributes<T> extends RefAttributes<T> {
+}
+
+```
+
+`AllHTMLAttributes` 의 alias로 모든 HTML 속성을 포함하고 있다.\
+그래서 타입 자체도 많고, 특정 태그에 대한 타입들도 제공받지만, 덜 구체적인 타입을 제공한다.
+
+```tsx
+interface ButtonProps extends React.HTMLProps<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌ 
+  // type?: 'button' | 'submit' | 'reset' | undefined;
+  //
+  // 'type' 속성이 존재하지만, 타입이 부족합니다.
+  // type?: string | undefined;
+  const type = props.type;
+  // ...
+}
+```
+
+## 3. `JSX.IntrinsicElements['button']`
+
+```ts
+interface IntrinsicElements {
+  // HTML
+  // ...
+  button: React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>;
+}
+
+type DetailedHTMLProps<E extends HTMLAttributes<T>, T> = ClassAttributes<T> & E;
+```
+
+typescript의 글로벌 스코프에 있는 타입으로, 사용 가능한 네이티브 JSX 요소들의 타입을 제공한다.\
+그렇기에 `내장 요소` 라고도 불린다.\
+
+하지만, 이 타입은 인터페이스 확장이 불가능하다.
+
+```tsx
+// ❌ 에러: 인덱스 접근 타입은 확장할 수 없습니다.
+interface ButtonProps extends JSX.IntrinsicElements['button'] {}
+```
+
+이렇게 하면 되긴 한다..
+
+```tsx
+interface ButtonProps extends NonNullable<JSX.IntrinsicElements['button'], {}> {}
+
+```
+
+## 4. `React.ButtonHTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface ButtonHTMLAttributes<T> extends HTMLAttributes<T> {
+    disabled?: boolean | undefined;
+    form?: string | undefined;
+    formAction?:
+        | string
+        | DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS[
+            keyof DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS
+        ]
+        | undefined;
+    formEncType?: string | undefined;
+    formMethod?: string | undefined;
+    formNoValidate?: boolean | undefined;
+    formTarget?: string | undefined;
+    name?: string | undefined;
+    type?: "submit" | "reset" | "button" | undefined;
+    value?: string | readonly string[] | number | undefined;
+}
+```
+
+위의 `JSX.IntrinsicElements['button']`의 내부에서 살펴볼 수 있었던 타입으로,
+우리가 필요로 하는 것들을 제공한다. 하지만 더 유용한 타입이 있다.
+
+여기 아주 재밌는 타입이 있다\
+[`DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS`](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/c76c419153bf70858ab82843483657ae1bf11f17/types/react/canary.d.ts#L90)\
+RSC(React Server Components)에서 form action을 지원하기 위한 타입이다.\
+지금 Canaray 채널에서만 사용 가능하다. 타입 이름 그대로 지금 사용하면 해고당할 수 있다.
+
+여기서 구체적으로 찾아보지는 않겠지만, 아래 자료들을 보면 더 자세히 알 수 있을 것이다.
+https://react.dev/reference/react-dom/components/form
+https://github.com/DefinitelyTyped/DefinitelyTyped/pull/66928
+https://github.com/facebook/react/pull/27459
+https://github.com/facebook/react/pull/27460
+<aside>
+React’s extensions to the formAction prop are currently only available in React’s Canary and experimental channels. In stable releases of React, formAction works only as a built-in browser HTML component. Learn more about React’s release channels here.
+</aside>
+
+
+## 5. `React.ComponentProps<'button'>`
+https://react-typescript-cheatsheet.netlify.app/docs/react-types/componentprops/
+
+```ts
+type ComponentProps<T extends keyof JSX.IntrinsicElements | JSXElementConstructor<any>> = T extends
+    JSXElementConstructor<infer P> ? P
+    : T extends keyof JSX.IntrinsicElements ? JSX.IntrinsicElements[T]
+    : {};
+```
+
+먼저 결론부터 말하면 `ButtonHTMLAttributes`와 동일하다고 할 수 있지만, 더 짧고 간결하다. 안쓸 이유가 없다.
+
+타입이 조금 복잡한데, 차근차근 따라가보자.
+
+- 첫 번째 조건: `T extends JSXElementConstructor<infer P>` 'T'가 `JSXElementConstructor<infer P>` 에 할당 가능한가?\
+즉 `T`가 컴포넌트 생성자 타입이라면, 생성자가 받는 props 타입인 `P`를 반환한다.
+- 두 번째 조건: 첫 번째 조건에 만족하지 않고, `T extends keyof JSX.IntrinsicElements` 'T'가 `JSX.IntrinsicElements`에 할당 가능하면,\
+즉 `T`가 `JSX.IntrinsicElements`의 키 중 하나라면, `JSX.IntrinsicElements[T]`를 반환한다.
+
+`React.ComponentProps<'button'>` 은 JSX 요소를 생성하는 함수나, 클래스의 타입이 아니므로, 두 번째 조건에 만족한다.
+그래서 `JSX.IntrinsicElements['button']`를 반환한다.
+
+`JSX.IntrinsicElements['button']`는 또 `React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>`를 반환한다.
+결국 필요한 것들 모두 포함하고 있다.
+
+첫 번째 조건에 부합하는 경우는 다음과 같다.
+
+```tsx
+type Props = { name: string; age: number; };
+type Component = (props: Props) => (<div>...</div>);
+type ComponentProps = React.ComponentProps<typeof Component>;
+// ComponentProps = { name: string; age: number; }
+```
+
+이러한 구조로인해 유연하게 사용할 수 있다.
+
+## 6. `React.ComponentPropsWithRef<'button'>`, `React.ComponentPropsWithoutRef<'button'>`
+
+
+```ts
+type ComponentPropsWithRef<T extends ElementType> = T extends (new(props: infer P) => Component<any, any>)
+    ? PropsWithoutRef<P> & RefAttributes<InstanceType<T>>
+    : PropsWithRef<ComponentProps<T>>;
+
+type ComponentPropsWithoutRef<T extends ElementType> = PropsWithoutRef<ComponentProps<T>>;
+
+type PropsWithoutRef<P> =
+    P extends any ? ("ref" extends keyof P ? Omit<P, "ref"> : P) : P;
+type PropsWithRef<P> =
+    "ref" extends keyof P
+        ? P extends { ref?: infer R | undefined }
+            ? string extends R ? PropsWithoutRef<P> & { ref?: Exclude<R, string> | undefined }
+            : P
+        : P
+        : P;
+```
+
+
+
+### `React.ComponentPropsWithRef<'button'>`
+
+이것도 타입이 조금 복잡한데, 차근차근 따라가보자.
+
+- 첫 번째 조건: `T extends (new(props: infer P) => Component<any, any>)` 'T'가 `new(props: infer P) => Component<any, any>` 에 할당 가능한가?\
+`T`가 클래스 컴포넌트 생성자에 할당 가능하다면, props 타입에서 ref 를 제외한 나머지 타입과 `RefAttributes<InstanceType<T>>`를 합친 타입을 반환한다.
+- 그렇지 않다면, `PropsWithRef<ComponentProps<T>>`를 반환한다.
+
+`PropsWithRef`는 더 복잡한데, 간단히 정리해보면 ref가 문자열 타입이 아닌 경우에 해당 ref의 타입을 유지하거나 조정하여 반환한다.
+
+## 결론
+
+`React.ComponentProps<'button'>`을 사용하면 간결하고 유연하게 사용할 수 있다.
