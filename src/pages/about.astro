@@ -16,6 +16,7 @@ import Layout from "../layouts/BlogPost.astro";
     height: calc(100% - 1rem);
     background-color: black;
     margin: 0 auto;
+    position: relative;
   }
 
   figure {
@@ -39,25 +40,14 @@ import Layout from "../layouts/BlogPost.astro";
       oncontextmenu="return false;"
     >
       <source src="/video/about.mp4" type="video/mp4" />
+      <div>hello world</div>
     </video>
     <figcaption>My footiage from 2024, shot on super8 film</figcaption>
   </figure>
   <h1>
     Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
+    <br />
+    <br />
+     Based in Seoul, South Korea. 🇰🇷
   </h1>
-  <!-- japanese -->
-  <!-- <h1>
-    こんにちは！👋<br /> 私の名前はYongSeok Jangです。<br />
-     私はフロントエンドエンジニアです。
-  </h1>
-
-  <h1>
-    你好！👋<br /> 我的名字是YongSeok Jang。<br />
-     我是一名前端工程师。
-  </h1>
-
-  <h1>
-    안녕하세요!👋<br /> 제 이름은 장용석입니다.<br />
-     저는 프론트엔드 엔지니어입니다.
-  </h1> -->
 </Layout>
