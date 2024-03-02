@@ -110,7 +110,6 @@ const visitCodeBlock = async (ast, vFile, isSimple) => {
       let graphSvgFilename;
       try {
         graphSvgFilename = await render(value, destinationDir, vFile);
-        console.log("graphSvgFilename", graphSvgFilename)
         vFile.info(`${lang} code block replaced with graph`, position, PLUGIN_NAME);
       } catch (error) {
         vFile.message(error, position, PLUGIN_NAME);
