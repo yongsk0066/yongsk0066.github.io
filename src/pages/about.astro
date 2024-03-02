@@ -15,7 +15,13 @@ import Layout from "../layouts/BlogPost.astro";
     width: calc(100% - 1rem);
     height: calc(100% - 1rem);
     background-color: black;
+    margin: 0 auto;
+  }
+
+  figure {
     margin: 2rem auto;
+    display: grid;
+    place-items: center;
   }
 </style>
 <Layout
@@ -23,16 +29,19 @@ import Layout from "../layouts/BlogPost.astro";
   description="나는 누구인가?"
   pubDate={new Date("January 14 2024")}
 >
-  <video
-    autoplay
-    loop
-    muted
-    playsinline
-    disablepictureinpicture
-    oncontextmenu="return false;"
-  >
-    <source src="/video/about.mp4" type="video/mp4" />
-  </video>
+  <figure>
+    <video
+      autoplay
+      loop
+      muted
+      playsinline
+      disablepictureinpicture
+      oncontextmenu="return false;"
+    >
+      <source src="/video/about.mp4" type="video/mp4" />
+    </video>
+    <figcaption>My footiage from 2024, shot on super8 film</figcaption>
+  </figure>
   <h1>
     Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
   </h1>
