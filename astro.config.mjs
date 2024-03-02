@@ -6,12 +6,13 @@ import rehypeKatex from "rehype-katex";
 import rehypeMathjax from "rehype-mathjax";
 import mermaid from "./plugin/remark-mermaid";
 import sitemap from '@astrojs/sitemap';
-
 import tailwind from "@astrojs/tailwind";
+
+import react from "@astrojs/react";
 
 // https://astro.build/config
 export default defineConfig({
-  i18n:{
+  i18n: {
     defaultLocale: 'ko',
     locales: ['ko', 'en']
   },
@@ -21,12 +22,10 @@ export default defineConfig({
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false
-    }),
+    })
     // rehypeMathjax
     ]
-  }), tailwind(),
-  sitemap()
-],
+  }), tailwind(), sitemap(), react()],
   site: 'https://yongsk0066.github.io',
   base: '/'
 });

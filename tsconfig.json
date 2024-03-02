@@ -3,9 +3,13 @@
   "compilerOptions": {
     "useDefineForClassFields": false,
     "experimentalDecorators": true,
-    "baseUrl": ".",
+    "baseUrl": "/Users/yongseok/dev/yongsk0066.github.io",
     "paths": {
-      "@styles/*": ["src/styles/*"]
-    }
+      "@styles/*": [
+        "src/styles/*"
+      ]
+    },
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
   }
 }

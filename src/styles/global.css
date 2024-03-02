@@ -99,11 +99,65 @@
 	font-display: swap;
 }
 
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-Regular.ttf') format('ttf');
+	font-weight: 800;
+	font-style: normal;
+	font-display: swap;
+}
 
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-Bold.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-SemiBold.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-Medium.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-Light.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-ExtraLight.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Oswald';
+	src: url('/fonts/Oswald-Medium.ttf') format('ttf');
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
+}
 
 
 body {
-	font-family: 'Atkinson', sans-serif;
+	font-family: 'Oswald', 'Atkinson', sans-serif;
 	margin: 0;
 	padding: 0;
 	text-align: left;
