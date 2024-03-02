@@ -27,8 +27,15 @@ const questions = (await getCollection("question")).sort(
   }
 
   @media (max-width: 720px) {
-    .subTitle {
+    ul {
+      gap: 0.25rem;
+    }
+    .description {
       font-size: 0.8rem;
+    }
+    .title {
+      font-size: 1rem;
+      font-weight: 600;
     }
   }
 </style>
