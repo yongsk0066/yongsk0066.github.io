@@ -18,7 +18,7 @@ export default defineConfig({
   },
   integrations: [lit(), mdx({
     optimize: true,
-    remarkPlugins: [remarkMath, mermaid],
+    remarkPlugins: [remarkMath],
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false
