@@ -2,10 +2,53 @@
 import Layout from "../layouts/BlogPost.astro";
 ---
 
+<style>
+  video {
+    aspect-ratio: 4 / 3;
+    width: fit-content;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    object-fit: cover;
+    box-sizing: border-box;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    outline: 0.5rem solid black;
+    width: calc(100% - 1rem);
+    height: calc(100% - 1rem);
+    background-color: black;
+    margin: 2rem auto;
+  }
+</style>
 <Layout
   title="About Me"
   description="나는 누구인가?"
   pubDate={new Date("January 14 2024")}
 >
-  <p>프론트엔드 개발자이다.</p>
+  <video
+    autoplay
+    loop
+    muted
+    playsinline
+    disablepictureinpicture
+    oncontextmenu="return false;"
+  >
+    <source src="/video/about.mp4" type="video/mp4" />
+  </video>
+  <h1>
+    Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
+  </h1>
+  <!-- japanese -->
+  <!-- <h1>
+    こんにちは！👋<br /> 私の名前はYongSeok Jangです。<br />
+     私はフロントエンドエンジニアです。
+  </h1>
+
+  <h1>
+    你好！👋<br /> 我的名字是YongSeok Jang。<br />
+     我是一名前端工程师。
+  </h1>
+
+  <h1>
+    안녕하세요!👋<br /> 제 이름은 장용석입니다.<br />
+     저는 프론트엔드 엔지니어입니다.
+  </h1> -->
 </Layout>
