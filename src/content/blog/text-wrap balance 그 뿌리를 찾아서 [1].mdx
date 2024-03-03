@@ -1,0 +1,273 @@
+---
+title: "text-wrap balance 그 뿌리를 찾아서 [1]"
+description: ""
+author: "Yongseok"
+pubDate: "Mar 4 2024"
+categories: ["html"]
+heroImage: "/blog-placeholder-3.jpg"
+---
+import { YouTube } from '../../components/lit/youtube-element';
+import LinkPreview from '../../components/LinkPreview.astro'
+
+## 인트로
+
+<LinkPreview src="https://developer.chrome.com/docs/css-ui/css-text-wrap-balance?hl=en" />
+
+`text-wrap: balance` 아직 들어보지 못한 사람들도 있겠지만,
+위의 구글 문서에서 살펴볼 수 있는 것 처럼 크롬 114버전 부터 지원된 [CSS Text Level4](https://www.w3.org/TR/css-text-4/#text-wrap)에 속하는 CSS 속성이다.
+
+어떤 기능인지 먼저 살펴보고 가자
+
+## `text-wrap: balance` 란?
+
+<p class="codepen" data-height="500" data-theme-id="light" data-slug-hash="KKxjpQm" data-user="web-dot-dev" style="height: 300px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid; margin: 1em 0; padding: 1em;">
+  <span>See the Pen <a href="https://codepen.io/web-dot-dev/pen/KKxjpQm">
+  Animated comparison of balanced and unbalanced headlines</a> by web.dev (<a href="https://codepen.io/web-dot-dev">@web-dot-dev</a>)
+  on <a href="https://codepen.io">CodePen</a>.</span>
+</p>
+<script async src="https://cpwebassets.codepen.io/assets/embed/ei.js"></script>
+<i>출처: https://developer.chrome.com/docs/css-ui/css-text-wrap-balance </i>
+
+2024년 3월 기준 safari가 아니고, 크롬 114버전 이상이면 제대로 보일 것 이다.
+여기 까지 보았을 때는, 단어의 뜻과 예제를 참고했을때, `text-wrap: balance`는 텍스트의 줄바꿈을 균형있게 해주는 기능이라고는 예상 할 수 있을 것이다.
+
+그런데 뭔가 이질감이 드는 부분이 있다.
+
+뭔가 다른 명확한 속성들과 별개로 '균형' 이라는 단어가 컴퓨터와 대화하는 과정에서는 어색하게 느껴진다. \
+
+chrome 페이지의 소개 문구 또한 아래와 같이만 설명되고 있다.
+>you can request the browser to figure out the best balanced line wrapping solution for the text
+
+어떤 기준을 가지고 균형을 맞추는 것인지, 그것이 궁금해졌다.
+
+다이빙전 준비 체조로 이 기능의 명세와, 기원에 대해 알아보자.
+
+w3c wg에 적힌 `text-wrapping`의 명세를 살펴보자. \
+https://www.w3.org/TR/css-text-4/#text-wrapping
+
+<aside>
+### Text Wrapping
+When inline-level content is laid out into lines, it is <mark>broken across line boxes. Such a break is called a line break.</mark> 
+When a line is broken due to explicit line-breaking controls (such as a preserved newline character), 
+or due to the start or end of a block, it is a <strong>forced line break.</strong> 
+When a line is broken due to content wrapping (i.e. when the UA creates <mark>unforced line breaks in order to fit the content</mark> within the measure), 
+it is a <mark><strong>soft wrap break</strong></mark>. The process of breaking inline-level content into lines is called line breaking.
+
+<mark>Wrapping is only performed at an allowed break point, called a <strong>soft wrap opportunity.</strong></mark> 
+When wrapping is enabled (see white-space), the UA must minimize the amount of content overflowing a line by wrapping the line at a soft wrap opportunity, if one exists.
+
+Where text is allowed to wrap is controlled by the line-breaking rules and controls; 
+whether it is allowed to wrap and how multiple soft wrap opportunities within a line are prioritized is controlled by the text-wrap-mode, text-wrap-style, wrap-before, wrap-after, and wrap-inside properties.\
+<b><i>...중략...</i></b>
+### Selecting How to Wrap: the `text-wrap-style` property
+When wrapping is allowed (see text-wrap-mode), 
+this property selects between several approaches for wrapping lines, 
+<mark>trading off between speed, quality and style of layout, or stability.</mark> 
+It does not change which soft wrap opportunity exist, but changes how the user agent selects among them. 
+Possible values:\
+<b>`balance`</b> : 
+Line breaks are chosen to balance the remaining (empty) space in each line box, if better balance than auto is possible. 
+This must not change the number of line boxes the block would contain if text-wrap were set to auto.
+The remaining space to consider is that which remains after placing floats and inline content, but before any adjustments due to text justification. 
+<mark>Line boxes are balanced when the standard deviation from the average inline-size of the remaining space in each line box is reduced over the block</mark> (including lines that end in a forced break).
+
+The exact algorithm is UA-defined.
+
+UAs may treat this value as auto if there are more than ten lines to balance.
+</aside>
+
+중요한 부분을 살펴보면 아래와 같다.
+
+<aside>
+### Text Wrapping
+인라인 레벨 콘텐츠가 한줄로 배치될 때, 라인박스를 기준으로 `줄바꿈(line break)`이 일어난다. ([line box가 궁금한 사람은 여기로](https://www.w3.org/TR/CSS2/visuren.html#inline-formatting))\
+`<br>`태그나, 블록의 시작과 끝에 의해 강제로 줄바꿈이 일어나는 것은 `강제 줄바꿈(forced line break)`이라고 한다.\
+[`<wbr>`](https://developer.mozilla.org/ko/docs/Web/HTML/Element/wbr)이나 [`&shy;`](https://developer.mozilla.org/ko/docs/Web/CSS/hyphens#u00ad_shy) (부끄럽다가 아니라 soft-hyphen characters의 줄임이다)
+같이 강요하지 않는 줄바꿈은 `소프트 줄 바꿈(soft wrap break)`이라고 한다. ('wrap break'라는 단어를 뭐라고 번역해야할지 모르겠다.)\
+래핑은 허용된 줄바꿈 지점에서만 일어난다. 이것은 `소프트 랩 기회(soft wrap opportunity)`라고 한다.
+
+### 랩 방식 선택: `text-wrap-style` 속성
+
+래핑은 `속도`, `품질`, `스타일`, `안정성`을 고려하여 여러 방법 중에서 선택된다.\
+<b>balance</b> : ... 남은 인라인 사이즈의 평균에서 표준 편차가 줄어들 때까지 라인박스를 균형있게 만든다. (강제 줄바꿈이 일어난 라인도 포함)
+</aside>
+
+아하! 어느정도 구체적인 결정 방식이 설명되어 있다. \
+남은 공간의 크기가 평균에 가까워지도록 줄바꿈을 결정하는 것이다. 쉽게 말하면, 줄바꿈을 결정할 때, 줄바꿈 후 남은 공간의 크기가 비슷하도록 하는 것이다.
+
+그럼 더 깊이 가보기 전 남은 궁금증이 있다. \
+이 기능은 어디서 나왔을까?
+
+### 기원
+
+이라고 하기엔 그렇게 근본이 있는 것은 아니지만...
+
+이전에는 가독성을 위해서 `<wbr>` 태그나, `&shy;`를 사용하여 사람이 직접 줄바꿈을 조절했다. \
+혹은 javascript로 줄바꿈을 조절하는 라이브러리를 사용했다.
+<LinkPreview src="https://open.nytimes.com/headline-balancing-act-6e92d3d6119" />
+[뉴욕 타임즈](https://open.nytimes.com/headline-balancing-act-6e92d3d6119)에서 보면, 이 기능은 신문의 헤드라인을 균형있게 만들기 위해 사용되었다고 한다. (관련 JS 코드 https://github.com/nytimes/text-balancer)\
+다른 예로는 https://github.com/adobe/balance-text, https://github.com/shuding/react-wrap-balancer 등이 있다.
+
+안드로이드 쪽에는 이미 적용되어 있는 부분도 있다. (https://cs.android.com/android/platform/superproject/+/master:frameworks/minikin/include/minikin/LineBreaker.h;l=38;drc=5ca657189aac546af0aafaba11bbc9c5d889eab3?hl=ja)
+
+종합적으로 광고나, 신문, 웹페이지 등에서 텍스트의 가독성을 위해 사용되었던 기능이라고 볼 수 있다.
+
+### 다이빙
+
+대충 어떤 기능인지, 어디서 나왔는지 알았으니, 이제 물러나도 좋다.\
+지금부터는 이 기능의 시작부터 끝까지 살펴보는 것이다.
+
+관련된 문서 자료부터 살펴보자
+
+
+#### blink-dev 그룹 이메일
+
+[Intent to Ship: CSS healine balancing](https://groups.google.com/a/chromium.org/g/Blink-dev/c/f5eLz6PIXaI?pli=1)
+<img src="/post/images/blink-dev.png" />
+
+'Koji Ishii'가 blink-dev 그룹에 올린 이메일이다. 아래로 죽 그룹간의 토론이 이어진다. 
+우선 Koji의 이메일 부터 살펴보자.
+
+##### Specification
+https://w3c.github.io/csswg-drafts/css-text-4/#valdef-text-wrap-balance\
+csswg-drafts에 올라가있는 명세이다. 
+
+##### Design doc
+https://docs.google.com/document/d/16-T9gqCagJxcST6hcnneSb7qGunxXa37_UHYqMqhPL0/edit?usp=sharing
+'Koji Ishii'가 작성한 기술의 디자인에대한 문서이다.  그리 길지는 않고, 구현에 대한 설명이 주를 이루고 있다. 나중에 살펴보도록 하고 이어서 이메일을 살펴보자.
+<img src="/post/images/balance-doc.png" />
+
+##### TAG review
+https://github.com/w3ctag/design-reviews/issues/822
+여기서 `TAG`는 `Technical Architecture Group`의 약자로, w3c의 기술적인 문제에 대한 리뷰를 하는 그룹이다. 
+해당 이슈를 통해서 `text-wrap: balance`에 대한 리뷰가 이루어졌다.
+<img src="/post/images/balance-tag-review.png" />
+
+기본적인 내용은 이전에 살펴본 명세나 디자인 문서와 동일하고, 링크 또한 동일하다.\
+추가적인 것은 test에 관한 내용이 있다.
+
+https://wpt.fyi/results/css/css-text/white-space?label=master&label=experimental&aligned&view=subtest&q=text-wrap
+
+테스트는 w3c에서 관리하는 wpt.fyi([Web Platform Tests Dashboard](https://github.com/web-platform-tests/wpt.fyi))에서 이뤄지고 있다.
+wpt는 web platform test의 약자로, 웹 플랫폼의 표준을 테스트하는 테스트 스위트이다.
+
+<img src="/post/images/balance-wpt.png"/>
+
+각 테스트 케이스는 html 파일로 나눠져 있고 이런식으로 들어가 있다.
+
+https://github.com/web-platform-tests/wpt/blob/695af8663f/css/css-text/white-space/text-wrap-balance-overflow-001.html
+```html
+<!DOCTYPE html>
+<link rel="help" href="https://drafts.csswg.org/css-text-4/#valdef-text-wrap-balance">
+<link rel="match" href="reference/text-wrap-balance-overflow-001-ref.html">
+<style>
+.container {
+  font-family: monospace;
+  font-size: 20px;
+  inline-size: 15ch;
+  border: 1px solid;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+</style>
+<div class="container">CONTROLLING YOUR BU</div>
+<div class="container">CONTROLLING YOUR BU BU</div>
+```
+
+물론 라이브로 확인해볼 수도 있다 ㅎㅎ
+https://wpt.live/css/css-text/white-space/text-wrap-balance-overflow-001.html
+
+관련 PR https://github.com/web-platform-tests/interop/issues/561
+
+<aside>
+### Interop Dashboard
+https://wpt.fyi/interop-2024
+추가적인 기능 중 하나로 interop dashboard가 있다.
+웹의 상호운용성(interoperability)을 개선하기 위해 만들어진 각 브라우저에 대한 상호운용성을 보여주는 대시보드이다.
+<img src="/post/images/balance-interop.png" />
+
+조사 프로젝트를 선정하고 테스트를 진행하면서 각 플랫폼을 푸시하는 역할을 하고 있다.
+
+실제로 mozilla 쪽 이슈를 보면 이런식으로 focus area 에 대한 개선 작업들이 이루어지고 있다.
+
+https://bugzilla.mozilla.org/show_bug.cgi?id=1875519
+<img src="/post/images/balance-mozilla-interop.png"/>
+
+</aside>
+
+뭔가 너무 많이 돌아온 것 같은데 일단 다시 이메일로 돌아가보자.
+
+##### Interoperability and Compatibility
+
+상호운용성과 호환성에 대한 이야기가 나온다. 아무래도 생태계를 위해서는 다른 브라우저들과의 호환성이 중요하다.
+koji가 각 브라우저 프로젝트들에 해당 기능에 대한 입장 요청을 보낸 이슈가 첨부되어 있다.
+실제 엔진의 프로젝트는 아니고 standards-positions 이슈를 통해서 해당 기능에 대한 입장을 요청한 것이다.
+
+###### 모질라(https://github.com/mozilla/standards-positions/issues/755)
+<img src="/post/images/balance-mozilla.png"/>
+
+해당 리뷰의 댓글로 모질라 측에서 명세를 보고 작성한 이슈와 PR은 각각 아래서 살펴볼 수 있다.
+- standard position 이슈 (https://bugzilla.mozilla.org/show_bug.cgi?id=1731541)
+- 관련 PR 중 일부 (https://phabricator.services.mozilla.com/D187543)
+
+
+###### 웹킷(https://github.com/WebKit/standards-positions/issues/143)
+
+<img src="/post/images/balance-webkit.png"/>
+
+애플의 웹킷 쪽은 여기서 버그를 트래킹하고 있다.
+https://bugs.webkit.org/show_bug.cgi?id=249840 
+
+<img src="/post/images/balance-webkit-bugzilla.png"/>
+
+
+<aside>
+왜 웹킷인데도 bugzilla 라는 이름을 쓸까?\
+[bugzilla](https://www.bugzilla.org/)는 모질라에서 만든 버그 트래킹 시스템이다. 원래는 모질라에서 사용하던 시스템이지만, 다른 회사들도 사용하고 있다.
+<LinkPreview src="https://ko.wikipedia.org/wiki/%EB%B2%84%EA%B7%B8%EC%A7%88%EB%9D%BC"/>
+위키를 참고 하자 
+</aside
+>
+
+관련 PR은 이쪽에서 볼 수 있다. \
+
+<LinkPreview src="https://github.com/WebKit/WebKit/pull/16723"/>
+
+애플의 경우 EWS(early warning system)을 통해서 병합전 각 환경(OS별)별 빌드 결과를 확인할 수 있다.\
+여기서 다룰 내용은 아니므로 각자 들어가서 구경해보자.\
+EWS 링크(https://ews-build.webkit.org/#/builders/26/builds/15587) \
+EWS(https://github.com/webkit-early-warning-system)
+<img src="/post/images/balance-webkit-ews.png"/>
+
+우리가 어디 까지 왔는지 다시 정리해보자.
+
+우리는 koji의 이메일 본문을 통해서 해당 기능의 명세, 디자인 문서, TAG 리뷰, 테스트, 각 브라우저별 호환성에 대한 이슈를 살펴보았다.
+또한 각 브라우저별로 해당 기능에 대한 입장을 요청한 이슈와 PR을 살펴보았다.
+
+본문 자체는 이정도로 살펴보면 좋을 것 같고... 해당 이메일을 수신 받은 blink-dev 그룹이 주고 받은 내용을 살펴보자.
+
+라고 하려고 했는데, 내용이 상당히 길기도 하고. 굳이 살펴볼 필요가 있을까 싶다. \
+주로 성능적 이슈에 대한 내용이라던지 다른 속성과의 관계(white-space), 구현에 대한 명확성, 기능에 대한 제어(마지막 줄 길이를 4em으로 할건지 전체 줄의 최소 15%로 할건지 등) 등에 대한 토론이 이루어졌다.
+
+크게 다뤄진 이슈만 요약해보자.
+
+`text-wrap`의 경우, 줄바꿈을 제어하는 속성인데, 이는 기존의 `white-space`와 충돌하는 기능이다. 그에 따라 이 둘 사이의 정리가 필요하다는 것이다.\
+`white-space` 속성은 공백 처리와 줄바꿈 방식을 제어하지만, `text-wrap: balance`와 같은 값을 사용할 때는 줄바꿈의 균형을 맞추는 추가적인 동작이 요구된다.\
+해결 방안으로는 white-space 속성이 text-wrap의 값도 내포할 수 있도록, 즉 shorthand로서 기능하도록 하는 방법이 제안되었다.
+
+비슷한 이전 사례로는 baseline-source 이 있는데, 이때의 경우도 vertical-align과 충돌하는 문제가 있었고, 이를 해결하기 위해 vertical-align의 값으로 baseline-source를 사용할 수 있도록 하는 방법이 제안되었다.
+[[baseline-source] Set baseline-source to auto when vertical-align set.](https://chromium-review.googlesource.com/c/chromium/src/+/4189506)
+
+
+### 잠시... 멈추고...
+
+이렇게 쭉 살펴보다보니, 하나의 기능이 얼마나 많은 과정을 거쳐서 브라우저에 적용되는지 알 수 있었다.\
+하지만 우리의 본래의 여정은 `text-wrap: balance`의 명세와 구현에 대한 것이었다.\
+여태 관련 명세 및 작업에 대한 것만 쭉 살펴보다가 이만큼 와버렸기에. 더이상 구현에 대한 것을 마저 정리할 힘이 바닥나버렸다.
+
+아무래도 명세를 읽다보니 수많은 하이퍼텍스트의 늪에 빠져버린 것이다.\
+그래도 각 엔진들의 이슈와 PR이 어디서 관리되는지 Test는 어디서 진행되는지. 궁금한 이에게 이정표가 되었길 바라며.
+
+그래서 이번 포스트는 여기까지만 하고, 다음 포스트에서는 실제 구현에 대한 것을 살펴보도록 하겠다. (자료조사는 해두었다. 걱정 말기를)
+
+이만
