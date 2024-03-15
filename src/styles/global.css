@@ -266,6 +266,10 @@ aside {
 	text-wrap: pretty;
 }
 
+aside > p {
+	margin: 0 !important;
+}
+
 aside > hr {
 	margin: 1em 0!important;
 	border-top: 1px solid rgb(var(--gray));

@@ -22,14 +22,14 @@ const image = document
   <div class="info">
     <h3>{title}</h3>
     <p>{description}</p>
-    <span>{src}</span>
+    <span>{decodeURIComponent(src)}</span>
   </div>
   {image && <img class="link-image" src={image} alt={title} />}
 </a>
 <style>
   .link-preview {
     display: grid;
-    grid-template-columns: 80% 20%;
+    grid-template-columns: 80% auto;
     height: 180px;
     max-height: 180px;
     overflow: hidden;
