@@ -683,7 +683,7 @@
     lit "^3.0.0"
     lit-html "^3.0.0"
 
-"@lit-labs/ssr-client@^1.1.5", "@lit-labs/ssr-client@^1.1.6":
+"@lit-labs/ssr-client@^1.1.5":
   version "1.1.6"
   resolved "https://registry.npmjs.org/@lit-labs/ssr-client/-/ssr-client-1.1.6.tgz"
   integrity sha512-MHOHSDGmlum66PP2a6ATLHHwTFvYl+s7R4NYBp8E1NqHDA5UEuEIA1o/E4NoDinc3Ow56yz9Cvh89DvFDif5Pg==
@@ -691,6 +691,15 @@
     "@lit/reactive-element" "^1.6.1 || ^2.0.0"
     lit "^2.7.0 || ^3.0.0"
     lit-html "^2.7.0 || ^3.0.0"
+
+"@lit-labs/ssr-client@^1.1.7":
+  version "1.1.7"
+  resolved "https://registry.yarnpkg.com/@lit-labs/ssr-client/-/ssr-client-1.1.7.tgz#fd0cf4ce986ee903dc67ad647193f2323ac15a6d"
+  integrity sha512-VvqhY/iif3FHrlhkzEPsuX/7h/NqnfxLwVf0p8ghNIlKegRyRqgeaJevZ57s/u/LiFyKgqksRP5n+LmNvpxN+A==
+  dependencies:
+    "@lit/reactive-element" "^2.0.4"
+    lit "^3.1.2"
+    lit-html "^3.1.2"
 
 "@lit-labs/ssr-dom-shim@^1.1.2", "@lit-labs/ssr-dom-shim@^1.1.2-pre.0":
   version "1.1.2"
@@ -702,7 +711,7 @@
   resolved "https://registry.npmjs.org/@lit-labs/ssr-dom-shim/-/ssr-dom-shim-1.2.0.tgz"
   integrity sha512-yWJKmpGE6lUURKAaIltoPIE/wrbY3TEkqQt+X0m+7fQNnAv0keydnYvbiJFP1PnMhizmIWRWOG5KLhYyc/xl+g==
 
-"@lit-labs/ssr@^3.2.0", "@lit-labs/ssr@^3.2.1":
+"@lit-labs/ssr@^3.2.0":
   version "3.2.1"
   resolved "https://registry.npmjs.org/@lit-labs/ssr/-/ssr-3.2.1.tgz"
   integrity sha512-y8LHFdRFYLXJ44kddCjeaKM/NVqcz1Z0TQHic7Siawxr07d4YZKYtghqnX1bbe2Oa8+qFW7NKFv54CIB7BzrZQ==
@@ -716,6 +725,23 @@
     lit "^3.1.0"
     lit-element "^3.3.0 || ^4.0.0"
     lit-html "^3.1.0"
+    node-fetch "^3.2.8"
+    parse5 "^7.1.1"
+
+"@lit-labs/ssr@^3.2.2":
+  version "3.2.2"
+  resolved "https://registry.yarnpkg.com/@lit-labs/ssr/-/ssr-3.2.2.tgz#5f931a5e4cb77b91e1157965e03133ca38335713"
+  integrity sha512-He5TzeNPM9ECmVpgXRYmVlz0UA5YnzHlT43kyLi2Lu6mUidskqJVonk9W5K699+2DKhoXp8Ra4EJmHR6KrcW1Q==
+  dependencies:
+    "@lit-labs/ssr-client" "^1.1.7"
+    "@lit-labs/ssr-dom-shim" "^1.2.0"
+    "@lit/reactive-element" "^2.0.4"
+    "@parse5/tools" "^0.3.0"
+    "@types/node" "^16.0.0"
+    enhanced-resolve "^5.10.0"
+    lit "^3.1.2"
+    lit-element "^4.0.4"
+    lit-html "^3.1.2"
     node-fetch "^3.2.8"
     parse5 "^7.1.1"
 
