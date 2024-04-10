@@ -3,15 +3,19 @@
 interface Props {
   src: string;
 }
-import jsdom from 'jsdom';
+import jsdom from "jsdom";
 const { src } = Astro.props;
 
 const response = await fetch(src);
 const html = await response.text();
 const { document } = new jsdom.JSDOM(html)?.window;
-const title = document.querySelector('title')?.textContent;
-const description = document.querySelector('meta[name=description]')?.getAttribute('content');
-const image = document.querySelector("meta[property='og:image']")?.getAttribute('content');
+const title = document.querySelector("title")?.textContent;
+const description = document
+  .querySelector("meta[name=description]")
+  ?.getAttribute("content");
+const image = document
+  .querySelector("meta[property='og:image']")
+  ?.getAttribute("content");
 ---
 
 <a class="link-preview" href={src} target="_blank" rel="noopener noreferrer">
