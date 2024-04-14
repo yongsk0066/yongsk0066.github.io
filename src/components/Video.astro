@@ -1,0 +1,51 @@
+---
+interface Props {
+  src: string;
+  caption?: string;
+  ratio?: string;
+}
+
+const { src, caption, ratio } = Astro.props;
+---
+
+<figure>
+  <video
+    autoplay
+    loop
+    muted
+    playsinline
+    disablepictureinpicture
+    oncontextmenu="return false;"
+    style={{
+      ...(ratio && { aspectRatio: ratio }),
+    }}
+  >
+    <source src={src} type="video/mp4" />
+  </video>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  video {
+    width: fit-content;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    object-fit: cover;
+    box-sizing: border-box;
+    box-shadow: rgba(0, 0, 0, 0.173) 0px 0px 6px 3px;
+    background-color: black;
+    margin: 0 auto;
+    position: relative;
+    transition: box-shadow 0.3s;
+  }
+
+  video:hover {
+    box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
+  }
+
+  figure {
+    margin: 2rem auto;
+    display: grid;
+    place-items: center;
+  }
+</style>

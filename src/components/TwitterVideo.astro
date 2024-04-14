@@ -1,0 +1,56 @@
+---
+interface Props {
+  src: string;
+}
+
+const { src } = Astro.props;
+
+const validateSrc = (src: string) => {
+  const regex = /https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/;
+  return regex.test(src);
+};
+
+if (!validateSrc(src)) {
+  throw new Error("Invalid src");
+}
+const key = Math.random().toString(36).substring(7);
+---
+
+<div class="twitter-container" id={key}>
+  <blockquote class="twitter-tweet" data-media-max-width="1080">
+    <a href={src}></a>
+  </blockquote>
+  <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"
+  ></script>
+</div>
+
+<script define:vars={{ key }}>
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === "childList") {
+        const twitterContainer = document.querySelector(`#${key}`);
+        const twitterWidget = twitterContainer?.children?.[0];
+        if (twitterWidget) {
+          twitterWidget.style.margin = "-0.1em";
+          twitterWidget.style.width = "calc(100% + .2em)";
+          twitterWidget.style.border = "none";
+        }
+      }
+    });
+  });
+
+  const twitterContainer = document.querySelector(`#${key}`);
+  twitterContainer && observer.observe(twitterContainer, { childList: true });
+</script>
+<style>
+  .twitter-container {
+    border-radius: 0.5em;
+    overflow: hidden;
+    box-shadow: rgba(0, 0, 0, 0.173) 0px 0px 6px 3px;
+    transition: box-shadow 0.3s;
+  }
+
+  .twitter-container:hover {
+    box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
+  }
+</style>
