@@ -9,6 +9,7 @@ import sitemap from '@astrojs/sitemap';
 import tailwind from "@astrojs/tailwind";
 
 import react from "@astrojs/react";
+import customTheme from './shiki/github-dark-default.json'
 
 // https://astro.build/config
 export default defineConfig({
@@ -22,10 +23,15 @@ export default defineConfig({
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false
-    })
+    }),
     // rehypeMathjax
     ]
   }), tailwind(), sitemap(), react()],
+  markdown:{
+    shikiConfig: {
+      theme: customTheme,
+    },
+  },
   site: 'https://yongsk0066.github.io',
   base: '/'
 });

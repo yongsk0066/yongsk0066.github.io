@@ -1,0 +1,768 @@
+---
+title: "useActionState (form 이 뭘까 2)"
+description: ""
+author: "Yongseok"
+pubDate: "2024-04-21"
+categories: [""]
+heroImage: "/blog-placeholder-3.jpg"
+
+---
+
+import LinkPreview from '../../components/LinkPreview.astro';
+
+
+이전 내용에서 form의 기본적인 구현에 대해서 살펴보았다.
+리액트에도 form action이라던지 useFormState, useFormStatus 같은 폼에 관련된 hook이 있다.\
+이런 훅들은 어떤 동작을 하는 것인지 살펴보고자 한다.
+
+
+### useActionState
+
+비동기 액션을 처리하기 위한 훅이다.
+
+https://react.dev/reference/react/useActionState
+
+```tsx
+import { useActionState } from "react"; // not react-dom
+
+function Form({ formAction }) {
+  const [state, action, isPending] = useActionState(formAction);
+
+  return (
+    <form action={action}>
+      <input type="email" name="email" disabled={isPending} />
+      <button type="submit" disabled={isPending}>
+        Submit
+      </button>
+      {state.errorMessage && <p>{state.errorMessage}</p>}
+    </form>
+  );
+}
+```
+useFormState에 대해서 살펴보고 있었는데, useActionState라는 이름으로 변경되었다.
+<LinkPreview src="https://github.com/facebook/react/pull/28491" />
+
+폼에 종속되지 않고 비동기 action을 처리하기 위한 훅으로 쓰기 위함이다.
+
+소스코드를 통해 어떤 식으로 동작하는지 살펴보자.
+
+마운트 되는 과정을 살펴보자.
+마운트 되면 mountActionState 함수가 호출 되어 초기 상태를 설정한다.
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js
+(HooksDispatcherOnMountInDEV: Dispatcher).useActionState =
+      function useActionState<S, P>(
+        action: (Awaited<S>, P) => S,
+        initialState: Awaited<S>,
+        permalink?: string,
+      ): [Awaited<S>, (P) => void, boolean] {
+        currentHookNameInDev = 'useActionState';
+        mountHookTypesDev();
+        return mountActionState(action, initialState, permalink);
+      };
+```
+
+
+
+
+```ts
+// 훅이 마운트 될 때 호출되는 함수
+function mountActionState<S, P>(
+  action: (Awaited<S>, P) => S,
+  initialStateProp: Awaited<S>,
+  permalink?: string,
+): [Awaited<S>, (P) => void, boolean] {
+  // 초기 상태를 가져온다.
+  let initialState: Awaited<S> = initialStateProp;
+
+  // hydrating 중인 경우
+  if (getIsHydrating()) {
+    // 서버에서 랜더링된 폼 상태를 가져온다.
+    const root: FiberRoot = (getWorkInProgressRoot(): any);
+    const ssrFormState = root.formState;
+    // If a formState option was passed to the root, there are form state
+    // markers that we need to hydrate. These indicate whether the form state
+    // matches this hook instance.
+    // 만약 formState 옵션이 루트에 전달되었다면, hydrate해야 할 폼 상태 마커가 있다.
+    // 이것들은 폼 상태가 이 훅 인스턴스와 일치하는지를 나타낸다.
+    if (ssrFormState !== null) {
+      // tryToClaimNextHydratableFormMarkerInstance를 통해 현재 Fiber와 일치하는 폼 마커를 찾아서
+      // 일치하는 경우 초기 상태를 가져온다.
+      const isMatching = tryToClaimNextHydratableFormMarkerInstance(
+        currentlyRenderingFiber,
+      );
+      if (isMatching) {
+        initialState = ssrFormState[0];
+      }
+    }
+  }
+  // ...
+```
+
+useActionState는 인자로 action과 initialState를 받는다. (추가로 permalink)\
+비동기 처리를 하기 때문에 초기 값은 Awaited일 수 있다.
+
+useActionState는 3개의 훅을 조합하여 사용하게 된다. 이 훅은 다음과 같은 값을 반환한다. 
+
+- state: 액션의 현재 상태 값
+- dispatch: 액션을 디스패치하는 함수
+- isPending: 액션이 현재 진행 중인지 여부를 나타내는 boolean 값
+
+이를 통해 컴포넌트는 현재 상태를 읽고, 새로운 액션을 디스패치하며, 액션의 완료 여부를 알 수 있다.
+
+## stateHook - state를 담기위한 훅
+
+action의 state(상태)를 담기 위한 훅을 생성한다.\
+초기값으로는 initialState가 넘어오는데, 타입이 `Awaited<S>` 이다.\
+비동기 액션의 결과를 담기 위해서 `Awaited<S>` 타입을 사용한다.
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountActionState 함수
+
+// ...
+// ========================================================
+// state를 담기위한 훅
+// ========================================================
+
+// State hook. The state is stored in a thenable which is then unwrapped by
+// the `use` algorithm during render.
+// 상태 훅. 상태는 렌더링 중에 'use' 알고리즘에 의해 언래핑되는 thenable에 저장됩니다.
+
+
+  // mountWorkInProgressHook를 통해 새로운 훅을 생성한다.
+  const stateHook = mountWorkInProgressHook();
+  stateHook.memoizedState = stateHook.baseState = initialState;
+  // TODO: Typing this "correctly" results in recursion limit errors
+  // const stateQueue: UpdateQueue<S | Awaited<S>, S | Awaited<S>> = {
+  const stateQueue = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: (null: any),
+    lastRenderedReducer: actionStateReducer,
+    lastRenderedState: initialState,
+  };
+  // stateQueue 객체를 생성하고 stateHook.queue에 할당한다.
+  stateHook.queue = stateQueue;
+  // dispatchSetState 함수를 currentlyRenderingFiber와 stateQueue와 바인딩하여 setState 함수를 생성합니다.
+  // stateQueue.dispatch에 setState 함수를 할당합니다.
+
+  // 여기까지는 useState와 유사한 부분
+  const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+  ): any);
+  stateQueue.dispatch = setState;
+
+```
+
+<aside>
+<b> 여기서 든 생각 : </b>
+useState와 이름도 비슷하고, 상태를 담는 훅이라는 점도 비슷한데 무엇이 다를까?
+</aside>
+
+useState에서 본 익숙한 동작들이 들어있다. 
+
+잠시 간단하게 useState의 마운트 과정(mountState)을 살펴보자.
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountState 함수
+
+// ...
+function mountState<S>(
+  initialState: (() => S) | S,
+): [S, Dispatch<BasicStateAction<S>>] {
+  const hook = mountStateImpl(initialState);
+  const queue = hook.queue;
+  const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    queue,
+  ): any);
+  queue.dispatch = dispatch;
+  return [hook.memoizedState, dispatch];
+}
+
+function mountStateImpl<S>(initialState: (() => S) | S): Hook {
+  const hook = mountWorkInProgressHook();
+  // 똑같이 훅을 만들고
+  if (typeof initialState === 'function') {
+    // ...
+  }
+  // 상태를 초기화한다.
+  hook.memoizedState = hook.baseState = initialState;
+  // 큐를 만들고
+  const queue: UpdateQueue<S, BasicStateAction<S>> = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: null,
+    lastRenderedReducer: basicStateReducer,
+    lastRenderedState: (initialState: any),
+  };
+
+  // 큐를 훅에 할당한다.
+  hook.queue = queue;
+  // 그리고 훅을 반환한다.
+  return hook;
+}
+
+
+```
+
+두개의 차이를 살펴보자.
+
+
+```ts
+// useState (mountState) 의 타입
+type BasicStateAction<S> = (S => S) | S;
+
+const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  queue, // UpdateQueue<S, BasicStateAction<S>>
+): any);
+```
+useState의 경우에는 큐의 타입이 `UpdateQueue<S, BasicStateAction<S>>` 타입으로 캐스팅 된다.
+
+```ts
+// useActionState (mountActionState 의 stateHook) 의 타입
+
+const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+): any);
+```
+반면 useActionState는 비동기 액션의 결과를 담기 위해서 `UpdateQueue<S | Awaited<S>, S | Awaited<S>>` 타입으로 캐스팅 된다.
+
+
+Awaited는 다음과 같이 정의 되어 있다.
+
+재밌는것은 재귀를 통해 겹겹이 쌓인 Thanable에서도 최종적으로 resolve될 값을 반환한다.
+
+```ts
+// packages/shared/ReactTypes.js
+export type Awaited<T> = T extends null | void
+
+  ? T // null 또는 undefined인 경우 그대로 반환
+  : T extends Object // T가 객체 타입인 경우
+
+    ? T extends {then(onfulfilled: infer F): any} // then 메서드를 가진 Thenable 객체인 경우
+      ? F extends (value: infer V) => any // then 메서드의 첫 번째 인자가 함수인 경우
+        ? Awaited<V> // 함수의 첫 번째 인자 타입을 재귀적으로 Awaited로 감싸기
+        : empty // then 메서드의 첫 번째 인자가 함수가 아닌 경우 (유효하지 않은 Thenable)
+
+      : T // then 메서드를 가지지 않은 일반 객체인 경우
+    : T; // 객체가 아닌 경우 (숫자, 문자열 등)
+  ```
+
+
+## pendingStateHook - Pending 상태 처리를 위한 부분
+
+비동기 액션의 현재 pending 상태를 처리하기 위한 부분이다. 
+pendingStateHook도 기본적으로 useState와 유사하다.
+mountStateImpl 를 통해서 훅을 생성한다.
+
+또한 pending상태는 바로 업데이트 되어야하기 때문에 낙관적 업데이트를 사용한다.\
+이에 대해서는 dispatchOptimisticSetState 와 함께 아래서 설명하겠다.
+
+이때 조금 다른 점은 초기 값으로 `Thenable<boolean> | boolean` 을 넘긴다. (기본값으로는 false).
+
+<aside>
+<b> 여기서 든 생각 : </b>
+근데 전체적으로 코드를 살펴보았을때 낙관적 업데이트 대상이기도 하고 그렇기에 pending의 타입이 Thenable일 필요가 있는가?
+</aside>
+이에 의문이 들어 PR을 올려보았다.
+<LinkPreview src="https://github.com/facebook/react/pull/28942" />
+
+useTransition 쪽 코드를 참고한 것 같은데 여기서는 booleanOrThenable이기 때문에 유효하지만 이경우는 그렇지 않기에 boolean이 적합하지 않을까...
+
+
+```ts
+// ========================================================
+// Pending 상태 처리를 위한 부분
+// ========================================================
+// Pending state. This is used to store the pending state of the action.
+// Tracked optimistically, like a transition pending state.
+// 팬딩 상태. 이것은 액션의 보류 중인 상태를 저장하는 데 사용됩니다.
+// 전환 보류 중 상태처럼 낙관적으로 추적됩니다.
+
+  // mountStateImpl을 통해 진행 중 상태를 위한 훅을 생성
+  const pendingStateHook = mountStateImpl((false: Thenable<boolean> | boolean));
+  // dispatchOptimisticSetState 함수를 currentlyRenderingFiber, false, 
+  // 그리고 pendingStateHook.queue와 바인딩하여 setPendingState 함수를 생성
+  const setPendingState: boolean => void = (dispatchOptimisticSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    false,
+    ((pendingStateHook.queue: any): UpdateQueue<
+      S | Awaited<S>, // S가 Promise또는 Thenable인 경우
+      S | Awaited<S>,
+    >),
+  ): any);
+```
+
+Thenable 타입은 아래와 같다. 궁금한 사람을 위해 첨부.
+
+```ts
+// packages/shared/ReactTypes.js
+
+// The subset of a Thenable required by things thrown by Suspense.
+// This doesn't require a value to be passed to either handler.
+export interface Wakeable {
+  then(onFulfill: () => mixed, onReject: () => mixed): void | Wakeable;
+}
+
+// The subset of a Promise that React APIs rely on. This resolves a value.
+// This doesn't require a return value neither from the handler nor the
+// then function.
+interface ThenableImpl<T> {
+  then(
+    onFulfill: (value: T) => mixed,
+    onReject: (error: mixed) => mixed,
+  ): void | Wakeable;
+}
+interface UntrackedThenable<T> extends ThenableImpl<T> {
+  status?: void;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface PendingThenable<T> extends ThenableImpl<T> {
+  status: 'pending';
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface FulfilledThenable<T> extends ThenableImpl<T> {
+  status: 'fulfilled';
+  value: T;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface RejectedThenable<T> extends ThenableImpl<T> {
+  status: 'rejected';
+  reason: mixed;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export type Thenable<T> =
+  | UntrackedThenable<T>
+  | PendingThenable<T>
+  | FulfilledThenable<T>
+  | RejectedThenable<T>;
+  ```
+
+
+## actionQueueHook - 액션 큐 훅
+
+액션을 큐에 넣어서 관리하기 위한 부분이다.
+이때 앞에서 만들어진 두개의 훅의 dispatch가 같이 넘어가게 된다.
+
+```ts
+
+// ========================================================
+// 액션 큐 훅 
+// ========================================================
+
+// Action queue hook. This is used to queue pending actions. The queue is
+// shared between all instances of the hook. Similar to a regular state queue,
+// but different because the actions are run sequentially, and they run in
+// an event instead of during render.
+
+// 액션 큐 훅. 이것은 보류 중인 액션을 큐에 넣는 데 사용됩니다. 큐는 훅의 모든 인스턴스에서 공유됩니다.
+// 일반 상태 큐와 유사하지만 액션은 순차적으로 실행되며 렌더링 중이 아닌 이벤트에서 실행됩니다.
+  const actionQueueHook = mountWorkInProgressHook();
+  // memorizedState가 여기서 이뤄지지 않는다.
+  const actionQueue: ActionStateQueue<S, P> = {
+    state: initialState, // 이때 initialState가 들어간다.
+    dispatch: (null: any), // circular
+    action,
+    pending: null,
+  };
+  actionQueueHook.queue = actionQueue;
+  // 여기까지는 queue를 만들고 넘겨주는 부분
+  const dispatch = (dispatchActionState: any).bind(
+    null,
+    currentlyRenderingFiber,
+    actionQueue,
+    setPendingState, // setPendingState 함수를 넘겨준다.
+    setState, // setState 함수를 넘겨준다.
+  );
+  actionQueue.dispatch = dispatch;
+
+  // Stash the action function on the memoized state of the hook. We'll use this
+  // to detect when the action function changes so we can update it in
+  // an effect.
+
+  // 훅의 메모이즈된 상태에 액션 함수를 저장합니다. 
+  // 액션 함수가 변경되었을 때 이를 감지하여 효과에서 업데이트할 수 있도록 사용합니다.
+  actionQueueHook.memoizedState = action;
+
+  // 최종적으로 [state, dispatch, isPending]를 반환한다.
+  return [initialState, dispatch, false];
+}
+
+```
+
+이 세개의 훅의 또다른 차이점은 각각
+`dispatchSetState`, `dispatchOptimisticSetState`, `dispatchActionState` 함수를 통해서 상태를 변경한다는 것이다.
+
+이 세가지를 비교해보자.
+
+## dispatch 비교
+
+### dispatchSetState
+
+```ts
+function dispatchSetState<S, A>(
+  fiber: Fiber,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const lane = requestUpdateLane(fiber);
+  // 업데이트를 태울 Lane을 요청받는다.
+
+  const update: Update<S, A> = {
+    lane,
+    revertLane: NoLane, // Optimistic update가 아니므로 NoLane
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+  // 업데이트 객체를 생성한다.
+
+  // 랜더링 단계인지 확인한다.
+  if (isRenderPhaseUpdate(fiber)) {
+    // 랜더링 단계인 경우
+    enqueueRenderPhaseUpdate(queue, update);
+  } else {
+    // 랜더링 단계가 아닌 경우
+    const alternate = fiber.alternate;
+    // 이전 Fiber를 가져온다.
+    if (
+      fiber.lanes === NoLanes && // 현재 Fiber의 Lane이 NoLanes이고
+      (alternate === null || alternate.lanes === NoLanes) // 이전 Fiber의 Lane이 NoLanes인 경우
+    ) { // 즉 이전에 스케쥴링된 업데이트가 없다는 것을 의미
+      const lastRenderedReducer = queue.lastRenderedReducer; // lastRenderedReducer는 마지막으로 렌더링된 reducer 함수
+      // 큐가 현재 비어 있으면 렌더링 단계에 들어가기 전에 
+      // 다음 상태를 eager하게 계산할 수 있습니다. 미리 계산한다고 보면 됨.
+      // 새 상태가 현재 상태와 같으면 완전히 벗어날 수 있습니다.
+      if (lastRenderedReducer !== null) { 
+        let prevDispatcher = null;
+        try {
+          const currentState: S = (queue.lastRenderedState: any);
+          const eagerState = lastRenderedReducer(currentState, action);
+          // eager하게 계산된 상태와 이를 계산하는 데 사용된 reducer를 업데이트 객체에 저장합니다. 
+          // 렌더링 단계에 들어갈 때까지 reducer가 변경되지 않으면
+          // reducer를 다시 호출하지 않고 eager 상태를 사용할 수 있습니다.
+          update.hasEagerState = true;
+          update.eagerState = eagerState;
+          if (is(eagerState, currentState)) {
+            // 빠른 경로. React를 다시 렌더링하도록 예약하지 않고 벗어날 수 있습니다.
+            // 컴포넌트가 다른 이유로 다시 렌더링되고 그때까지 reducer가 변경되면
+            // 나중에 이 업데이트를 다시 조정해야 할 수도 있습니다.
+            // TODO: 이 경우에도 transition을 얽히게 해야 할까요?
+
+            // 리랜더링이 필요없는 경우
+            enqueueConcurrentHookUpdateAndEagerlyBailout(fiber, queue, update);
+            return;
+          }
+        } catch (error) {
+        // 오류를 억제합니다. 렌더링 단계에서 다시 throw됩니다.
+        } finally {
+        }
+      }
+    }
+
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
+    if (root !== null) {
+      scheduleUpdateOnFiber(root, fiber, lane);
+      entangleTransitionUpdate(root, queue, lane);
+    }
+  }
+
+  markUpdateInDevTools(fiber, lane, action);
+}
+```
+
+```ts
+
+function isRenderPhaseUpdate(fiber: Fiber): boolean {
+  const alternate = fiber.alternate;
+  return (
+    fiber === currentlyRenderingFiber ||
+    (alternate !== null && alternate === currentlyRenderingFiber)
+  );
+}
+
+function enqueueRenderPhaseUpdate<S, A>(
+  queue: UpdateQueue<S, A>,
+  update: Update<S, A>,
+): void {
+  // This is a render phase update. Stash it in a lazily-created map of
+  // queue -> linked list of updates. After this render pass, we'll restart
+  // and apply the stashed updates on top of the work-in-progress hook.
+  didScheduleRenderPhaseUpdateDuringThisPass = didScheduleRenderPhaseUpdate =
+    true;
+  const pending = queue.pending;
+  if (pending === null) {
+    // This is the first update. Create a circular list.
+    update.next = update;
+  } else {
+    update.next = pending.next;
+    pending.next = update;
+  }
+  queue.pending = update;
+}
+
+```
+
+### dispatchOptimisticSetState
+
+낙관적 업데이트(Optimistic Update)를 처리하기 위한 함수이다.\
+낙관적 업데이트는 상태를 바로 업데이트 해주는데 목적이 있기 때문에, 동기적으로 동작하고
+그에따라 syncLane을 이용한다. 
+
+그리고 선반영에 대한 후처리를 위해서 transition이 끝난후에 상태를 되돌려 놓기 위해 revertLane을 사용한다.
+
+그러므로 더욱더 Thenable일 이유가 없지 않을까... 하여 PR을 올려보았다.
+
+```ts
+function dispatchOptimisticSetState<S, A>(
+  fiber: Fiber,
+  throwIfDuringRender: boolean,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const transition = requestCurrentTransition();
+
+  const update: Update<S, A> = {
+    // 낙관적 업데이트는 동기적으로 일어남으로 SyncLane을 사용한다. 유저에게 바로 보여줘야 하기 때문이다.
+    lane: SyncLane,
+    // After committing, the optimistic update is "reverted" using the same
+    // lane as the transition it's associated with.
+    // 낙관적 업데이트는 즉시 일어나기 때문에, 나중에 실제 데이터와 불일치가 발생할 수 있다.
+    // 이를 해결하기 위해 revertLane을 사용한다.
+    // 적절한 시점에 상태를 되돌려 놓기 위해 transitionLane을 사용한다.
+    // Transition이 끝
+    revertLane: requestTransitionLane(transition),
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+
+  if (isRenderPhaseUpdate(fiber)) {
+    // 렌더 중에 startTransition을 호출할 때, 예외를 던지기보다 경고를 발생시킵니다. 예외를 던지면 중대한 변경이 될 수 있기 때문입니다.
+    // setOptimisticState는 새로운 API이므로 예외를 던지는 것이 허용됩니다.
+    if (throwIfDuringRender) {
+      throw new Error('Cannot update optimistic state while rendering.');
+    } else {
+      // 렌더링 중에 startTransition이 호출되었습니다. 
+      // 렌더 단계 업데이트가 어차피 두 번째 업데이트에 의해 덮어쓰여질 것이므로 여기서 경고 외에는 아무것도 할 필요가 없습니다.
+      // 이 분기를 제거하고 향후 릴리스에서 예외를 던지도록 만들 수 있습니다.
+    }
+  } else {
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, SyncLane);
+    if (root !== null) {
+      // 낙관적 업데이트 구현은 Transition이 낙관적 업데이트보다 먼저 시도되지 않는다고 가정합니다. 
+      // 이는 현재 낙관적 업데이트가 항상 동기적으로 처리되기 때문에 유효합니다. 
+      // 만약 이 동작 방식이 변경되면, 이를 고려해야 합니다.
+      scheduleUpdateOnFiber(root, fiber, SyncLane);
+      // 낙관적 업데이트는 항상 동기적이므로 여기서 entangleTransitionUpdate 함수를 호출할 필요가 없습니다.
+    }
+  }
+
+  markUpdateInDevTools(fiber, SyncLane, action);
+}
+```
+
+### dispatchActionState
+
+액션을 처리하기 위한 함수이다.\
+기본적으로는 원형 연결 리스트 형태(Circular Linked List)의 자료구조를 사용하여 액션을 큐에 넣는다.
+
+그리하여 액션들의 순차적 실행이 보장된다.
+
+<aside>
+<b> 여기서 든 생각 : </b>
+원형 링크드 리스트를 사용한 더 직접적인 이유가 있을까? 배열기반으로 처리하는 것보다 추가적인 구현이 덜 들어가서 이지 않을까...
+</aside>
+
+여기서 직접적으로 액션이 실행된다. 
+
+```ts
+function dispatchActionState<S, P>(
+  fiber: Fiber,
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+): void {
+  if (isRenderPhaseUpdate(fiber)) {
+    // 렌더링 중에는 폼 상태를 업데이트 할 수 없다!
+    throw new Error('Cannot update form state while rendering.');
+  }
+  // 액션 큐가 비어있는지 확인
+  const last = actionQueue.pending;
+  if (last === null) {
+    // 비어있으면(no pending actions) 이게 첫 번째 액션이므로 즉시 실행
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: (null: any), // circular (state 업데이트와 비슷하게 연결리스트로 구현)
+    };
+    // 원형 연결 리스트 형태로 만들어진다.
+    newLast.next = actionQueue.pending = newLast; // 새로 생성한 액션을 큐에 넣는다. 
+    // actionQueue.pending = newLast; 시작점을 설정한다.
+    // 새로운 액션 노드의 next 속성을 자기 자신으로 설정합니다. 다음 노드는 자기 자신이 된다.
+
+    runActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+      payload,
+    );
+  } else {
+
+    // 이미 실행 중인 액션이 있는 경우 큐에 추가합니다.
+    const first = last.next; // 다음 액션을 가져온다. (원형 연결 리스트이기 때문에 마지막 노드의 다음 노드가 첫 번째 노드가 된다.)
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: first, // 가져온 다음 액션을 새로운 액션의 다음으로 설정합니다.
+    };
+    actionQueue.pending = last.next = newLast; // 새로운 액션을 큐에 넣는다.
+    // actionQueue.pending = last.next = newLast; 마지막 노드의 다음 노드를 새로운 노드로 설정합니다.
+  }
+}
+
+function runActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+) {
+  const action = actionQueue.action; // 액션을 가져온다.
+  const prevState = actionQueue.state; // 이전 상태를 가져온다.
+
+  // startTransition에서 가져온 부분
+  const prevTransition = ReactSharedInternals.T;
+  const currentTransition: BatchConfigTransition = {
+    _callbacks: new Set<(BatchConfigTransition, mixed) => mixed>(),
+  };
+  ReactSharedInternals.T = currentTransition;
+  if (__DEV__) {
+    ReactSharedInternals.T._updatedFibers = new Set();
+  }
+
+  // 팬딩상태를 낙관적으로 업데이트합니다. useTransition과 유사합니다.
+  // 모든 액션이 완료되면 자동으로 되돌립니다.
+  setPendingState(true);
+
+  try {
+    const returnValue = action(prevState, payload); // 액션을 실행합니다.
+    if (
+      returnValue !== null &&
+      typeof returnValue === 'object' &&
+      typeof returnValue.then === 'function'
+    ) {
+      // 액션이 null이 아니고 객체이며 then 메서드를 가지고 있는 경우
+      // thenable로 변환합니다.
+      const thenable = ((returnValue: any): Thenable<Awaited<S>>);
+      notifyTransitionCallbacks(currentTransition, thenable);
+
+      // 액션의 반환 상태를 읽기 위한 리스너를 추가합니다. 
+      // 이것이 해결되면 시퀀스의 다음 액션을 실행할 수 있습니다.
+      thenable.then( // thenable을 사용하여 비동기 액션을 처리합니다.
+        (nextState: Awaited<S>) => { // 성공한 경우
+          actionQueue.state = nextState; // 상태를 업데이트합니다.
+          finishRunningActionStateAction(  // 액션 실행이 끝나면 실행합니다.
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          );
+        },
+        () => // 실패한 경우
+          finishRunningActionStateAction( 
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          ),
+      );
+
+      setState((thenable: any)); // stateHook의 setState를 호출합니다. thenable을 넘겨줍니다.
+    } else { // 반환값이 thenable이 아닌 경우, 즉 동기적인 경우
+      setState((returnValue: any)); // stateHook의 setState를 호출합니다. 반환값을 넘겨줍니다.
+
+      const nextState = ((returnValue: any): Awaited<S>); // 반환값을 nextState에 할당합니다.
+      actionQueue.state = nextState; // 상태를 업데이트합니다.
+      finishRunningActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+      );
+    }
+  } catch (error) {
+    // This is a trick to get the `useActionState` hook to rethrow the error.
+    // When it unwraps the thenable with the `use` algorithm, the error
+    // will be thrown.
+    const rejectedThenable: S = ({
+      then() {},
+      status: 'rejected',
+      reason: error,
+      // $FlowFixMe: Not sure why this doesn't work
+    }: RejectedThenable<Awaited<S>>);
+    setState(rejectedThenable);
+    finishRunningActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+    );
+  } finally {
+    ReactSharedInternals.T = prevTransition;
+  }
+}
+
+// 액션 실행이 끝나면 실행되는 함수
+function finishRunningActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: Dispatch<S | Awaited<S>>,
+  setState: Dispatch<S | Awaited<S>>,
+) {
+  // The action finished running. Pop it from the queue and run the next pending
+  // action, if there are any.
+  // 액션 실행이 끝나고, 큐에서 제거하고 만약 보류 중인 액션이 있다면 다음 보류 중인 액션을 실행합니다.
+  const last = actionQueue.pending; // 마지막 액션을 가져옵니다.
+  if (last !== null) { // 마지막 액션이 null이 아닌 경우
+    const first = last.next; // 다음 액션을 가져옵니다.
+    if (first === last) { // 마지막 액션이 첫 번째 액션인 경우 (원형 연결 리스트이기 때문에)
+      // 큐에서 마지막 액션이었습니다.
+      actionQueue.pending = null;  // 큐를 비웁니다.
+    } else { // 마지막 액션이 첫 번째 액션이 아닌 경우
+      // 원형 큐에서 첫 번째 노드를 제거합니다.
+      const next = first.next; // 다음 노드를 가져옵니다.
+      last.next = next; // 마지막 노드의 다음 노드를 다음 노드로 설정합니다.
+
+      // 다음 액션을 실행합니다.
+      runActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+        next.payload,
+      );
+    }
+  }
+}
+```
+
+이런 과정을 통해 useActionState 훅은 상태를 관리하고, 액션을 디스패치하며, 액션의 완료 여부를 알 수 있게 된다. 
+
+
+## 마무리
+
+useActionState 훅은 기존의 useFormState 훅이 가진 혼란과 한계를 해결하기 위해 도입된 훅이다.\
+그로인해 더이상 렌더러에 종속되지 않고 사용할 수 있게 되었다.  
+
+코드 살펴보면서 발견한 부분을 올린 PR도 통과 되었으면 좋겠다.
+
+다음시간에는 좀더 폼과 가까운 useFormStatus에 대해서 살펴보겠다.
+

@@ -1,0 +1,34 @@
+---
+title: "Ascii 스크린 만22들기"
+description: ""
+author: "Yongseok"
+pubDate: "Feb 4 2024"
+categories: ["ascii"]
+heroImage: "/blog-placeholder-4.jpg"
+---
+
+# useFormStatus
+
+```ts
+// ReactDomFormAction.js
+export function useFormStatus(): FormStatus {
+  if (!enableAsyncActions) {
+    throw new Error('Not implemented.');
+  } else {
+    const dispatcher = resolveDispatcher();
+    // $FlowFixMe[not-a-function] We know this exists because of the feature check above.
+    return dispatcher.useHostTransitionStatus();
+  }
+}
+
+```
+```ts
+// ReactFiberHooks.js
+function useHostTransitionStatus(): TransitionStatus {
+  if (!enableAsyncActions) {
+    throw new Error('Not implemented.');
+  }
+  const status: TransitionStatus | null = readContext(HostTransitionContext);
+  return status !== null ? status : NoPendingHostTransition;
+}
+```
