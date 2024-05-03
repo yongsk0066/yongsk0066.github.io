@@ -1,7 +1,7 @@
 ---
 import { type CollectionEntry, getCollection } from "astro:content";
 import PageLayout from "@layouts/PageLayout.astro";
-import ArrowCard from "@components/Nano/ArrowCard.astro";
+import ArrowCard from "@components/ArrowCard.astro";
 import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 
 const data = (await getCollection("blog"))

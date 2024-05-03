@@ -1,80 +1,27 @@
 ---
-import { SITE_TITLE } from "../consts";
-import HeaderLink from "./HeaderLink.astro";
+import Container from "./Container.astro";
+import Link from "./Link.astro";
 import HeaderClock from "./widget/HeaderClock";
 ---
 
-<!-- Google Tag Manager (noscript) -->
-<noscript
-  ><iframe
-    src="https://www.googletagmanager.com/ns.html?id=GTM-THN5VFZZ"
-    height="0"
-    width="0"
-    style="display:none;visibility:hidden"></iframe></noscript
->
-<!-- End Google Tag Manager (noscript) -->
 <header>
-  <nav>
-    <h2><a href="/">{SITE_TITLE}</a></h2>
-    <div class="header-utils">
-      <div class="internal-links">
-        <HeaderLink href="/">Home</HeaderLink>
-        <HeaderLink href="/blog">Blog</HeaderLink>
-        <HeaderLink href="/about">About</HeaderLink>
-      </div>
-      <HeaderClock client:load />
+  <Container>
+    <div class="flex flex-wrap gap-y-2 justify-between">
+      <Link href="/" underline={false}>
+        <div class="font-semibold">장용석 블로그</div>
+      </Link>
+      <nav class="flex gap-1">
+        <Link href="/blog"> blog </Link>
+        <!-- <span>
+          {`/`}
+        </span> -->
+        <!-- <Link href="/work"> work </Link> -->
+        <span>
+          {`/`}
+        </span>
+        <Link href="/about"> about </Link>
+        <HeaderClock client:load />
+      </nav>
     </div>
-  </nav>
+  </Container>
 </header>
-<style>
-  header {
-    margin: 0;
-    padding: 0 1em;
-    font-family: "Oswald";
-    background-color: rgba(243, 244, 246, 0.8);
-    border-bottom: 1px solid black;
-    position: sticky;
-    backdrop-filter: blur(12px);
-    top: 0;
-    z-index: 100;
-  }
-  h2 {
-    margin: 0;
-    font-size: 1em;
-  }
-
-  h2 a,
-  h2 a.active {
-    text-decoration: none;
-  }
-  nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  nav a {
-    padding: 1em 0.5em;
-    color: var(--black);
-    border-bottom: 4px solid transparent;
-    text-decoration: none;
-  }
-  nav a.active {
-    text-decoration: none;
-    border-bottom-color: var(--accent);
-  }
-  .social-links,
-  .social-links a {
-    display: flex;
-  }
-
-  .header-utils {
-    display: flex;
-    align-items: center;
-  }
-
-  @media (max-width: 720px) {
-    .social-links {
-      display: none;
-    }
-  }
-</style>

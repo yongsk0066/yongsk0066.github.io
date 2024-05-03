@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./styles.css";
 
 function HeaderClock() {
@@ -11,7 +11,7 @@ function HeaderClock() {
   }, []);
 
   return (
-    <div className="header__clock">
+    <div className="header__clock pl-2 text-sm">
       {time.toLocaleTimeString("it-IT", {
         hour: "2-digit",
         minute: "2-digit",

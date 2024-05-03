@@ -8,6 +8,24 @@
       "@styles/*": [
         "src/styles/*"
       ],
+      "@layouts/*": [
+        "src/layouts/*"
+      ],
+      "@components/*": [
+        "src/components/*"
+      ],
+      "@pages/*": [
+        "src/pages/*"
+      ],
+      "@lib/*": [
+        "src/lib/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ],
+      "@consts": [
+        "src/consts"
+      ],
       "@*": ["./src/*"]
     },
     "jsx": "react-jsx",
