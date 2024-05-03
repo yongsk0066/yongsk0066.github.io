@@ -3,7 +3,7 @@
   "compilerOptions": {
     "useDefineForClassFields": false,
     "experimentalDecorators": true,
-    "baseUrl": "/Users/yongseok/dev/yongsk0066.github.io",
+    "baseUrl": ".",
     "paths": {
       "@styles/*": [
         "src/styles/*"
