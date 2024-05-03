@@ -250,13 +250,12 @@ article {
 
 	code {
 		@apply font-mono text-sm bg-gray-200 dark:bg-black  py-1 px-1.5 rounded-md;
-
-		&::after {
-			content: none !important;
-		}
-		&::before {
-			content: none !important;
-		}
+	}
+	code::after {
+		content: none !important;
+	}
+	code::before {
+		content: none !important;
 	}
 }
 
