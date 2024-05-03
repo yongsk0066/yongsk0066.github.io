@@ -11,7 +11,7 @@ function HeaderClock() {
   }, []);
 
   return (
-    <div className="header__clock pl-2 text-sm">
+    <div className="header__clock text-sm">
       {time.toLocaleTimeString("it-IT", {
         hour: "2-digit",
         minute: "2-digit",

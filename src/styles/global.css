@@ -206,7 +206,7 @@ header {
 }
 
 main {
-  @apply flex-1 py-32;
+  @apply flex-1 py-24;
 }
 
 footer {
@@ -256,6 +256,10 @@ article {
 	}
 	code::before {
 		content: none !important;
+	}
+
+	pre {
+		@apply max-sm:text-xs !important;
 	}
 }
 

@@ -22,7 +22,7 @@ import PageLayout from "@layouts/PageLayout.astro";
   <body>
     <!-- <Header title={SITE_TITLE} /> -->
     <PageLayout title={"About Me"} description={"나는 누구인가?"}>
-      <div class="mx-auto animate-expand px-8">
+      <div class="mx-auto animate-expand px-8 max-sm:px-4 max-sm:-mt-8">
         <HomeCoverElement client:only="lit" />
       </div>
     </PageLayout>
