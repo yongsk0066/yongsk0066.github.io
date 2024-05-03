@@ -7,13 +7,12 @@ import Header from "../components/Header.astro";
 
 type Props = CollectionEntry<"blog">["data"];
 
-const { title, description, pubDate, updatedDate, heroImage, categories } =
-  Astro.props;
+const { title, description, date, heroImage, categories } = Astro.props;
 ---
 
 <html lang="ko">
   <head>
-    <BaseHead title={title} description={description} />
+    <BaseHead title={title} description={description ?? ""} />
     <style>
       main {
         width: 100%;
@@ -82,14 +81,14 @@ const { title, description, pubDate, updatedDate, heroImage, categories } =
         <div class="prose">
           <div class="title">
             <div class="date">
-              <FormattedDate date={pubDate} />
-              {
+              <FormattedDate date={date} />
+              <!-- {
                 updatedDate && (
                   <div class="last-updated-on">
                     Last updated on <FormattedDate date={updatedDate} />
                   </div>
                 )
-              }
+              } -->
             </div>
             <div class="categories">
               {

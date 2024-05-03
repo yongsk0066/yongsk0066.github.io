@@ -1,9 +1,11 @@
 ---
+import Container from "@components/Nano/Container.astro";
 import BaseHead from "../components/BaseHead.astro";
 import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
 import { HomeCoverElement } from "../components/lit/asciiScreen/home-cover-element";
 import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
+import PageLayout from "@layouts/PageLayout.astro";
 ---
 
 <!doctype html>
@@ -17,15 +19,15 @@ import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
         align-items: center;
         width: 100%;
         height: 100%;
-        padding: 16px 0;
       }
     </style>
   </head>
   <body>
-    <Header title={SITE_TITLE} />
-    <main>
-      <HomeCoverElement client:only="lit" />
-    </main>
-    <Footer />
+    <!-- <Header title={SITE_TITLE} /> -->
+    <PageLayout title={"About Me"} description={"나는 누구인가?"}>
+      <div class="mx-auto animate-expand px-8">
+        <HomeCoverElement client:only="lit" />
+      </div>
+    </PageLayout>
   </body>
 </html>
