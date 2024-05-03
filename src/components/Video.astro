@@ -10,6 +10,7 @@ const { src, caption, ratio } = Astro.props;
 
 <figure>
   <video
+    class="rounded-lg shadow-xl hover:shadow-3xl hover:-translate-y-2 hover:scale-105 transition-all duration-300 ease-in-out"
     autoplay
     loop
     muted
@@ -28,19 +29,11 @@ const { src, caption, ratio } = Astro.props;
 <style>
   video {
     width: fit-content;
-    border-radius: 0.5rem;
-    overflow: hidden;
     object-fit: cover;
     box-sizing: border-box;
-    box-shadow: rgba(0, 0, 0, 0.173) 0px 0px 6px 3px;
     background-color: black;
     margin: 0 auto;
     position: relative;
-    transition: box-shadow 0.3s;
-  }
-
-  video:hover {
-    box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
   }
 
   figure {

@@ -1,0 +1,25 @@
+---
+import Container from "./Container.astro";
+import Link from "./Link.astro";
+---
+
+<header>
+  <Container>
+    <div class="flex flex-wrap gap-y-2 justify-between">
+      <Link href="/" underline={false}>
+        <div class="font-semibold">장용석 블로그</div>
+      </Link>
+      <nav class="flex gap-1">
+        <Link href="/blog"> blog </Link>
+        <!-- <span>
+          {`/`}
+        </span> -->
+        <!-- <Link href="/work"> work </Link> -->
+        <span>
+          {`/`}
+        </span>
+        <Link href="/about"> about </Link>
+      </nav>
+    </div>
+  </Container>
+</header>

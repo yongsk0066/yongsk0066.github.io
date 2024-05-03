@@ -1,5 +1,7 @@
 ---
+import PageLayout from "@layouts/PageLayout.astro";
 import Layout from "../layouts/BlogPost.astro";
+import Container from "@components/Nano/Container.astro";
 ---
 
 <style>
@@ -25,29 +27,28 @@ import Layout from "../layouts/BlogPost.astro";
     place-items: center;
   }
 </style>
-<Layout
-  title="About Me"
-  description="나는 누구인가?"
-  pubDate={new Date("January 14 2024")}
->
-  <figure>
-    <video
-      autoplay
-      loop
-      muted
-      playsinline
-      disablepictureinpicture
-      oncontextmenu="return false;"
-    >
-      <source src="/video/about.mp4" type="video/mp4" />
-      <div>hello world</div>
-    </video>
-    <figcaption>My footage from 2024, shot on super8 film</figcaption>
-  </figure>
-  <h1>
-    Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
-    <br />
-    <br />
-    Based in Seoul, South Korea. 🇰🇷
-  </h1>
-</Layout>
+<PageLayout title={"About Me"} description={"나는 누구인가?"}>
+  <Container>
+    <figure>
+      <video
+        autoplay
+        loop
+        muted
+        playsinline
+        disablepictureinpicture
+        oncontextmenu="return false;"
+      >
+        <source src="/video/about.mp4" type="video/mp4" />
+      </video>
+      <figcaption class="mt-2 text-sm text-gray-500">
+        My footage from 2024, shot on super8 film
+      </figcaption>
+    </figure>
+    <h1 class="antialiased text-5xl text-black font-bold leading-[1.4]">
+      Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
+      <br />
+      <br />
+      Based in Seoul, South Korea. 🇰🇷
+    </h1>
+  </Container>
+</PageLayout>
