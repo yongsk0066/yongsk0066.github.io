@@ -18,6 +18,11 @@ export async function getStaticPaths() {
 type Props = CollectionEntry<"blog">;
 
 const post = Astro.props;
+
+// const seriesPosts = (await getCollection("blog"))
+//   .filter((_post) => _post.data.series === post.data.series)
+//   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
 const { Content } = await post.render();
 ---
 
@@ -26,6 +31,22 @@ const { Content } = await post.render();
     <div class="animate">
       <BackToPrev href="/blog"> 돌아가기 </BackToPrev>
     </div>
+    <!-- series -->
+    <!-- <div class="animate flex items-center gap-1.5" >
+      <div class="font-base text-sm">
+        {post.data.series}
+      </div>
+      &bull;
+      <div>
+        <ul>
+          {
+            seriesPosts.map((seriesPost) => {
+              return seriesPost.slug;
+            })
+          }
+        </ul>
+      </div>
+    </div> -->
     <div class="space-y-1 my-10">
       <div class="animate flex items-center gap-1.5">
         <div class="font-base text-sm">
