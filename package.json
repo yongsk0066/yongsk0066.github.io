@@ -10,10 +10,10 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/check": "0.5.10",
+    "@astrojs/check": "0.6.0",
     "@astrojs/lit": "^4.0.1",
-    "@astrojs/mdx": "2.3.1",
-    "@astrojs/react": "3.3.2",
+    "@astrojs/mdx": "3.0.0",
+    "@astrojs/react": "3.3.4",
     "@astrojs/rss": "^4.0.5",
     "@astrojs/sitemap": "3.1.4",
     "@astrojs/tailwind": "^5.1.0",
@@ -27,7 +27,7 @@
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
-    "astro": "4.7.1",
+    "astro": "4.8.2",
     "clsx": "^2.1.1",
     "fs-extra": "^11.1.1",
     "jsdom": "^24.0.0",
