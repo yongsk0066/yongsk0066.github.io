@@ -1,9 +1,7 @@
-import { Environment, Lightformer } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Physics } from "@react-three/rapier";
 import { useRef } from "react";
-import { Euler, Vector3, type Mesh } from "three";
-import * as THREE from "three";
+import { AxesHelper, Matrix4, Mesh, Vector3 } from "three";
+
 const Earth = () => {
   const meshRef = useRef<Mesh>(null);
 
@@ -32,20 +30,46 @@ const Airplane = () => {
     }
 
     const radius = 3.5;
-    const speed = 1;
+    const speed = 1.5;
     const angle = clock.getElapsedTime() * speed;
+
+    // 기울어진 회전 축 설정 (예: X축에 30도 기울이기)
+    const tiltAngle = -Math.PI / 4; // 30도
+    const rotationMatrix = new Matrix4().makeRotationX(tiltAngle);
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    meshRef.current.position.set(x, 0, z);
-    // meshRef.current.rotateOnWorldAxis(new Vector3(0, 1, 0), 0.01);
+
+    const originalPosition = new Vector3(x, 0, z);
+    const tiltedPosition = originalPosition.applyMatrix4(rotationMatrix);
+    meshRef.current.position.set(
+      tiltedPosition.x,
+      tiltedPosition.y,
+      tiltedPosition.z
+    );
+
+    // 비행기의 회전을 기울어진 축에 맞추기
+    const direction = new Vector3(-Math.sin(angle), 0, Math.cos(angle))
+      .applyMatrix4(rotationMatrix)
+      .normalize();
+
+    const lookAt = new Vector3().addVectors(tiltedPosition, direction);
+
+    meshRef.current.lookAt(lookAt);
+    meshRef.current.rotateX(Math.PI / 2);
   });
 
   return (
-    <mesh ref={meshRef} rotation={[0, 0, Math.PI / 2]}>
+    <mesh ref={meshRef}>
       <coneGeometry args={[0.5, 1.5, 6]} />
       <meshStandardMaterial color="red" />
     </mesh>
   );
+};
+
+const Axes = () => {
+  const axesRef = useRef<AxesHelper>(null);
+
+  return <primitive ref={axesRef} object={new AxesHelper(20)} />;
 };
 
 export default function Globe() {
@@ -54,9 +78,10 @@ export default function Globe() {
       style={{
         height: "500px",
       }}
-      camera={{ position: [0, 0, 5], fov: 120 }}
+      camera={{ position: [5, 5, 7], fov: 60 }}
     >
       <ambientLight intensity={0.5} />
+      <pointLight position={[10, 10, 10]} intensity={1.2} castShadow />
       <directionalLight
         position={[2, 2, -5]}
         intensity={1}
@@ -66,6 +91,7 @@ export default function Globe() {
       />
       <Earth />
       <Airplane />
+      <Axes />
     </Canvas>
   );
 }
