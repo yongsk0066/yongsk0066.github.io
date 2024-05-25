@@ -1,0 +1,777 @@
+---
+title: "React Compiler, 너 누구니 [1]"
+description: "React Compiler에 대해 깊이 파헤쳐보고자 한다. 우선은 바벨 플러그인을 통해 컴파일러의 진입점을 살펴보자."
+author: "Yongseok"
+categories: ["React Compiler"]
+date: '2024-05-25T11:31:51.502Z'
+series: "React Compiler"
+---
+import LinkPreview from '../../components/LinkPreview.astro'
+import  { YouTube } from "../../components/lit/youtube-element"
+
+React Conf 2024에 다녀온지도 벌써 1주일이 지났다.\
+지난주에는 베가스에 있었는데... 지금은 역삼역 카페이다.
+
+이번 컨퍼런스 내용 중 하나의 큰 축이었던 React-Forget으로 알려지던 React Compiler가 세상에 나왔다.
+
+<LinkPreview src="https://github.com/facebook/react/pull/29061" />
+
+이 컴파일러는 마법과도 같이 말그래로 `알잘딱`하게 우리의 리액트 코드들을 메모이제이션을 해준다. 
+
+리액트 코어팀과 같이 얼마나 오랜시간 폐관수련을 하였길래 이런 마법을 부릴 수 있게 된걸까?
+
+리액트 팀은 꽤나 오래전부터 컴파일러에 대한 관심을 보였다고 한다. (react에 대한 컴파일러는 아니지만) 그 흔적들은 이런 프로젝트들에서 엿볼 수 있다.
+
+<LinkPreview src="https://github.com/facebookarchive/prepack" />
+<LinkPreview src="https://prepack.io/" />
+
+
+이번 시리즈에서는 React Compiler에 대해 깊이 파헤쳐보고자 한다.\
+플러그인을 통한 진입, 컴파일 과정, 메모이제이션, 그리고 미래에 대해서 살펴보자.
+
+
+## React Compiler
+
+<LinkPreview src="https://react.dev/learn/react-compiler" />
+
+컴파일러가 나온지 얼마 안되었기에, 공식 문서도 업데이트될 여지가 있다. 그런고로 컴파일러에 대한 자세한 설명은 공식 문서를 참고하자.\
+현재 리액트 컴파일러는 babel 플러그인을 통해 사용할 수 있다.
+
+https://github.com/facebook/react/tree/main/compiler/packages/babel-plugin-react-compiler
+
+우리도 이 진입점을 통해 컴파일러 속으로 들어가보자
+
+## 진입점(EntryPoint)
+
+<aside>본 글에서는 babel에 대해서는 깊이 다루지 않기로 한다.</aside>
+
+https://github.com/facebook/react/blob/main/compiler/packages/babel-plugin-react-compiler/src/Babel/BabelPlugin.ts
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/Babel/BabelPlugin.ts
+import type * as BabelCore from "@babel/core";
+// ...
+/*
+ * The React Forget Babel Plugin
+ * @param {*} _babel
+ * @returns
+ */
+export default function BabelPluginReactCompiler(
+  _babel: typeof BabelCore
+): BabelCore.PluginObj {
+  return {
+    name: "react-forget",
+    visitor: {
+      /*
+       * Note: Babel does some "smart" merging of visitors across plugins, so even if A is inserted
+       * prior to B, if A does not have a Program visitor and B does, B will run first. We always
+       * want Forget to run true to source as possible.
+       */
+      Program(prog, pass): void {
+        // ...
+        compileProgram(prog, {
+          opts,
+          filename: pass.filename ?? null,
+          comments: pass.file.ast.comments ?? [],
+          code: pass.file.code,
+        });
+      },
+    },
+  };
+}
+
+```
+
+컴파일러의 진입점이다. 바벨을 통해 최상위 노드인 `Program`을 찾아 컴파일을 시작한다. \
+일단 바벨에 대해서는 블랙박스로 생각하고, `compileProgram` 함수를 살펴보자.
+
+## Program 
+
+코드 자체가 길기 때문에 동작 순서대로 끊어서 살펴보자.\
+최상위 노드로부터 compileProgram이 실행되게 되면 다음과 같은 일이 일어난다.
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  // Top level "use no forget", skip this file entirely
+  if (
+    findDirectiveDisablingMemoization(program.node.directives, options) != null
+  ) {
+    return;
+  }
+  //...
+
+}
+```
+```ts
+function findDirectiveDisablingMemoization(
+  directives: Array<t.Directive>,
+  options: PluginOptions
+): t.Directive | null {
+  for (const directive of directives) {
+    const directiveValue = directive.value.value;
+    if (
+      (directiveValue === "use no forget" ||
+        directiveValue === "use no memo") &&
+      !options.ignoreUseNoForget
+    ) {
+      return directive;
+    }
+  }
+  return null;
+}
+```
+우선 최상위 노드에 use no forget 또는 use no memo와 같은 주석이 있는지 확인하고 있다면 컴파일을 하지 않는다.
+forget은 컴파일러의 이전 이름이었기에, 더 직관적인 형태의 주석으로 바꾸고 있다고 한다.
+
+<figure>
+<img src="/post/images/ReactCompiler1/use_memo_commit.png" />
+<figcaption>Add support for 'use memo'</figcaption>
+</figure>
+
+
+
+### 1. 노드 순회 (program.traverse)
+
+program 노드를 기점으로 순회하면서 컴파일을 진행한다.
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  // Main traversal to compile with Forget
+  // Forget을 통한 컴파일을 위한 메인 순회
+  program.traverse(
+    {
+      ClassDeclaration(node: NodePath<t.ClassDeclaration>) {
+        node.skip(); // 스킵!
+        return;
+      },
+
+      ClassExpression(node: NodePath<t.ClassExpression>) {
+        node.skip(); // 스킵!
+        return;
+      },
+
+      FunctionDeclaration: traverseFunction,
+
+      FunctionExpression: traverseFunction,
+
+      ArrowFunctionExpression: traverseFunction,
+    },
+    {
+      ...pass,
+      opts: { ...pass.opts, ...options },
+      filename: pass.filename ?? null,
+    }
+  );
+  // ...
+```
+
+`program.traverse`메서드는 두가지 인자를 받는데, 첫번째는 노드들에 대한 동작을 정의한 객체이다.
+
+이 부분에서 컴파일러가 어떤 요소들을 스킵하고 어떤 요소들을 컴파일하는지 알 수 있다.
+
+
+- `ClassDeclaration`과 `ClassExpression` :  클래스 내부에 정의된 함수는 this를 참조할 수 있어 컴파일에 안전하지 않다. \
+따라서 이 노드들을 만나면 `node.skip()`을 호출하여 내부를 방문하지 않고 건너뛴다.
+- `FunctionDeclaration`, `FunctionExpression`, `ArrowFunctionExpression`: 이 노드들은 모두 `traverseFunction`이라는 함수를 통해 처리된다. 
+
+여기까지만 보았을 때 알 수 있는 점은, React Compiler는 함수에 대해서만 컴파일을 진행하는 것으로 보인다.
+
+<aside>각 노드의 타입에 대해서는 [Babel AST Types](https://babeljs.io/docs/babel-types)를 참고하자.</aside>
+
+
+### 2. 순회 함수 (traverseFunction)
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  const compiledFns: Array<CompileResult> = [];
+
+  //...
+    const traverseFunction = (fn: BabelFn, pass: CompilerPass): void => {
+    /*
+    * getReactFunctionType 
+    * 리턴 타입 : ReactFunctionType ("Component" | "Hook" | "Other")
+    */
+    const fnType = getReactFunctionType(fn, pass);  // 함수의 타입을 식별한다.
+    if (fnType === null || ALREADY_COMPILED.has(fn.node)) { // 이미 컴파일된 함수인지 확인
+      return;
+    }
+    /*
+     * 새로운 FunctionDeclaration 노드를 생성할 수 있으므로, 이를 건너뛰어야 한다.
+     * 그렇지 않으면 무한 루프가 발생할 수 있다.
+     * 원래 함수를 다시 방문하지 않도록 해야한다.
+     */
+    ALREADY_COMPILED.add(fn.node); // 이미 컴파일된 함수라고 표시
+    fn.skip(); // 함수를 방문하지 않도록 스킵
+
+    let compiledFn: CodegenFunction;
+    // ... 
+
+    compiledFn = compileFn(
+      fn,
+      config,
+      fnType,
+      useMemoCacheIdentifier.name,
+      options.logger,
+      pass.filename,
+      pass.code
+    );
+    // ... 
+
+    compiledFns.push({ originalFn: fn, compiledFn });
+  };
+```
+
+함수에 대한 컴파일을 진행하는 `traverseFunction`함수이다.\
+우선 `getReactFunctionType`를 통해 리액트기준으로 어떤 타입의 함수인지 식별한다.\
+여기서 타입자체는 크게 중요하지 않은데, `null`일 때는 컴파일을 진행하지 않는다.
+
+`compileFn`를 통해 컴파일 된 결과물과 원본 함수는 `compiledFns` 배열에 추가된다.
+
+다음으로 넘어가기전에 어떤 경우에 컴파일을 하지 않는지 `getReactFunctionType`의 내부를 살펴보자.
+
+#### 1. 함수에 'use no forget', 'use no memo' 주석이 있는 경우, 컴파일을 하지 않는다.
+위에서 살펴봤던 `findDirectiveDisablingMemoization`함수를 통해 주석을 확인한다.
+```ts
+// getReactFunctionType
+const useNoForget = findDirectiveDisablingMemoization(
+  fn.node.body.directives,
+  pass.opts
+); // 'use no forget' | 'use no memo' | null
+if (useNoForget != null) {
+  return null;
+}
+```
+#### 1.1 `use forget`, `use memo` 가 있는 경우 바로 식별후 리턴한다.
+```ts
+// getReactFunctionType
+  if (findDirectiveEnablingMemoization(fn.node.body.directives) != null) {
+    // 'use forget' | 'use memo' 인 경우
+    return getComponentOrHookLike(fn, hookPattern) ?? "Other";
+  }
+```
+#### 2. 컴파일 모드가 `annotation`인 경우, 컴파일을 하지 않는다. (지시자를 통해 컴파일을 활성화하는 경우)
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "annotation": {
+    // opt-ins are checked above
+    // 옵트인은 위에서 확인된다.
+    return null;
+  }
+```
+#### 3. 컴파일 모드가 `infer`인 경우, 컴포넌트와 훅을 식별한다. (기본 모드가 `infer`이다.)
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "infer": {
+    // Component and hook declarations are known components/hooks
+    if (fn.isFunctionDeclaration()) {
+      if (isComponentDeclaration(fn.node)) {
+        return "Component";
+      } else if (isHookDeclaration(fn.node)) {
+        return "Hook";
+      }
+    }
+
+    // Otherwise check if this is a component or hook-like function
+    return getComponentOrHookLike(fn, hookPattern);
+    }
+```
+
+#### 4. 컴파일 모드가 `all`인 경우, 최상위 함수만 컴파일한다.
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "all": {
+    // Compile only top level functions
+    if (fn.scope.getProgramParent() !== fn.scope.parent) {
+      return null;
+    }
+
+    return getComponentOrHookLike(fn, hookPattern) ?? "Other";
+  }
+```
+
+
+### 3. 컴파일된 함수로 교체
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  /*
+   * Only insert Forget-ified functions if we have not encountered a critical
+   * error elsewhere in the file, regardless of bailout mode.
+   */
+  /*
+    * 중단 모드에 관계없이 다른 곳에서 심각한 오류를 만나지 않은 경우에만 Forget-ified 함수를 삽입한다.
+    */
+  for (const { originalFn, compiledFn } of compiledFns) {
+    const transformedFn = createNewFunctionNode(originalFn, compiledFn);
+
+    if (gating != null) {
+      insertGatedFunctionDeclaration(originalFn, transformedFn, gating);
+    } else {
+      originalFn.replaceWith(transformedFn);
+    }
+  }
+```
+
+`compiledFns` 배열에 담긴 컴파일된 함수와 원본을  `createNewFunctionNode`에 넘겨서 새로운 함수 노드를 생성하여 교체한다.\
+아래 `createNewFunctionNode`내부로직은 단순하다. 각 노드 타입에 따라 일부 원본 노드의 정보와 함께 새로운 노드를 생성한다.\
+그리고 컴파일된 함수를 이미 방문한 것으로 표시한다.
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+
+export function createNewFunctionNode(
+  originalFn: BabelFn,
+  compiledFn: CodegenFunction
+): t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression {
+  let transformedFn:
+    | t.FunctionDeclaration
+    | t.ArrowFunctionExpression
+    | t.FunctionExpression;
+  switch (originalFn.node.type) {
+    case "FunctionDeclaration": {
+      const fn: t.FunctionDeclaration = {
+        type: "FunctionDeclaration",
+        id: compiledFn.id,
+        loc: originalFn.node.loc ?? null,
+        async: compiledFn.async,
+        generator: compiledFn.generator,
+        params: compiledFn.params,
+        body: compiledFn.body,
+      };
+      transformedFn = fn;
+      break;
+    }
+    case "ArrowFunctionExpression": {
+      const fn: t.ArrowFunctionExpression = {
+        //...
+      };
+      transformedFn = fn;
+      break;
+    }
+    case "FunctionExpression": {
+      const fn: t.FunctionExpression = {
+        //...
+      };
+      transformedFn = fn;
+      break;
+    }
+  }
+
+  // Avoid visiting the new transformed version
+  // 새로운 변환된 버전을 방문하지 않도록 한다.
+  ALREADY_COMPILED.add(transformedFn);
+  return transformedFn;
+}
+```
+
+
+### 4. import 업데이트
+
+컴파일된 함수중 메모이제이션 된 것이 있다면, `useMemoCache`를 Import하도록 하는 로직이 마지막에 있다.\
+`useMemoCache`는 컴파일된 함수들이 메모이제이션을 사용할 때 필요한 함수이다.\
+그렇기에 이게 사용되는 부분에 'Import' 구문을 추가 해준다고 보면된다.
+
+```ts
+  //...
+    const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
+    const moduleName = options.runtimeModule ?? "react/compiler-runtime";
+
+  //...
+  // Forget compiled the component, we need to update existing imports of useMemoCache
+  // Forget가 컴포넌트를 컴파일했으므로, useMemoCache의 기존 임포트를 업데이트해야한다.
+  if (compiledFns.length > 0) { // 컴파일된 함수가 있다면
+    let needsMemoCacheFunctionImport = false; // useMemoCache 함수 임포트가 필요한지 여부
+    for (const fn of compiledFns) { // 컴파일된 함수들을 순회하며
+      if (fn.compiledFn.memoSlotsUsed > 0) { // memoSlotsUsed가 0보다 크다면 (메모리제이션을 사용한다면)
+        needsMemoCacheFunctionImport = true; // useMemoCache 함수 임포트가 필요하다.
+        break;
+      }
+    }
+
+    if (needsMemoCacheFunctionImport) { // useMemoCache 함수 임포트가 필요하다면
+      updateMemoCacheFunctionImport( // useMemoCache 함수 임포트를 업데이트한다.
+        program,
+        moduleName,
+        useMemoCacheIdentifier.name
+      );
+    }
+    addImportsToProgram(program, externalFunctions);
+  }
+```
+"import"를 추가하기 위해서 호출되는 `updateMemoCacheFunctionImport`의 인자로 `moduleName`와 `useMemoCacheIdentifier`를 보자.
+```ts 
+const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
+const moduleName = options.runtimeModule ?? "react/compiler-runtime";
+```
+`generateUidIdentifier`는 바벨의 메서드이다. 이를 통해서 고유한 식별자를 생성한다.\
+이 경우는 `c`라는 식별자를 생성하고 있는데, 중복된다면 `_c`, `_c2`와 같이 숫자를 붙여서 생성하게 된다. [참고](https://github.com/jamiebuilds/babel-handbook/blob/master/translations/en/plugin-handbook.md#generating-a-uid)
+
+`moduleName`은 `options.runtimeModule`이 없다면 `react/compiler-runtime`을 사용한다.\
+`options.runtimeModule`의 기본값은 `null`이다. 
+
+잠시 옵션을 살펴보자. 
+
+```ts 
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Options.ts
+export type PluginOptions = {
+  // ...
+  /*
+   * 활성화된 경우, Forget은 `react/compiler-runtime` 대신 주어진 모듈에서 `useMemoCache`를 가져올 것이다.
+   *
+   * ```
+   * // If set to "react-compiler-runtime"
+   * import {c as useMemoCache} from 'react-compiler-runtime';
+   * ```
+   */
+  runtimeModule?: string | null | undefined;
+}
+
+export const defaultOptions: PluginOptions = {
+  compilationMode: "infer",
+  runtimeModule: null,
+  // ...
+} as const;
+```
+
+다시 updateMemoCacheFunctionImport를 살펴보자.
+
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Imports.ts
+export function updateMemoCacheFunctionImport(
+  program: NodePath<t.Program>,
+  moduleName: string,
+  useMemoCacheIdentifier: string
+): void {
+  /*
+   * If there isn't already an import of * as React, insert it so useMemoCache doesn't
+   * throw
+   */
+  /*
+   * 이미 * as React로 된 임포트가 없다면, useMemoCache가 throw되지 않도록 삽입한다.
+   */
+  const hasExistingImport = hasExistingNonNamespacedImportOfModule(
+    program,
+    moduleName
+  );
+
+  if (hasExistingImport) {
+    // 이미 있는 임포트에 useMemoCache 함수를 추가한다.
+    const didUpdateImport = addMemoCacheFunctionSpecifierToExistingImport(
+      program,
+      moduleName,
+      useMemoCacheIdentifier
+    );
+    if (!didUpdateImport) {
+      throw new Error(
+        `Expected an ImportDeclaration of \`${moduleName}\` in order to update ImportSpecifiers with useMemoCache`
+      );
+    }
+  } else {
+    // 새로운 임포트를 추가한다.
+    addMemoCacheFunctionImportDeclaration(
+      program,
+      moduleName,
+      useMemoCacheIdentifier
+    );
+  }
+}
+
+function addMemoCacheFunctionImportDeclaration(
+  program: NodePath<t.Program>,
+  moduleName: string,
+  localName: string
+): void {
+  program.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
+      t.stringLiteral(moduleName)
+    )
+  );
+}
+```
+실질적으로 'import'구문이 추가되는 부분을 보면 
+```ts
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
+      t.stringLiteral(moduleName)
+    )
+```
+
+이 부분을 거쳐 
+```ts
+import { c as _c } from "react/compiler-runtime";
+```
+와 같은 형태로 업데이트된다. \
+그런데 왜 키워드로는 `useMemoCache`를 언급해왔으면서 `useMemoCache`가 아니고 `c`를 import 하는 것일까?
+
+이를 추적하기 위해서는 `react/compiler-runtime`을 살펴봐야한다.\
+다른 부분과는 다르게(?) 컴파일러 패키지 내부에서 가져오지 않고 `react` 패키지에서 가져오고 있다. 리액트로 들어가서 살펴보자
+
+<figure>
+<img src="/post/images/ReactCompiler1/use_memo_cache_commit.png" />
+<figcaption>[`react/compiler-runtime`를 이용하도록 수정한 commit](https://github.com/facebook/react/commit/ebe58ee619f55eefad9efd433996069af2e6a70a)</figcaption>
+</figure>
+
+
+```ts
+// react/compiler-runtime.js
+
+export {useMemoCache as c} from './src/ReactHooks';
+```
+
+`useMemoCache`를 `c`로 내보내고 있다. 그래서 `c`를 import하는 것이다.
+<aside>[useMemoCache 구현체](https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116)는 나중에 더 깊이살펴보자</aside>
+
+이것은 기본 값이고 위에서 살펴봤듯이 옵션에 따라 다른 모듈에서 가져올 수도 있다. 메모이제이션 로직의 확장성을 염두해 둔것일까?\
+또 하나의 옵션인 `react-compiler-runtime`에서의 구현도 살펴보자.
+
+```ts
+// packages/react-compiler-runtime/src/index.ts
+type MemoCache = Array<number | typeof $empty>;
+
+const $empty = Symbol.for("react.memo_cache_sentinel");
+/**
+ * DANGER: this hook is NEVER meant to be called directly!
+ **/
+export function c(size: number) {
+  return React.useState(() => {
+    const $ = new Array(size);
+    for (let ii = 0; ii < size; ii++) {
+      $[ii] = $empty;
+    }
+    // This symbol is added to tell the react devtools that this array is from
+    // useMemoCache.
+    // @ts-ignore
+    $[$empty] = true;
+    return $;
+  })[0];
+}
+```
+여기서는 직접적으로 `c`로 내보내고 있고, 간단한 구현체를 가지고 있다. \
+구현을 간략하게 설명해보면, useState를 이용하여 size만큼의 배열을 생성하고, 각 요소에는 `$empty`라는 심볼을 넣어 초기화한다. (이 심볼은 나중에 react-devtool 에서 사용된다.)\
+그리고 이 배열을 반환한다. \
+일단 우리는 전반적인 컴파일러의 적용과정을 살펴보고 있음으로 이 배열이 어떤 식으로 사용되는 것인지는 뒤에서 살펴보도록 하자.
+
+<aside>왜 c라고 부르기로 한 것일까는 나중에 물어보도록 해야겠다. 아마 cache의 c아닐까?</aside>
+
+### 컴파일 끝!
+
+더 이상 깊이 들어가면 길을 잃을 수 있으니 원래 목적인 컴파일러의 적용과정을 마무리하도록 하자.\
+`useMemoCache` 다른 이름으로 `c`에 대한 import 구문을 추가하는 것으로. `compileProgram`의 동작은 끝났다.\
+그 말은 바벨 플러그인이 동작을 마쳤다는 것이다. 
+
+
+### 컴파일 결과물 맛보기
+
+그럼 우리는 이제 컴파일된 코드를 확인해보자.
+
+컴파일 과정을 살펴보기위해서 [React Compiler Playground](https://playground.react.dev/)를 실행하여 코드를 넣어보았다.
+
+```ts
+function Component({ color }) {
+  return <div styles={{color}}>hello world</div>;
+}
+
+export default function MyApp() {
+  const color= "red"
+  return (
+      <Component color={color} />
+  )
+}
+```
+이 코드를 넣어보았더니, 다음과 같이 컴파일된 결과물을 확인할 수 있었다.
+
+```ts
+function Component(t0) {
+  const $ = _c(2);
+
+  const { color } = t0;
+  let t1;
+
+  if ($[0] !== color) {
+    t1 = (
+      <div
+        styles={{
+          color,
+        }}
+      >
+        hello world
+      </div>
+    );
+    $[0] = color;
+    $[1] = t1;
+  } else {
+    t1 = $[1];
+  }
+
+  return t1;
+}
+
+function MyApp() {
+  const $ = _c(1);
+
+  let t0;
+
+  if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
+    t0 = <Component color="red" />;
+    $[0] = t0;
+  } else {
+    t0 = $[0];
+  }
+
+  return t0;
+}
+```
+
+<figure>
+<img src="/post/images/ReactCompiler1/playground_example.png" />
+<figcaption>playground 결과물</figcaption>
+</figure>
+
+컴파일 결과물에 대한 분석은 다음시간에 하기로 하고 오늘 다뤘던 내용위주로 살펴보자
+
+오... 뭔가 위에서 우리가 살펴봤던 코드가 보이는가?\
+컴포넌트들마다 위에서 살펴보았던 `useMemoCache`, 다른 이름으로 `_c`라는 메모이제이션 함수를 호출하고 있다. \
+아직 조금이지만, 컴파일러의 결과물에 대한 시야가 넓어진 것 같다.\
+우리의 여정은 일단 여기서 잠시 쉬도록 하자
+
+다음시간에는 `useMemoCache`의 동작 및 컴파일 과정들에 대해 더 깊이 살펴보도록 하자.
+
+## [더 알아보기] 그런데 왜 여기는 위에서 길게 살펴봤던 import구문은 없을까?
+
+이를 찾아보기 위해서는 playground 코드를 살펴보도록 하자
+
+```tsx
+// compiler/apps/playground/components/Editor/EditorImpl.tsx
+
+import {
+  //...
+  run,
+} from "babel-plugin-react-compiler/src";
+  // ...
+function compile(source: string): CompilerOutput {
+  // ...
+    for (const result of run(
+    fn,
+    {
+      ...config,
+      customHooks: new Map([...COMMON_HOOKS]),
+    },
+    getReactFunctionType(id),
+    "_c",
+    null,
+    null,
+    null,
+  )) {
+    // ...
+  }
+}
+
+
+export default function Editor() {
+  // ...
+  const compilerOutput =compile(deferredStore.source)
+  // ...
+}
+```
+
+우리가 살펴봤던 구문은 compileProgram 레벨에서 실행되는데, playground에서는 `run` 함수를 통해 실행되고 있다.\
+`run`함수는 `compileProgram`의 과정중 컴파일 과정인 `compileFn`가  실행하는 함수이다. \
+실질적으로 컴파일을 실행하는 부분이다.
+
+```ts
+// compiler/packages/babel-plugin-react-compiler/src/Entrypoint/Pipeline.ts
+
+export function compileFn(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): CodegenFunction {
+  let generator = run(
+    func,
+    config,
+    fnType,
+    useMemoCacheIdentifier,
+    logger,
+    filename,
+    code
+  );
+  while (true) {
+    const next = generator.next();
+    if (next.done) {
+      return next.value;
+    }
+  }
+}
+```
+이 부분에 대해서는 다음시간에 더 깊이 살펴보도록 하자.
+
+그렇기에 import구문은 보이지 않는 것이다.\
+우리가 살펴봤던 것처럼 실행된다면 아래와 같은 결과물이 될 것이다. 
+
+```ts
+import { c as _c } from "react/compiler-runtime";
+
+function Component(t0) {
+  const $ = _c(2);
+
+  const { color } = t0;
+  let t1;
+
+  if ($[0] !== color) {
+    t1 = (
+      <div
+        styles={{
+          color,
+        }}
+      >
+        hello world
+      </div>
+    );
+    $[0] = color;
+    $[1] = t1;
+  } else {
+    t1 = $[1];
+  }
+
+  return t1;
+}
+// ...
+```
+
+오늘은 더 이상 딥다이브할 에너지가 없다. 안녕!
+
+

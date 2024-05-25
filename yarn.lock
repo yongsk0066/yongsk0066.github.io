@@ -2371,9 +2371,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"astro@npm:^4.9.0":
-  version: 4.9.0
-  resolution: "astro@npm:4.9.0"
+"astro@npm:4.9.1":
+  version: 4.9.1
+  resolution: "astro@npm:4.9.1"
   dependencies:
     "@astrojs/compiler": "npm:^2.8.0"
     "@astrojs/internal-helpers": "npm:0.4.0"
@@ -2444,7 +2444,7 @@ __metadata:
       optional: true
   bin:
     astro: astro.js
-  checksum: 10c0/86c7020e2e848c318c5f9c75cc5bbbf39b390d23590f490368cb9337e625fae8328f6f9aee8fe95fc8749c0cce04a9f1bd7541af49e8743f49ee24fcb882c698
+  checksum: 10c0/0a8c9cd0fb5eeb9abe0bce34b70a605b183ab2a94545ff93ee807d4b9984a4a2e663dcd4258351d1c2e2f4e3ebfdfdeae54ca1ea75a7efaea6e5117655c9d815
   languageName: node
   linkType: hard
 
@@ -5048,7 +5048,7 @@ __metadata:
     "@types/react-dom": "npm:^18.3.0"
     "@types/three": "npm:^0.164.0"
     "@webcomponents/template-shadowroot": "npm:^0.2.1"
-    astro: "npm:^4.9.0"
+    astro: "npm:4.9.1"
     clsx: "npm:^2.1.1"
     fs-extra: "npm:^11.1.1"
     jsdom: "npm:^24.0.0"
