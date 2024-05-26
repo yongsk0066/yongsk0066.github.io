@@ -9,33 +9,32 @@ series: "React Compiler"
 import LinkPreview from '../../components/LinkPreview.astro'
 import  { YouTube } from "../../components/lit/youtube-element"
 
-React Conf 2024에 다녀온지도 벌써 1주일이 지났다.\
-지난주에는 베가스에 있었는데... 지금은 역삼역 카페이다.
+React Conf 2024에 다녀온지도 벌써 1주일이 지났다. \
+지난주에는 베가스에 있었는데 지금은 역삼역 카페에서 이 글을 쓰고 있다.
 
-이번 컨퍼런스 내용 중 하나의 큰 축이었던 React-Forget으로 알려지던 React Compiler가 세상에 나왔다.
+컨퍼런스의 큰 주제 중 하나였던 React-Forget으로 알려진 React Compiler가 공개되었다.
 
 <LinkPreview src="https://github.com/facebook/react/pull/29061" />
 
-이 컴파일러는 마법과도 같이 말그래로 `알잘딱`하게 우리의 리액트 코드들을 메모이제이션을 해준다. 
+이 컴파일러는 마법처럼 우리의 리액트 코드를 "알잘딱"하게 메모이제이션 해준다.
 
 리액트 코어팀과 같이 얼마나 오랜시간 폐관수련을 하였길래 이런 마법을 부릴 수 있게 된걸까?
 
-리액트 팀은 꽤나 오래전부터 컴파일러에 대한 관심을 보였다고 한다. (react에 대한 컴파일러는 아니지만) 그 흔적들은 이런 프로젝트들에서 엿볼 수 있다.
+리액트 팀은 꽤 오래전부터 컴파일러에 대한 관심을 보였다고 한다. (react에 대한 컴파일러는 아니지만) 그 흔적들은 이런 프로젝트들에서 엿볼 수 있다.
 
 <LinkPreview src="https://github.com/facebookarchive/prepack" />
 <LinkPreview src="https://prepack.io/" />
 
 
 이번 시리즈에서는 React Compiler에 대해 깊이 파헤쳐보고자 한다.\
-플러그인을 통한 진입, 컴파일 과정, 메모이제이션, 그리고 미래에 대해서 살펴보자.
-
+바벨 플러그인을 통한 진입점, 컴파일 과정, 메모이제이션, 그리고 미래까지 차근차근 살펴보자.
 
 ## React Compiler
 
 <LinkPreview src="https://react.dev/learn/react-compiler" />
 
-컴파일러가 나온지 얼마 안되었기에, 공식 문서도 업데이트될 여지가 있다. 그런고로 컴파일러에 대한 자세한 설명은 공식 문서를 참고하자.\
-현재 리액트 컴파일러는 babel 플러그인을 통해 사용할 수 있다.
+컴파일러가 공개된지 얼마 안되었기에 공식 문서도 업데이트될 여지가 있다. 자세한 설명은 공식 문서를 참고해보자.\ 
+현재 리액트 컴파일러는 바벨 플러그인을 통해 사용할 수 있다.
 
 https://github.com/facebook/react/tree/main/compiler/packages/babel-plugin-react-compiler
 
@@ -586,6 +585,18 @@ export function c(size: number) {
 더 이상 깊이 들어가면 길을 잃을 수 있으니 원래 목적인 컴파일러의 적용과정을 마무리하도록 하자.\
 `useMemoCache` 다른 이름으로 `c`에 대한 import 구문을 추가하는 것으로. `compileProgram`의 동작은 끝났다.\
 그 말은 바벨 플러그인이 동작을 마쳤다는 것이다. 
+
+
+### 마무리 요약
+
+리액트 컴파일러의 적용 과정을 요약하면 다음과 같습니다.
+
+1. 바벨 플러그인을 통해 컴파일러가 시작되며, 최상위 노드인 Program 노드부터 순회합니다.
+2. 함수 노드들 중 리액트 컴포넌트와 훅에 해당하는 함수들을 식별하고, 이들에 대해 컴파일을 수행합니다.
+3. 컴파일 과정에서 메모이제이션 등의 최적화가 적용되며, 컴파일된 함수들은 원본 함수들과 함께 저장됩니다.
+4. 컴파일이 완료된 후, 컴파일된 함수들로 원본 함수들을 교체합니다.
+5. 마지막으로 메모이제이션이 적용된 함수가 있다면, useMemoCache 함수의 import 구문을 자동으로 추가합니다.
+
 
 
 ### 컴파일 결과물 맛보기
