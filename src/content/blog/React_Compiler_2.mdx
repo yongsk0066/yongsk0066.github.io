@@ -310,6 +310,8 @@ export const enableNoCloningMemoCache = false;
 ```
 현 시점에서는 `enableNoCloningMemoCache`는 false로 설정되어 있다.
 
+다시 `useMemoCache`로 돌아가보자.
+
 ### 캐시가 없다면? 새로운 캐시 생성
 
 이제 마지막으로 캐시가 없다면, 새로운 캐시를 생성한다.
@@ -388,7 +390,7 @@ if (data === undefined) {
 ```
 
 만약 data가 `undefined`가 아니라면, 즉 캐시 데이터가 존재한다면, data의 길이가 요청된 size와 일치하는지 확인한다.\
-확인하는 이유는, 이전 렌더링에서 사용된 캐시 데이터와 현재 렌더링에서 사용할 캐시 데이터의 길이가 다르다면, 경고를 띄운다.
+확인하는 이유는, 이전 렌더링에서 사용된 캐시 데이터와 현재 렌더링에서 사용할 캐시 데이터의 길이가 다르다면, 문제가 발생할 수 있기 때문이다.
 
 ```ts
 else if (data.length !== size) {
