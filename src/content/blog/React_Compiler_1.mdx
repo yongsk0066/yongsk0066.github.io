@@ -44,6 +44,10 @@ https://github.com/facebook/react/tree/main/compiler/packages/babel-plugin-react
 
 <aside>본 글에서는 babel에 대해서는 깊이 다루지 않기로 한다.</aside>
 
+React Compiler는 바벨 플러그인을 통해 컴파일을 시작한다. \ 
+진입점인 `BabelPluginReactCompiler`함수는 바벨을 통해 Program 노드를 찾아 컴파일을 시작한다. \
+여기서 `compileProgram` 함수가 호출되며, 컴파일 프로세스가 시작된다.
+
 https://github.com/facebook/react/blob/main/compiler/packages/babel-plugin-react-compiler/src/Babel/BabelPlugin.ts
 
 ```ts
@@ -81,7 +85,6 @@ export default function BabelPluginReactCompiler(
 
 ```
 
-컴파일러의 진입점이다. 바벨을 통해 최상위 노드인 `Program`을 찾아 컴파일을 시작한다. \
 일단 바벨에 대해서는 블랙박스로 생각하고, `compileProgram` 함수를 살펴보자.
 
 ## Program 
@@ -396,31 +399,31 @@ export function createNewFunctionNode(
 그렇기에 이게 사용되는 부분에 'Import' 구문을 추가 해준다고 보면된다.
 
 ```ts
-  //...
-    const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
-    const moduleName = options.runtimeModule ?? "react/compiler-runtime";
+//...
+const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
+const moduleName = options.runtimeModule ?? "react/compiler-runtime";
 
-  //...
-  // Forget compiled the component, we need to update existing imports of useMemoCache
-  // Forget가 컴포넌트를 컴파일했으므로, useMemoCache의 기존 임포트를 업데이트해야한다.
-  if (compiledFns.length > 0) { // 컴파일된 함수가 있다면
-    let needsMemoCacheFunctionImport = false; // useMemoCache 함수 임포트가 필요한지 여부
-    for (const fn of compiledFns) { // 컴파일된 함수들을 순회하며
-      if (fn.compiledFn.memoSlotsUsed > 0) { // memoSlotsUsed가 0보다 크다면 (메모리제이션을 사용한다면)
-        needsMemoCacheFunctionImport = true; // useMemoCache 함수 임포트가 필요하다.
-        break;
-      }
-    }
-
-    if (needsMemoCacheFunctionImport) { // useMemoCache 함수 임포트가 필요하다면
-      updateMemoCacheFunctionImport( // useMemoCache 함수 임포트를 업데이트한다.
-        program,
-        moduleName,
-        useMemoCacheIdentifier.name
-      );
-    }
-    addImportsToProgram(program, externalFunctions);
+//...
+// Forget compiled the component, we need to update existing imports of useMemoCache
+// Forget가 컴포넌트를 컴파일했으므로, useMemoCache의 기존 임포트를 업데이트해야한다.
+if (compiledFns.length > 0) { // 컴파일된 함수가 있다면
+let needsMemoCacheFunctionImport = false; // useMemoCache 함수 임포트가 필요한지 여부
+for (const fn of compiledFns) { // 컴파일된 함수들을 순회하며
+  if (fn.compiledFn.memoSlotsUsed > 0) { // memoSlotsUsed가 0보다 크다면 (메모리제이션을 사용한다면)
+    needsMemoCacheFunctionImport = true; // useMemoCache 함수 임포트가 필요하다.
+    break;
   }
+}
+
+if (needsMemoCacheFunctionImport) { // useMemoCache 함수 임포트가 필요하다면
+  updateMemoCacheFunctionImport( // useMemoCache 함수 임포트를 업데이트한다.
+    program,
+    moduleName,
+    useMemoCacheIdentifier.name
+  );
+}
+addImportsToProgram(program, externalFunctions);
+}
 ```
 "import"를 추가하기 위해서 호출되는 `updateMemoCacheFunctionImport`의 인자로 `moduleName`와 `useMemoCacheIdentifier`를 보자.
 ```ts 
@@ -517,13 +520,13 @@ function addMemoCacheFunctionImportDeclaration(
 ```
 실질적으로 'import'구문이 추가되는 부분을 보면 
 ```ts
-    t.importDeclaration(
-      [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
-      t.stringLiteral(moduleName)
-    )
+t.importDeclaration(
+  [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
+  t.stringLiteral(moduleName)
+)
 ```
-
-이 부분을 거쳐 
+`localName`에는 넘겨받은 `useMemoCacheIdentifier`인 "_c"가 들어가고, `moduleName`에는 `react/compiler-runtime`이 들어간다.\
+그렇게 이 부분을 거쳐 
 ```ts
 import { c as _c } from "react/compiler-runtime";
 ```
@@ -668,8 +671,8 @@ function MyApp() {
 
 컴파일 결과물에 대한 분석은 다음시간에 하기로 하고 오늘 다뤘던 내용위주로 살펴보자
 
-오... 뭔가 위에서 우리가 살펴봤던 코드가 보이는가?\
-컴포넌트들마다 위에서 살펴보았던 `useMemoCache`, 다른 이름으로 `_c`라는 메모이제이션 함수를 호출하고 있다. \
+오... 우리가 앞에서 살펴본 코드들이 보이시나요?\
+각 컴포넌트가 `useMemoCache`(`_c`)라는 메모이제이션 함수를 호출하고 있습니다. \
 아직 조금이지만, 컴파일러의 결과물에 대한 시야가 넓어진 것 같다.\
 우리의 여정은 일단 여기서 잠시 쉬도록 하자
 
