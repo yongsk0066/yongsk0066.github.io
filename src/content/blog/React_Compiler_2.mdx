@@ -13,6 +13,10 @@ import  { YouTube } from "../../components/lit/youtube-element"
 [React Compiler, 너 누구니 [1]](https://yongsk0066.github.io/blog/react_compiler_1/) 지난 글에서 React Compiler의 전체적인 구조를 살펴보았다. \
 컴파일러의 동작 방식을 살펴보기전에, 많이 언급되었던 `useMemoCache`를 먼저 살펴보고 가자.
 
+<LinkPreview src="https://github.com/facebook/react/pull/25143" />
+
+`useMemoCache`에 대한 초기 구현 PR이다. 궁금하다면 한번 살펴보자.
+
 일단 전체 코드를 쭉 훑어 보고 부분부분 살펴보자
 
 https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116
@@ -292,10 +296,6 @@ if ($[0] !== color) {
 
 하지만 '원자적 쓰기'가 보장된다면, color에 대한 캐시가 있다는 것은 반드시 엘리먼트에 대한 캐시도 있다는 것을 보장 받을 수 있다.
 
-<LinkPreview src="https://github.com/facebook/react/pull/25143" />
-
-`useMemoCache`에 대한 초기 구현 PR이다. 
-
 
 휴, 뭔가 꽤나 멀리 왔다. 이제 다시 `useMemoCache`로 돌아가보자.
 
@@ -460,6 +460,9 @@ function updateMemo<T>(
 그렇기 메모이제이션의 책임은 `useMemoCache`가 아닌 컴파일러가 맡는다.
 
 ### `useMemoCache`의 테스트 코드
+
+이제 `useMemoCache`를 사용하는 예시 코드를 살펴보자.\
+좋은 예시들이 테스트 코드에 많이 있기 때문에, 테스트 코드를 살펴보면 동작을 이해하는데 도움이 될 것이다.
 
 ```ts
 // 비싼 계산을 하는 함수
