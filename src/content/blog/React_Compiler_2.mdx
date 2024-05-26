@@ -1,0 +1,798 @@
+---
+title: "React Compiler, 너 누구니 [2] - useMemoCache"
+description: "React Compiler의 주요 구성 요소 중 하나인 useMemoCache에 대해 깊게 알아보자, useMemoCache의 동작 원리와, 구현을 살펴보고, 실험적인 기능인 enableNoCloningMemoCache에 대해 알아보자."
+author: "Yongseok"
+categories: ["React Compiler"]
+date: '2024-05-26T03:30:51.104Z'
+series: "React Compiler"
+---
+import LinkPreview from '../../components/LinkPreview.astro'
+import  { YouTube } from "../../components/lit/youtube-element"
+
+
+[React Compiler, 너 누구니 [1]](https://yongsk0066.github.io/blog/react_compiler_1/) 지난 글에서 React Compiler의 전체적인 구조를 살펴보았다. \
+컴파일러의 동작 방식을 살펴보기전에, 많이 언급되었던 `useMemoCache`를 먼저 살펴보고 가자.
+
+일단 전체 코드를 쭉 훑어 보고 부분부분 살펴보자
+
+https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116
+
+```ts
+// react-reconciler/src/ReactFiberHooks.js
+function useMemoCache(size: number): Array<any> {
+  let memoCache = null;
+  // Fast-path, load memo cache from wip fiber if already prepared
+  let updateQueue: FunctionComponentUpdateQueue | null =
+    (currentlyRenderingFiber.updateQueue: any);
+  if (updateQueue !== null) {
+    memoCache = updateQueue.memoCache;
+  }
+  // Otherwise clone from the current fiber
+  if (memoCache == null) {
+    const current: Fiber | null = currentlyRenderingFiber.alternate;
+    if (current !== null) {
+      const currentUpdateQueue: FunctionComponentUpdateQueue | null =
+        (current.updateQueue: any);
+      if (currentUpdateQueue !== null) {
+        const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache;
+        if (currentMemoCache != null) {
+          memoCache = {
+            // When enableNoCloningMemoCache is enabled, instead of treating the
+            // cache as copy-on-write, like we do with fibers, we share the same
+            // cache instance across all render attempts, even if the component
+            // is interrupted before it commits.
+            //
+            // If an update is interrupted, either because it suspended or
+            // because of another update, we can reuse the memoized computations
+            // from the previous attempt. We can do this because the React
+            // Compiler performs atomic writes to the memo cache, i.e. it will
+            // not record the inputs to a memoization without also recording its
+            // output.
+            //
+            // This gives us a form of "resuming" within components and hooks.
+            //
+            // This only works when updating a component that already mounted.
+            // It has no impact during initial render, because the memo cache is
+            // stored on the fiber, and since we have not implemented resuming
+            // for fibers, it's always a fresh memo cache, anyway.
+            //
+            // However, this alone is pretty useful — it happens whenever you
+            // update the UI with fresh data after a mutation/action, which is
+            // extremely common in a Suspense-driven (e.g. RSC or Relay) app.
+            data: enableNoCloningMemoCache
+              ? currentMemoCache.data
+              : // Clone the memo cache before each render (copy-on-write)
+                currentMemoCache.data.map(array => array.slice()),
+            index: 0,
+          };
+        }
+      }
+    }
+  }
+  // Finally fall back to allocating a fresh instance of the cache
+  if (memoCache == null) {
+    memoCache = {
+      data: [],
+      index: 0,
+    };
+  }
+  if (updateQueue === null) {
+    updateQueue = createFunctionComponentUpdateQueue();
+    currentlyRenderingFiber.updateQueue = updateQueue;
+  }
+  updateQueue.memoCache = memoCache;
+
+  let data = memoCache.data[memoCache.index];
+  if (data === undefined) {
+    data = memoCache.data[memoCache.index] = new Array(size);
+    for (let i = 0; i < size; i++) {
+      data[i] = REACT_MEMO_CACHE_SENTINEL;
+    }
+  } else if (data.length !== size) {
+    // TODO: consider warning or throwing here
+    if (__DEV__) {
+      console.error(
+        'Expected a constant size argument for each invocation of useMemoCache. ' +
+          'The previous cache was allocated with size %s but size %s was requested.',
+        data.length,
+        size,
+      );
+    }
+  }
+  memoCache.index++;
+  return data;
+}
+```
+
+이제 한번 순서대로 훅을 살펴보자.
+
+### 빠른 경로
+
+처음 이뤄지는 작업은 현재 렌더링 중인 파이버의 `updateQueue`에서 `memoCache`를 찾아오는 작업이다.\
+이전에 호출된 적(렌더링된 적)이 있다면 존재할 것이다. 이를 통해 불필요한 캐시 할당을 방지할 수 있다.
+
+```ts
+let memoCache = null;
+// Fast-path, load memo cache from wip fiber if already prepared
+let updateQueue: FunctionComponentUpdateQueue | null =
+  (currentlyRenderingFiber.updateQueue: any);
+if (updateQueue !== null) {
+  memoCache = updateQueue.memoCache;
+}
+```
+
+
+### 캐시가 없다면? 대체 파이버 (Alternate fiber)에서 캐시 복제
+
+현재 렌더링 중인 fiber의 `updateQueue`에 `memoCache`가 없다면, 대체 파이버(Alternate fiber)를 확인한다.\
+대체 파이버는 이전 렌더링 결과를 나타내는 파이버로, 캐시를 포함하고 있을 가능성이 높다. \
+대체 파이버에서 캐시를 복제하여 사용한다.
+
+로직의 흐름을 보기 위해 조건문을 잠시 제거 해두었다. 원문은 위에서 확인할 수 있다.
+
+```ts
+let memoCache = null;
+// ...
+// 캐시가 없다면, 대체 파이버에서 캐시 복제
+if (memoCache == null) {
+
+  const current = currentlyRenderingFiber.alternate; // 대체 파이버
+  const currentUpdateQueue = current.updateQueue;    // 대체 파이버의 updateQueue를 가져온다.
+  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; // 대체 파이버의 memoCache를 가져온다.
+
+  memoCache = {
+    data: enableNoCloningMemoCache
+      ? currentMemoCache.data
+      : // Clone the memo cache before each render (copy-on-write)
+        currentMemoCache.data.map(array => array.slice()),
+    index: 0,
+  };
+}
+```
+
+이 때 캐시를 복사하는 과정에서 `enableNoCloningMemoCache` 옵션에 따라 동작이 달라진다.\
+`enableNoCloningMemoCache` 플래그에 따라 캐시 데이터를 그대로 사용할지, 깊은 복사를 할지 결정한다.
+- <b>활성화</b>되어 있다면, 캐시 데이터를 그대로 사용한다. 이는 메모리 사용량을 줄일 수 있지만, 캐시 데이터가 변경될 리스크를 가지고 있다.
+- <b>비활성화</b>되어 있다면, 캐시 데이터를 깊은 복사하여 사용한다. 이는 이전 렌더링의 캐시 데이터를 안전하게 사용할 수 있게 해주지만, 메모리 사용량이 증가할 수 있다.
+
+<LinkPreview src="https://github.com/facebook/react/pull/28878" />
+
+이부분에 긴 주석이 달려있는데, 이 내용도 살펴보자. 번역을 미리 해보았다.
+
+```plaintext
+enableNoCloningMemoCache가 활성화되면, 파이버에서처럼 캐시를 copy-on-write로 처리하지 않고, 
+심지어 컴포넌트가 커밋되기 전에 중단되더라도 모든 렌더링 시도에서 모두 동일한 캐시 인스턴스를 공유합니다.
+
+만약 업데이트가 중단되면, 일시 중단되었기 때문이든 다른 업데이트 때문이든, 
+이전 시도에서 메모된 계산을 재사용할 수 있습니다. 
+React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행하기 때문에 이것이 가능합니다. 
+즉, 메모이제이션의 출력을 기록하지 않고는 입력을 기록하지 않습니다.
+
+이것은 컴포넌트와 훅 내에서 일종의 "재개(resuming)" 형태를 제공합니다.
+
+이것은 이미 마운트된 컴포넌트를 업데이트할 때만 작동합니다. 메모 캐시가 파이버에 저장되고, 
+파이버에 대한 재개를 구현하지 않았기 때문에 초기 렌더링 동안에는 영향을 미치지 않습니다. 
+어쨌든 항상 새로운 메모 캐시입니다.
+
+그러나 이것만으로도 꽤 유용합니다. 변이/액션 후에 새로운 데이터로 UI를 업데이트할 때마다 발생하는데, 
+이는 Suspense 기반(예: RSC 또는 Relay)의 앱에서 매우 일반적입니다.
+```
+
+`React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행하기 때문에 이것이 가능합니다.  즉, 메모이제이션의 출력을 기록하지 않고는 입력을 기록하지 않습니다.` 이 의미는 뭘까?
+>  🤷‍♂️ 원자가 여기서 왜 나와?
+
+우선 '원자적(Atomic)' 이라는 단어는 '더 이상 나눌 수 없는'라는 의미로 사용된다. (~원자도 나눌 수 있는데요?~ 라는 발언은 하지말자)\
+컴퓨터 과학에서의 '원자적 작업(Atomic operation)'은 '더 이상 나눌 수 없는 작업', 즉 한 번에 완전히 실행되거나 실행되지 않는 작업을 의미한다.
+
+<aside>다중 스레드 환경에서 많이 사용되는 개념이다. 다중 스레드 환경에서는 여러 스레드가 동시에 같은 자원에 접근할 수 있기 때문에,
+한 스레드가 자원을 사용하는 동안 다른 스레드가 접근하지 못하도록 하는 것이 중요하다. 이 때 사용되는 것이 '원자적 작업'이다.</aside>
+
+<b>예시를 들어보자.</b> \
+은행에서의 계좌이체를 떠올려보자. 만약 A 계좌에서 B 계좌로 10만원을 이체한다고 할때 이 작업은 두단계로 이뤄지게 된다.
+1. A 계좌에서 10만원을 빼는 작업
+2. B 계좌에 10만원을 더하는 작업
+
+만약 이 과정 사이에 문제가 생겨서 <b>프로세스가 중단</b>된다면 어떻게 될까? \
+A 계좌에서는 10만원이 사라졌지만, B 계좌는 받지 못한 상태가 되어버린다. 이런 상황을 방지하기 위해 <b>'원자적 작업'</b>이 필요하다.\
+즉 이체 작업은 한번에 완전히 실행되거나 실행되지 않아야 한다.
+
+React Compiler의 메모이제이션 과정도 이와 비슷한 개념을 사용한다. 예시를 통해서 설명해보자.
+
+아래 코드를 컴파일 해보자.
+
+```tsx
+function Component({ active }) {
+  let color: string;
+  if (active) {
+    color = "red";
+  } else {
+    color = "blue";
+  }
+  return <div styles={{ color }}>hello world</div>;
+}
+```
+
+컴파일 하게되면 아래와 같이 변환된다.
+  
+```tsx
+function Component(t0) {
+  const $ = _c(2);
+
+  const { active } = t0;
+  let color;
+
+  if (active) {
+    color = "red";
+  } else {
+    color = "blue";
+  }
+
+  let t1;
+
+  if ($[0] !== color) {
+    t1 = (
+      <div styles={{ color }}>hello world</div>
+    );
+    $[0] = color;
+    $[1] = t1;
+  } else {
+    t1 = $[1];
+  }
+
+  return t1;
+}
+```
+
+여리서 우리가 주목해야할 부분은 이부분이다.
+
+```ts
+if ($[0] !== color) {
+  t1 = (
+    <div styles={{ color }}>hello world</div>
+  );
+  $[0] = color;
+  $[1] = t1;
+} else {
+  t1 = $[1];
+}
+```
+먼저 간단히 동작을 설명해보자.
+`$`는 memoCache를 의미한다. 컴파일러는 `$[0]`에는 이전에 저장된 color 값을 저장하고, `$[1]`에는 이전에 렌더링된 결과를 저장하고 있다.\
+`if ($[0] !== color)` 캐시된 color값과 현재 color값을 비교한다. 만약 다르다면, 새로운 color에 대한 엘리먼트를 생성해야한다는 의미이다.\
+이때 새로운 엘리먼트를 생성하고, `$[0]`에 새로운 color값을 저장하고, `$[1]`에 새로운 엘리먼트를 저장한다.\
+그렇지 않다면, 이전에 렌더링된 결과를 사용한다.
+
+여기서 중요한 점은 `$[0] = color;`와 `$[1] = t1;`이 같은 블록 내에서 연속적으로 일어난다는 것이다.\
+이것이 바로 <b>'원자적 쓰기'</b>이다.
+
+이 두 줄은 하나의 원자적 연산으로 처리되기에, color 값이 캐시에 쓰이면, 그에 해당하는 엘리먼트도 반드시 캐시에 쓰인다. 이들 사이의 중간 상태는 존재하지 않는다.\
+이제 React Compiler의 원자적 쓰기가 무엇을 의미하는지 알게 되었다.
+
+다시 본래 내용으로 돌아가 보자.\
+`enableNoCloningMemoCache`가 false 라면 각 렌더링 시도시 이전 렌더링의 캐시를 복사하고 이 복사본을 수정하는 식으로 (copy-on-write) 사용한다.\
+하지만 이 방법은 렌더링이 중단되고 재개될 때마다 캐시를 복사하므로, 메모리 사용량이 증가할 수 있다.
+
+`enableNoCloningMemoCache`가 true라면 모든 렌더링 시도에서 동일한 캐시 인스턴스를 공유한다.
+
+즉, 렌더링이 중단(suspended/interrupted)되고 재개 되더라도, 이전 렌더링 시도에서의 캐시를 그대로 사용할 수 있다.\
+이는 메모리 관리에 있어서 큰 이점이다. 
+
+이런 동작이 가능하려면 React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행해야 한다는 것이다.
+
+예를 들어 보장되지 않았다면, 아래와 같은 문제가 발생했을 것이다.
+
+1. 'A'렌더링 시도가 color 값을 'red'로 캐시에 저장한다.
+2. 그러나 엘리먼트를 캐시에 기록하기 전에, 렌더링이 중단되어버린다.
+3. 'B'렌더링 시도가 시작되면, 이때 캐시에는 color에 대한 입력은 있지만, 출력이 없는 상태가 된다.
+
+이는 캐시 불일치 문제를 발생시키고 이는 렌더링 결과의 불일치로 이어질 것이다. \
+상태에 따른 렌더링 불일치 문제... 어디서 들어본적이 있지 않나요? 'useSyncExternalStore'를 설명할 때 나오는 tearing 문제와 비슷하다.
+
+<LinkPreview src="https://github.com/reactwg/react-18/discussions/69"/>
+
+하지만 '원자적 쓰기'가 보장된다면, color에 대한 캐시가 있다는 것은 반드시 엘리먼트에 대한 캐시도 있다는 것을 보장 받을 수 있다.
+
+<LinkPreview src="https://github.com/facebook/react/pull/25143" />
+
+`useMemoCache`에 대한 초기 구현 PR이다. 
+
+
+휴, 뭔가 꽤나 멀리 왔다. 이제 다시 `useMemoCache`로 돌아가보자.
+
+`enableNoCloningMemoCache`조건에 따른 분기를 보다가 여기까지 왔다.
+그래서 `enableNoCloningMemoCache`는 참이냐 거짓이냐!
+
+```ts
+// react/shared/ReactFeatureFlags.js
+
+// Test this at Meta before enabling.
+export const enableNoCloningMemoCache = false;
+```
+현 시점에서는 `enableNoCloningMemoCache`는 false로 설정되어 있다.
+
+### 캐시가 없다면? 새로운 캐시 생성
+
+이제 마지막으로 캐시가 없다면, 새로운 캐시를 생성한다.
+
+```ts
+if (memoCache == null) {
+  memoCache = {
+    data: [],
+    index: 0,
+  };
+}
+```
+
+### 캐시 할당
+
+updateQueue가 없다면 새로 만들고, memoCache를 할당한다.
+
+```ts
+if (updateQueue === null) {
+  updateQueue = createFunctionComponentUpdateQueue();
+  currentlyRenderingFiber.updateQueue = updateQueue;
+}
+updateQueue.memoCache = memoCache;
+```
+
+`createFunctionComponentUpdateQueue`는 기본적인 queue객체를 return 한다. 
+enableUseMemoCacheHook 플래그에 따라 나뉘는데 현재는 true되어있다.
+
+```ts
+// NOTE: defining two versions of this function to avoid size impact when this feature is disabled.
+// Previously this function was inlined, the additional `memoCache` property makes it not inlined.
+// 메모 : 이 기능이 비활성화되어 있을 때 크기 영향을 피하기 위해 이 함수의 두 가지 버전을 정의합니다.
+// 이전에 이 함수는 인라인으로 정의되었으며, 추가적인 `memoCache` 속성으로 인해 인라인되지 않습니다.
+let createFunctionComponentUpdateQueue: () => FunctionComponentUpdateQueue;
+if (enableUseMemoCacheHook) {
+  createFunctionComponentUpdateQueue = () => {
+    return {
+      lastEffect: null,
+      events: null,
+      stores: null,
+      memoCache: null,
+    };
+  };
+} else {
+  createFunctionComponentUpdateQueue = () => {
+    return {
+      lastEffect: null,
+      events: null,
+      stores: null,
+    };
+  };
+}
+```
+
+### 캐시 데이터 반환
+
+마지막으로 캐시 데이터를 반환한다.
+
+캐새로 부터 데이터를 가져오고,
+
+```ts
+let data = memoCache.data[memoCache.index]; 
+```
+
+데이터가 없다면 새로운 데이터를 할당하고, `REACT_MEMO_CACHE_SENTINEL`로 초기화한다.\
+`REACT_MEMO_CACHE_SENTINEL`은 memoization이 되지 않은 상태를 나타낸다.\
+호출 별로 캐시는 Array형태로 사용하기 때문에 Array로 초기화한다.
+
+```ts
+if (data === undefined) { 
+  data = memoCache.data[memoCache.index] = new Array(size);
+  for (let i = 0; i < size; i++) {
+    data[i] = REACT_MEMO_CACHE_SENTINEL;
+  }
+}
+```
+
+만약 data가 `undefined`가 아니라면, 즉 캐시 데이터가 존재한다면, data의 길이가 요청된 size와 일치하는지 확인한다.\
+확인하는 이유는, 이전 렌더링에서 사용된 캐시 데이터와 현재 렌더링에서 사용할 캐시 데이터의 길이가 다르다면, 경고를 띄운다.
+
+```ts
+else if (data.length !== size) {
+  if (__DEV__) {
+    console.error(
+      'useMemoCache의 각 호출에 대해 상수 크기 인수가 예상됩니다.' +
+        '이전 캐시는 크기 %s로 할당되었지만 크기 %s가 요청되었습니다.',
+      data.length,
+      size,
+    );
+  }
+}
+```
+
+마지막으로 캐시 인덱스를 증가시키고 데이터를 반환한다.
+
+```ts
+memoCache.index++;
+return data;
+```
+
+이전 편에서 살펴봤던 'react-compiler-runtime'에서의 구현과 비슷하지만, 조금더 Fiber에 맞게 수정된 부분이 있다.
+
+### `useMemo`와 `useMemoCache` 차이
+
+우리에겐 익숙한, 그리고 이제 잊혀지게 될 `useMemo`. 이름도 비슷한 탓에 차이에 대한 의문을 가질 수 있을 것이다.
+
+간단하게 `useMemo`의 구현을 돌아보자.
+
+```ts
+function mountMemo<T>(
+  nextCreate: () => T,
+  deps: Array<mixed> | void | null,
+): T {
+  const hook = mountWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  const nextValue = nextCreate();
+  hook.memoizedState = [nextValue, nextDeps];
+  return nextValue;
+}
+
+function updateMemo<T>(
+  nextCreate: () => T,
+  deps: Array<mixed> | void | null,
+): T {
+  const hook = updateWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps; //
+  const prevState = hook.memoizedState;
+  if (prevState !== null) {
+    // Assume these are defined. If they're not, areHookInputsEqual will warn.
+    if (nextDeps !== null) {
+      const prevDeps: Array<mixed> | null = prevState[1];
+      if (areHookInputsEqual(nextDeps, prevDeps)) { // 이전 deps와 현재 deps가 같다면 이전 값을 반환
+        return prevState[0];
+      }
+    }
+  }
+  const nextValue = nextCreate(); // 새로운 값 생성
+  hook.memoizedState = [nextValue, nextDeps]; // 새로운 값과 deps를 저장
+  return nextValue; // 새로운 값 반환
+}
+```
+
+둘다 메모이제이션을 위한 훅이지만 조금 다르다, `useMemo`는 개발자가 직접적으로 사용하는 훅으로, 의존성 배열을 받아서 의존성이 변경되었을 때만 새로운 값을 생성한다.\
+`useMemo`는 의존성 배열을 통해 메모이제이션 여부를 훅이 책임지는 것이다.\
+반면 `useMemoCache`는 컴파일러 내부에서 사용하는 훅으로, 의존성 배열을 받지 않고, 캐시를 관리하는 것이 주 목적이다.\
+그렇기 메모이제이션의 책임은 `useMemoCache`가 아닌 컴파일러가 맡는다.
+
+### `useMemoCache`의 테스트 코드
+
+```ts
+// 비싼 계산을 하는 함수
+function someExpensiveProcessing(t) { 
+  Scheduler.log(`Some expensive processing... [${t}]`);
+  return t;
+}
+
+// 서스팬스를 트리거 하기위한 함수
+function useWithLog(t, msg) { 
+  try {
+    return React.use(t); 
+  } catch (x) {
+    Scheduler.log(`Suspend! [${msg}]`);
+    throw x;
+  }
+}
+
+function Data({chunkA, chunkB}) { 
+  const a = someExpensiveProcessing(useWithLog(chunkA, 'chunkA')); 
+  const b = useWithLog(chunkB, 'chunkB');
+  return (
+    <>
+      {a}
+      {b}
+    </>
+  );
+}
+
+function Input() {
+  const [input, _setText] = useState('');
+  return input;
+}
+
+function App({chunkA, chunkB}) {
+  return (
+    <>
+      <div>
+        Input: <Input />
+      </div>
+      <div>
+        Data: <Data chunkA={chunkA} chunkB={chunkB} />
+      </div>
+    </>
+  );
+}
+```
+이와 같은 형태의 컴포넌트들의 컴파일 결과물을 가지고 테스트를 진행해보자.\
+Data 컴포넌트는 chunkA와 chunkB를 받아와서, chunkA에 대한 비싼 계산을 수행하고, chunkB는 그대로 반환한다.
+
+```ts
+// react-reconciler/src/__tests__/useMemoCache-test.js
+test('업데이트 중에 중단된(suspended/interrupted) 렌더링 시도에서의 계산을 재사용합니다', async () => { 
+  // This test demonstrates the benefit of a shared memo cache. By "shared" I
+  // mean multiple concurrent render attempts of the same component/hook use
+  // the same cache. (When the feature flag is off, we don't do this — the
+  // cache is copy-on-write.)
+  // 이 테스트는 공유 메모 캐시의 이점을 보여줍니다. "공유"라는 말은 동일한 컴포넌트/훅의
+  // 여러 동시 렌더링 시도가 동일한 캐시를 사용한다는 것을 의미합니다. 
+  // (기능 플래그가 꺼져 있으면 이렇게 하지 않습니다 - 캐시는 복사본입니다.)
+
+
+  function Data(t0) {
+    const $ = useMemoCache(5);
+    const {chunkA, chunkB} = t0;
+    const t1 = useWithLog(chunkA, 'chunkA');
+    let t2;
+
+    if ($[0] !== t1) {
+      t2 = someExpensiveProcessing(t1);
+      $[0] = t1;
+      $[1] = t2;
+    } else {
+      t2 = $[1];
+    }
+
+    const a = t2;
+    const b = useWithLog(chunkB, 'chunkB');
+    let t3;
+
+    if ($[2] !== a || $[3] !== b) {
+      t3 = (
+        <>
+          {a}
+          {b}
+        </>
+      );
+      $[2] = a;
+      $[3] = b;
+      $[4] = t3;
+    } else {
+      t3 = $[4];
+    }
+
+    return t3;
+  }
+
+  let setInput;
+  function Input() {
+    const [input, _set] = useState('');
+    setInput = _set;
+    return input;
+  }
+
+  function App(t0) {
+    const $ = useMemoCache(4);
+    const {chunkA, chunkB} = t0;
+    let t1;
+
+    if ($[0] === Symbol.for('react.memo_cache_sentinel')) {
+      t1 = (
+        <div>
+          Input: <Input />
+        </div>
+      );
+      $[0] = t1;
+    } else {
+      t1 = $[0];
+    }
+
+    let t2;
+
+    if ($[1] !== chunkA || $[2] !== chunkB) {
+      t2 = (
+        <>
+          {t1}
+          <div>
+            Data: <Data chunkA={chunkA} chunkB={chunkB} />
+          </div>
+        </>
+      );
+      $[1] = chunkA;
+      $[2] = chunkB;
+      $[3] = t2;
+    } else {
+      t2 = $[3];
+    }
+
+    return t2;
+  }
+
+  // Resolved 프로미스 생성
+  function createInstrumentedResolvedPromise(value) {
+    return {
+      then() {},
+      status: 'fulfilled',
+      value,
+    };
+  }
+
+  // Pending 프로미스 생성
+  function createDeferred() { 
+    let resolve;  
+    const p = new Promise(res => { 
+      resolve = res;
+    });
+    p.resolve = resolve;
+    return p;  
+  }
+```
+
+컴파일된 코드를 기반으로 이제 테스트를 진행해보자.
+
+
+#### 첫 번째 렌더링
+
+최초 렌더링에서는 `chunkA`와 `chunkB`를 받아와서 `Data` 컴포넌트를 렌더링한다.\
+`createInstrumentedResolvedPromise`는 Resolved된 프로미스를 생성한다. 즉 이미 받아온 데이터를 의미한다. \
+이때는 A1에 걸려있는 expensive process에 대한 로그가 찍히고, `Data` 컴포넌트는 `A1B1`을 반환한다.
+
+
+```ts
+// Initial render. We pass the data in as two separate "chunks" to simulate a stream (e.g. RSC).
+// 최초 렌더링. 데이터를 두 개의 별도 "청크"로 전달하여 스트림(예: RSC)을 시뮬레이션합니다.
+const root = ReactNoop.createRoot();
+const initialChunkA = createInstrumentedResolvedPromise('A1'); // A1로 resolve된 프로미스 생성
+const initialChunkB = createInstrumentedResolvedPromise('B1'); // B1로 resolve된 프로미스 생성
+await act(() => 
+  root.render(<App chunkA={initialChunkA} chunkB={initialChunkB} />), // 초기 렌더링
+);
+assertLog(['Some expensive processing... [A1]']); // 
+expect(root).toMatchRenderedOutput(
+  <>
+    <div>Input: </div>
+    <div>Data: A1B1</div>
+  </>,
+);
+```
+
+#### 전환중에 UI 업데이트
+
+```ts
+const updatedChunkA = createDeferred(); 
+const updatedChunkB = createDeferred(); 
+```
+
+`createDeferred` 함수를 사용하여 `updatedChunkA`와 `updatedChunkB`라는 두 개의 Promise 객체를 생성한다. 이 객체들은 나중에 데이터를 로드하는 데 사용된다
+
+```ts
+await act(() => {
+  React.startTransition(() => {
+    root.render(<App chunkA={updatedChunkA} chunkB={updatedChunkB} />);
+  });
+});
+```
+
+`React.startTransition`을 사용하여 UI 업데이트를 시작한다. transition은 낮은 우선순위로 스케줄링되어, 다른 작업이 끝난 후에 실행된다.\
+이때 `App` 컴포넌트에 `updatedChunkA`와 `updatedChunkB`를 전달하여 렌더링한다.
+
+```ts
+assertLog(['Suspend! [chunkA]']); 
+```
+```ts
+  const t1 = useWithLog(chunkA, 'chunkA');
+```
+`useWithLog` 함수에서 `chunkA`에 대한 `useWithLog`가 실행되고, pending 중에 있음으로 `use`에 의해서 Suspense가 트리거 되고 'Suspend! [chunkA]'가 찍히게 된다.
+
+```ts
+await act(() => updatedChunkA.resolve('A2'));
+```
+`updatedChunkA`를 'A2'로 resolve한다.
+
+```ts
+const t1 = useWithLog(chunkA, 'chunkA');
+let t2;
+
+if ($[0] !== t1) {
+  t2 = someExpensiveProcessing(t1);
+  $[0] = t1;
+  $[1] = t2;
+} else {
+  t2 = $[1];
+}
+const a = t2;
+const b = useWithLog(chunkB, 'chunkB');
+
+```
+데이터가 준비되었으므로, 렌더링이 재개 되고, `useWithLog`가 실행된다.\
+이때 `t1`은 'A2'가 되고, `$[0]`에는 이전에 저장된 'A1'과 비교하여 다르기 때문에 expensive process가 실행된다.\
+그에 따라 'Some expensive processing... [A2]'가 찍히게 된다.
+
+바로 다음으로 `useWithLog`가 실행되고, chunkB는 아직 resolve되지 않았기에 'Suspend! [chunkB]'가 찍히게 된다.\
+다시 렌더링이 중단되었기 때문에, 초기 UI를 그대로 보여준다.
+
+```ts
+expect(root).toMatchRenderedOutput(
+  <>
+    <div>Input: </div>
+    <div>Data: A1B1</div>
+  </>,
+);
+```
+
+
+#### 업데이트 전환 중 다른 부분 업데이트
+
+```ts
+// While waiting for the data to finish loading, update a different part of the screen. This interrupts the refresh transition.
+// 데이터 로드가 완료될 때까지 기다리는 동안 화면의 다른 부분을 업데이트합니다. 이는 새로 고침 전환을 중단합니다.
+//
+// In a real app, this might be an input or hover event.
+// 실제 앱에서는 입력 또는 호버 이벤트일 수 있습니다.
+await act(() => setInput('hi!')); // 입력값을 'hi!'로 변경
+```
+
+`setInput`을 사용하여 입력값을 'hi!'로 변경한다. 이 업데이트는 transition을 중단시키고, 새로운 업데이트를 시작한다.
+
+
+```ts
+// Once the input has updated, we go back to rendering the transition.
+// 입력이 업데이트되면 전환 렌더링으로 돌아갑니다.
+if (gate(flags => flags.enableNoCloningMemoCache)) { 
+  // We did not have process the first chunk again. We reused the computation from the earlier attempt.
+  // 첫 번째 청크를 다시 처리할 필요가 없었습니다. 이전 시도에서 계산을 재사용했습니다.
+  assertLog(['Suspend! [chunkB]']);
+} else {
+  // Because we clone/reset the memo cache after every aborted attempt, we must process the first chunk again.
+  // 중단된 시도마다 메모 캐시를 복제/재설정하기 때문에 첫 번째 청크를 다시 처리해야합니다.
+  assertLog(['Some expensive processing... [A2]', 'Suspend! [chunkB]']);
+}
+```
+
+`enableNoCloningMemoCache`가 활성화되어 있다면, 이전에 계산된 데이터를 재사용하고, `chunkB`에 대한 `useWithLog`가 실행되어 'Suspend! [chunkB]'가 찍힌다.\
+하지만 비활성화되어 있다면, 얕은 복사를 통해 캐시를 관리하기 때문에, 2차원 배열로 관리되는 memoCache의 경우, `$[0] !== t1`이 true가 되어 expensive process가 실행된다.
+```ts
+expect(root).toMatchRenderedOutput(
+  <>
+    <div>Input: hi!</div>
+    <div>Data: A1B1</div>
+  </>,
+);
+```
+
+여전히 chunkB는 resolve되지 않았기 때문에, 이전 렌더링 결과를 보여준다.
+
+```ts
+await act(() => updatedChunkB.resolve('B2')); // 청크B를 B2로 resolve
+```
+`updatedChunkB`를 'B2'로 resolve한다. 다시 렌더링이 재개된다.
+
+```ts
+if (gate(flags => flags.enableNoCloningMemoCache)) { 
+  // We did not have process the first chunk again. We reused the computation from the earlier attempt.
+  // 첫 번째 청크를 다시 처리할 필요가 없었습니다. 이전 시도에서 계산을 재사용했습니다.
+  assertLog([]);
+} else {
+  // Because we clone/reset the memo cache after every aborted attempt, we must process the first chunk again.
+  // 중단된 시도마다 메모 캐시를 복제/재설정하기 때문에 첫 번째 청크를 다시 처리해야합니다.
+  //
+  // That's three total times we've processed the first chunk, compared to just once when enableNoCloningMemoCache is on.
+  // enableNoCloningMemoCache가 켜져 있을 때 한 번에 비해 세 번째 청크를 처리한 총 횟수입니다.
+  assertLog(['Some expensive processing... [A2]']);
+}
+expect(root).toMatchRenderedOutput( // 렌더링 결과 확인
+  <>
+    <div>Input: hi!</div>
+    <div>Data: A2B2</div>
+  </>,
+);
+```
+플래그가 활성화되어 있다면, 이전에 계산된 데이터를 재사용하기에 로그 없이 렌더링이 완료된다.\
+하지만 비활성화되어 있다면, 이전에 계산된 데이터를 재사용하지 않기에 'Some expensive processing... [A2]'가 찍히게 된다.
+
+자 이렇게 이제 테스트 코드를 통해서 까지 `useMemoCache`의 동작을 확인해보았다.
+
+### 마치며
+
+이번 글에서는 `useMemoCache`에 대해서 알아보았다.\
+`useMemoCache`는 컴파일러 내부에서 사용되는 훅으로, 메모이제이션을 위한 캐시를 관리하는 것이 주 목적이다.\
+아직 실험적인 기능이지만 캐시를 공유 하는 기능도 염두해 두고 있는 것으로 보인다.
+
+어제보다 더 컴파일러에 대한 시야가 넓어졌다.\
+이제 기본적으로 어떤 방식을 통해 메모이제이션을 구현하는지 알게 되었으니, 다음에는 실질적으로 컴파일러가 어떻게 동작하는지에 대해 알아보면 좋을 것 같다.
+
+항상 글을 어떻게 마무리 지어야 할지가 고민이다. \
+이번에도 이렇게 그냥 마무리 해보겠다. 
+
+안녕!
