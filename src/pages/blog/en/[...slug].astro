@@ -1,0 +1,84 @@
+---
+import { type CollectionEntry, getCollection } from "astro:content";
+import PageLayout from "@layouts/PageLayout.astro";
+import Container from "@components/Container.astro";
+import FormattedDate from "@components/FormattedDate.astro";
+import { readingTime } from "@lib/utils";
+import BackToPrev from "@components/BackToPrev.astro";
+
+export async function getStaticPaths() {
+  const posts = (await getCollection("blog"))
+    .filter((post) => !post.data.draft)
+    .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: post,
+  }));
+}
+type Props = CollectionEntry<"blog">;
+
+const post = Astro.props;
+
+// const seriesPosts = (await getCollection("blog"))
+//   .filter((_post) => _post.data.series === post.data.series)
+//   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const { Content } = await post.render();
+---
+
+<PageLayout title={post.data.title} description={post.data.description ?? ""}>
+  <!--- Starts component --->
+  <div id="scroll-progress" class="bg-blue-600 h-1 fixed top-0 left-0 z-50">
+  </div>
+  <!--- Ends component --->
+  <Container>
+    <div class="animate">
+      <BackToPrev href="/blog"> 돌아가기 </BackToPrev>
+    </div>
+    <!-- series -->
+    <!-- <div class="animate flex items-center gap-1.5" >
+      <div class="font-base text-sm">
+        {post.data.series}
+      </div>
+      &bull;
+      <div>
+        <ul>
+          {
+            seriesPosts.map((seriesPost) => {
+              return seriesPost.slug;
+            })
+          }
+        </ul>
+      </div>
+    </div> -->
+    <div class="space-y-1 my-10">
+      <div class="animate flex items-center gap-1.5">
+        <div class="font-base text-sm">
+          <FormattedDate date={post.data.date} />
+        </div>
+        &bull;
+        <div class="font-base text-sm">
+          {readingTime(post.body)}
+        </div>
+      </div>
+      <div class="animate text-3xl font-bold text-black dark:text-white">
+        {post.data.title}
+      </div>
+    </div>
+    <article class="animate break-all">
+      <Content />
+    </article>
+  </Container>
+</PageLayout>
+<!--- Starts script --->
+<script type="module">
+  window.addEventListener("scroll", function () {
+    const scrollableHeight =
+      document.documentElement.scrollHeight - window.innerHeight;
+    const scrolled = window.scrollY;
+    const progressBar = document.getElementById("scroll-progress");
+    const progress = (scrolled / scrollableHeight) * 100;
+    progressBar.style.width = progress + "%";
+  });
+</script>
+<!--- Ends script --->

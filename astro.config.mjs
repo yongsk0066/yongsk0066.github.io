@@ -15,7 +15,10 @@ import customTheme from './shiki/github-dark-default.json'
 export default defineConfig({
   i18n: {
     defaultLocale: 'ko',
-    locales: ['ko', 'en']
+    locales: ['ko', 'en'],
+    routing: {
+      prefixDefaultLocale: false
+  }
   },
   integrations: [lit(), mdx({
     optimize: true,
