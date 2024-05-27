@@ -4,7 +4,11 @@ import PageLayout from "@layouts/PageLayout.astro";
 import ArrowCard from "@components/ArrowCard.astro";
 import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 
-const data = (await getCollection("blog"))
+const data = (
+  await getCollection("blog", ({ id }) => {
+    return !id.startsWith("en/");
+  })
+)
   .filter((post) => !post.data.draft)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 

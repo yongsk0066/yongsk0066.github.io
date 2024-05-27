@@ -6,7 +6,15 @@ import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 
 const data = (await getCollection("blog"))
   .filter((post) => !post.data.draft)
-  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .filter((post, index, self) => {
+    const hasEnglishVersion = self.some((p) => p.id === `en/${post.id}`);
+    if (hasEnglishVersion && !post.id.startsWith("en/")) {
+      return false;
+    }
+    return true;
+  });
 
 type Acc = {
   [year: string]: CollectionEntry<"blog">[];

@@ -18,7 +18,7 @@ export default defineConfig({
     locales: ['ko', 'en'],
     routing: {
       prefixDefaultLocale: false
-  }
+    }
   },
   integrations: [lit(), mdx({
     optimize: true,

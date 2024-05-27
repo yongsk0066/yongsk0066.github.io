@@ -1,23 +1,23 @@
 ---
-title: "React Compiler, 너 누구니 [2] - useMemoCache"
-description: "React Compiler의 주요 구성 요소 중 하나인 useMemoCache에 대해 깊게 알아보자, useMemoCache의 동작 원리와, 구현을 살펴보고, 실험적인 기능인 enableNoCloningMemoCache에 대해 알아보자."
+title: React Compiler, Who Are You [2] - useMemoCache"
+description: "Let's take a deep dive into useMemoCache, one of the key components of the React Compiler. We'll explore how useMemoCache works, examine its implementation, and learn about the experimental feature enableNoCloningMemoCache."
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-05-26T03:30:51.104Z'
 series: "React Compiler"
 ---
-import LinkPreview from '../../components/LinkPreview.astro'
-import  { YouTube } from "../../components/lit/youtube-element"
+import LinkPreview from '../../../components/LinkPreview.astro'
+import  { YouTube } from "../../../components/lit/youtube-element"
 
 
-[React Compiler, 너 누구니 [1]](https://yongsk0066.github.io/blog/react_compiler_1/) 지난 글에서 React Compiler의 전체적인 구조를 살펴보았다. \
-컴파일러의 동작 방식을 살펴보기전에, 많이 언급되었던 `useMemoCache`를 먼저 살펴보고 가자.
+In the previous post, [React Compiler, 너 누구니 [1]](https://yongsk0066.github.io/blog/react_compiler_1/), we looked at the overall structure of the React Compiler. \
+Before diving into how the compiler works, let's first take a closer look at `useMemoCache`, which was mentioned frequently.
 
 <LinkPreview src="https://github.com/facebook/react/pull/25143" />
 
-`useMemoCache`에 대한 초기 구현 PR이다. 궁금하다면 한번 살펴보자.
+This is the initial implementation PR for `useMemoCache`. Feel free to check it out if you're interested.
 
-일단 전체 코드를 쭉 훑어 보고 부분부분 살펴보자
+Let's first scan through the entire code and then examine it part by part.
 
 https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116
 
@@ -108,12 +108,12 @@ function useMemoCache(size: number): Array<any> {
 }
 ```
 
-이제 한번 순서대로 훅을 살펴보자.
+Now, let's go through the hook step by step.
 
-### 빠른 경로
+### Fast Path
 
-처음 이뤄지는 작업은 현재 렌더링 중인 파이버의 `updateQueue`에서 `memoCache`를 찾아오는 작업이다.\
-이전에 호출된 적(렌더링된 적)이 있다면 존재할 것이다. 이를 통해 불필요한 캐시 할당을 방지할 수 있다.
+The first operation is to find the `memoCache` from the `updateQueue` of the currently rendering fiber.\
+If it has been called (rendered) before, it will exist. This prevents unnecessary cache allocation.
 
 ```ts
 let memoCache = null;
@@ -126,27 +126,28 @@ if (updateQueue !== null) {
 ```
 
 
-### 캐시가 없다면? 대체 파이버 (Alternate fiber)에서 캐시 복제
+### If There's No Cache? Clone Cache from Alternate Fiber
 
-현재 렌더링 중인 fiber의 `updateQueue`에 `memoCache`가 없다면, 대체 파이버(Alternate fiber)를 확인한다.
+If there is no `memoCache` in the `updateQueue` of the currently rendering fiber, it checks the alternate fiber.
 
-React의 Fiber 아키텍처에서는 각각의 Fiber 노드가 'current' 트리와 'workInProgress' 트리 중 하나에 속하게 된다. \
-'current' 트리는 현재 화면에 렌더링되어 있는 컴포넌트의 상태를 나타내고, 'workInProgress' 트리는 React가 업데이트를 적용하려고 하는 상태를 나타낸다.\
-여기서 말하는 대체 파이버(Alternate Fiber)는 `currentlyRenderingFiber`, 즉 `workInProgress` 트리의 alternate 이므로, current 트리의 Fiber를 가리킨다.\
+In React's Fiber architecture, each Fiber node belongs to either the 'current' tree or the 'workInProgress' tree. 
+The 'current' tree represents the state of the components currently rendered on the screen, 
+and the 'workInProgress' tree represents the state that React is trying to apply updates to. The alternate fiber mentioned here is the alternate of currentlyRenderingFiber, 
+which is the workInProgress tree, so it points to the Fiber in the current tree.
 
-이 대체 파이버(current)에서 캐시를 복제하여 사용한다.
+It clones the cache from this alternate fiber (current) and uses it.
 
-로직의 흐름을 보기 위해 조건문을 잠시 제거 해두었다. 원문은 위에서 확인할 수 있다.
+To focus on the flow of the logic, I temporarily removed the conditional statements. You can see the original code above.
 
 ```ts
 let memoCache = null;
 // ...
-// 캐시가 없다면, 대체 파이버에서 캐시 복제
+// If there's no cache, clone the cache from the alternate fiber
 if (memoCache == null) {
 
-  const current = currentlyRenderingFiber.alternate; // 대체 파이버(current)를 가져온다.
-  const currentUpdateQueue = current.updateQueue;    // 대체 파이버의 updateQueue를 가져온다.
-  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; // 대체 파이버의 memoCache를 가져온다.
+  const current = currentlyRenderingFiber.alternate; // Get the alternate fiber (current)
+  const currentUpdateQueue = current.updateQueue;    // Get the updateQueue of the alternate fiber
+  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; // Get the memoCache of the alternate fiber
 
   memoCache = {
     data: enableNoCloningMemoCache
@@ -158,55 +159,61 @@ if (memoCache == null) {
 }
 ```
 
-이 때 캐시를 복사하는 과정에서 `enableNoCloningMemoCache` 옵션에 따라 동작이 달라진다.\
-`enableNoCloningMemoCache` 플래그에 따라 캐시 데이터를 그대로 사용할지, 얕은 복사를 할지 결정한다.
-- <b>활성화</b>되어 있다면, 캐시 데이터를 그대로 사용한다. 이는 메모리 사용량을 줄일 수 있지만, 캐시 데이터가 변경될 리스크를 가지고 있다.
-- <b>비활성화</b>되어 있다면, 캐시 데이터를 얕은 복사하여 사용한다. 이는 이전 렌더링의 캐시 데이터를 안전하게 사용할 수 있게 해주지만, 메모리 사용량이 증가할 수 있다.
+During the process of copying the cache, the behavior differs based on the `enableNoCloningMemoCache`option.\ 
+Depending on the `enableNoCloningMemoCache` flag, it decides whether to use the cache data as is or make a shallow copy.
+- If <b>enabled</b>, it uses the cache data as is. This can reduce memory usage but carries the risk of the cache data being modified.
+- If <b>disabled</b>, it makes a shallow copy of the cache data and uses it. This allows safe usage of the cache data from the previous rendering but can increase memory usage.
 
 <LinkPreview src="https://github.com/facebook/react/pull/28878" />
 
-이부분에 긴 주석이 달려있는데, 이 내용도 살펴보자. 번역을 미리 해보았다.
+There's a long comment attached to this part. Let's take a look at that as well. 
 
 ```plaintext
-`enableNoCloningMemoCache`가 활성화되면, 파이버에서처럼 캐시를 copy-on-write로 처리하지 않고, 
-심지어 컴포넌트가 커밋되기 전에 중단되더라도 모든 렌더링 시도에서 모두 동일한 캐시 인스턴스를 공유합니다.
+When `enableNoCloningMemoCache` is enabled, 
+instead of treating the cache as copy-on-write, 
+like we do with fibers, we share the same cache instance across all render attempts, 
+even if the component is interrupted before it commits.
 
-만약 업데이트가 중단되면, 일시 중단되었기 때문이든 다른 업데이트 때문이든, 
-이전 시도에서 메모된 계산을 재사용할 수 있습니다. 
-React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행하기 때문에 이것이 가능합니다. 
-즉, 메모이제이션의 출력을 기록하지 않고는 입력을 기록하지 않습니다.
+If an update is interrupted, 
+either because it suspended or because of another update, 
+we can reuse the memoized computations from the previous attempt. 
+We can do this because the React Compiler performs atomic writes to the memo cache, 
+i.e. it will not record the inputs to a memoization without also recording its output.
 
-이것은 컴포넌트와 훅 내에서 일종의 "재개(resuming)" 형태를 제공합니다.
+This gives us a form of "resuming" within components and hooks.
 
-이것은 이미 마운트된 컴포넌트를 업데이트할 때만 작동합니다. 메모 캐시가 파이버에 저장되고, 
-파이버에 대한 재개를 구현하지 않았기 때문에 초기 렌더링 동안에는 영향을 미치지 않습니다. 
-어쨌든 항상 새로운 메모 캐시입니다.
+This only works when updating a component that already mounted. 
+It has no impact during initial render, 
+because the memo cache is stored on the fiber, 
+and since we have not implemented resuming for fibers, 
+it's always a fresh memo cache, anyway.
 
-그러나 이것만으로도 꽤 유용합니다. 변이/액션 후에 새로운 데이터로 UI를 업데이트할 때마다 발생하는데, 
-이는 Suspense 기반(예: RSC 또는 Relay)의 앱에서 매우 일반적입니다.
+However, this alone is pretty useful 
+— it happens whenever you update the UI with fresh data after a mutation/action,
+which is extremely common in a Suspense-driven (e.g. RSC or Relay) app.
 ```
 
-`React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행하기 때문에 이것이 가능합니다.  즉, 메모이제이션의 출력을 기록하지 않고는 입력을 기록하지 않습니다.` 이 의미는 뭘까?
->  🤷‍♂️ 원자가 여기서 왜 나와?
+What does it mean that `the React Compiler performs atomic writes to the memo cache, i.e. it will not record the inputs to a memoization without also recording its output`?
+>  🤷‍♂️ Why is the word 'atomic' used here? 
 
-우선 '원자적(Atomic)' 이라는 단어는 '더 이상 나눌 수 없는'라는 의미로 사용된다. (~원자도 나눌 수 있는데요?~ 라는 발언은 하지말자)\
-컴퓨터 과학에서의 '원자적 작업(Atomic operation)'은 '더 이상 나눌 수 없는 작업', 즉 한 번에 완전히 실행되거나 실행되지 않는 작업을 의미한다.
+The word 'atomic' is used to mean 'indivisible' here. (Let's not say "Atoms can be split too?") \
+In computer science, an 'atomic operation' refers to an operation that cannot be further divided, meaning it either executes completely in one step or not at all.
 
-<aside>다중 스레드 환경에서 많이 사용되는 개념이다. 다중 스레드 환경에서는 여러 스레드가 동시에 같은 자원에 접근할 수 있기 때문에,
-한 스레드가 자원을 사용하는 동안 다른 스레드가 접근하지 못하도록 하는 것이 중요하다. 이 때 사용되는 것이 '원자적 작업'이다.</aside>
+<aside>This concept is commonly used in multi-threaded environments. In a multi-threaded environment, multiple threads can access the same resource simultaneously, so it's important to prevent other threads from accessing the resource while one thread is using it. This is where 'atomic operations' are used.</aside>
 
-<b>예시를 들어보자.</b> \
-은행에서의 계좌이체를 떠올려보자. 만약 A 계좌에서 B 계좌로 10만원을 이체한다고 할때 이 작업은 두단계로 이뤄지게 된다.
-1. A 계좌에서 10만원을 빼는 작업
-2. B 계좌에 10만원을 더하는 작업
+<b>Let's take an example.</b> \
+Consider a bank transfer. If we transfer $100r from account A to account B, this operation consists of two steps:
 
-만약 이 과정 사이에 문제가 생겨서 <b>프로세스가 중단</b>된다면 어떻게 될까? \
-A 계좌에서는 10만원이 사라졌지만, B 계좌는 받지 못한 상태가 되어버린다. 이런 상황을 방지하기 위해 <b>'원자적 작업'</b>이 필요하다.\
-즉 이체 작업은 한번에 완전히 실행되거나 실행되지 않아야 한다.
+- Deducting $100 from account A
+- Adding $100 dollar to account B
 
-React Compiler의 메모이제이션 과정도 이와 비슷한 개념을 사용한다. 예시를 통해서 설명해보자.
+What would happen if there's a problem between these steps and the process is <b>interrupted</b>?  \
+Account A would have lost $100, but account B wouldn't have received it. To prevent such situations, <b>'atomic operations'</b> are necessary.\
+In other words, the transfer operation should either execute completely or not at all.
 
-아래 코드를 컴파일 해보자.
+The React Compiler's memoization process uses a similar concept. Let's explain with an example.
+
+Let's compile the following code:
 
 ```tsx
 function Component({ active }) {
@@ -220,7 +227,7 @@ function Component({ active }) {
 }
 ```
 
-컴파일 하게되면 아래와 같이 변환된다.
+When compiled, it gets transformed to:
   
 ```tsx
 function Component(t0) {
@@ -251,7 +258,7 @@ function Component(t0) {
 }
 ```
 
-여리서 우리가 주목해야할 부분은 이부분이다.
+The part we should focus on here is:
 
 ```ts
 if ($[0] !== color) {

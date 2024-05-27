@@ -6,7 +6,9 @@ import { SITE_DESCRIPTION, SITE_TITLE } from '@consts';
 
 
 export async function GET(context) {
-	const posts = await getCollection('blog');
+	const posts = await getCollection("blog", ({ id }) => {
+    return !id.startsWith("en/");
+  })
 
 	return rss({
 		title: SITE_TITLE,
