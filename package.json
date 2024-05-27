@@ -27,7 +27,7 @@
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
     "@webcomponents/template-shadowroot": "^0.2.1",
-    "astro": "4.9.1",
+    "astro": "^4.9.2",
     "clsx": "^2.1.1",
     "fs-extra": "^11.1.1",
     "jsdom": "^24.0.0",
