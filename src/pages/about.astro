@@ -1,6 +1,9 @@
 ---
 import PageLayout from "@layouts/PageLayout.astro";
 import Container from "@components/Container.astro";
+import { dateRange } from "@lib/utils";
+import { SOCIALS } from "@consts";
+import Link from "@components/Link.astro";
 ---
 
 <style>
@@ -43,11 +46,92 @@ import Container from "@components/Container.astro";
         My footage from 2024, shot on super8 film
       </figcaption>
     </figure>
-    <h1 class="antialiased text-5xl text-black font-bold leading-[1.4]">
-      Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
-      <br />
-      <br />
-      Based in Seoul, South Korea. 🇰🇷
-    </h1>
+    <div class="space-y-16">
+      <h1
+        class="antialiased text-3xl font-bold leading-[1.4] text-black dark:text-white"
+      >
+        Hi! 👋<br /> My name is YongSeok Jang <br /> and I am a frontend engineer.
+        <br />
+        <br />
+        Based in Seoul, South Korea. 🇰🇷
+      </h1>
+      <section class="animate space-y-6">
+        <div class="flex flex-wrap gap-y-2 items-center justify-between">
+          <h5 class="font-semibold text-black dark:text-white">
+            Work Experience
+          </h5>
+        </div>
+        <ul class="flex flex-col space-y-4">
+          <li class="animate">
+            <div class="text-sm opacity-75">
+              {dateRange(new Date("2021-06-21"), "Current")}
+            </div>
+            <div class="font-semibold text-black dark:text-white">
+              <a
+                href="https://corp.remember.co.kr"
+                target="_blank"
+                rel="noopener noreferrer"
+                >드라마앤컴퍼니(Drama&Company) - 리멤버</a
+              >
+            </div>
+            <div class="text-sm opacity-75">Web Frontend Engineer</div>
+            <article></article>
+          </li>
+        </ul>
+      </section>
+
+      <section class="animate space-y-6">
+        <div class="flex flex-wrap gap-y-2 items-center justify-between">
+          <h5 class="font-semibold text-black dark:text-white">Education</h5>
+        </div>
+        <ul class="flex flex-col space-y-4">
+          <li class="animate">
+            <div class="text-sm opacity-75">
+              {dateRange(new Date("2015-02"), new Date("2021-02"))}
+            </div>
+            <div class="font-semibold text-black dark:text-white">
+              Dongguk University (동국대학교)
+            </div>
+            <div class="text-sm opacity-75">
+              <a
+                href="https://cse.dongguk.edu/main"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Computer Science & Enginerring</a
+              >, <a
+                href="https://food.dongguk.edu/main"
+                target="_blank"
+                rel="noopener noreferrer">Food Science & Biotechnology</a
+              >
+            </div>
+            <article></article>
+          </li>
+        </ul>
+      </section>
+
+      <section class="animate space-y-4">
+        <h5 class="font-semibold text-black dark:text-white">Let's Connect</h5>
+        <article>
+          <p>
+            If you want to get in touch with me about something or just to say
+            hi, reach out on social media.
+          </p>
+        </article>
+        <ul class="flex flex-wrap gap-2">
+          {
+            SOCIALS.map((SOCIAL) => (
+              <li class="flex gap-x-2 text-nowrap">
+                <Link href={SOCIAL.HREF} external>
+                  {SOCIAL.NAME}
+                </Link>
+                {"/"}
+              </li>
+            ))
+          }
+          <li>What should I add next?</li>
+        </ul>
+      </section>
+    </div>
   </Container>
 </PageLayout>
