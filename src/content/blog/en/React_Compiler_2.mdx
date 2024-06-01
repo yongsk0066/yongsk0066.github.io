@@ -159,7 +159,7 @@ if (memoCache == null) {
 }
 ```
 
-During the process of copying the cache, the behavior differs based on the `enableNoCloningMemoCache`option.\ 
+During the process of copying the cache, the behavior differs based on the `enableNoCloningMemoCache`option.\
 Depending on the `enableNoCloningMemoCache` flag, it decides whether to use the cache data as is or make a shallow copy.
 - If <b>enabled</b>, it uses the cache data as is. This can reduce memory usage but carries the risk of the cache data being modified.
 - If <b>disabled</b>, it makes a shallow copy of the cache data and uses it. This allows safe usage of the cache data from the previous rendering but can increase memory usage.
@@ -271,26 +271,28 @@ if ($[0] !== color) {
   t1 = $[1];
 }
 ```
-먼저 간단히 동작을 설명해보자.
-`$`는 memoCache를 의미한다. 컴파일러는 `$[0]`에는 이전에 저장된 color 값을 저장하고, `$[1]`에는 이전에 렌더링된 결과를 저장하고 있다.\
-`if ($[0] !== color)` 캐시된 color값과 현재 color값을 비교한다. 만약 다르다면, 새로운 color에 대한 엘리먼트를 생성해야한다는 의미이다.\
-이때 새로운 엘리먼트를 생성하고, `$[0]`에 새로운 color값을 저장하고, `$[1]`에 새로운 엘리먼트를 저장한다.\
-그렇지 않다면, 이전에 렌더링된 결과를 사용한다.
+First, let's briefly explain how this code works.
 
-여기서 중요한 점은 `$[0] = color;`와 `$[1] = t1;`이 같은 블록 내에서 연속적으로 일어난다는 것이다.\
-이것이 바로 <b>'원자적 쓰기'</b>이다.
+`$`represents memoCache. The compiler stores the previously saved color value in `$[0]`and the previously rendered result in`$[1]`.\
+`if ($[0] !== color)` compares the cached color value with the current color value. If they are different, it means a new element needs to be created for the new color.\
+At this point, it creates a new element, stores the new color value in`$[0]` and stores the new element in`$[1]`.\
+Otherwise, it uses the previously rendered result.
 
-이 두 줄은 하나의 원자적 연산으로 처리되기에, color 값이 캐시에 쓰이면, 그에 해당하는 엘리먼트도 반드시 캐시에 쓰인다. 이들 사이의 중간 상태는 존재하지 않는다.\
-이제 React Compiler의 원자적 쓰기가 무엇을 의미하는지 알게 되었다.
+The important point here is that `$[0] = color;`and `$[1] = t1;`occur at the same time within the same block.
+This is <b>'atomic writing'</b>.
 
-다시 본래 내용으로 돌아가 보자.\
-`enableNoCloningMemoCache`가 false 라면 각 렌더링 시도시 이전 렌더링의 캐시를 복사하고 이 복사본을 수정하는 식으로 (copy-on-write) 사용한다.\
-하지만 이 방법은 렌더링이 중단되고 재개될 때마다 캐시를 복사하므로, 메모리 사용량이 증가할 수 있다.
+These two lines are treated as a single atomic operation, so when a color valuee is written to the cache, the corresponding element is also guaranteed to be written to the cache. There is no intermediate state between theme.\
+Now we understand what React Compiler's atomic writing means.
 
-`enableNoCloningMemoCache`가 true라면 모든 렌더링 시도에서 동일한 캐시 인스턴스를 공유한다.
+Let's go back to the original content.\
+If `enableNoCloningMemoCache`is false, it uses the cache by copying the cache from the previous rendering on each rendering attempt and modifying this copy(copy-on-write).\
+However, this method copies the cache every time the rendering is interrupted and resumed, which can be inefficient in terms of memory usage.
 
-즉, 렌더링이 중단(suspended/interrupted)되고 재개 되더라도, 이전 렌더링 시도에서의 캐시를 그대로 사용할 수 있다.\
-이는 메모리 관리에 있어서 큰 이점이다. 
+If `enableNoCloningMemoCache` is true, the same cache instance is shared across all rendering attempts.\
+
+
+In other words, even if the rendering is interrupted(suspended/interrupted) and resumed, the cache from the previous rendering attempt can be reused as is.\
+This is a significant advantage in memory management.
 
 이런 동작이 가능하려면 React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행해야 한다는 것이다.
 
