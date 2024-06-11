@@ -25,7 +25,9 @@ const seriesPosts = (
     return !id.startsWith("en/");
   })
 )
-  .filter((_post) => _post.data.series === post.data.series)
+  .filter(
+    (_post) => _post.data.series === post.data.series && !!post.data.series
+  )
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
 
 const { Content } = await post.render();
