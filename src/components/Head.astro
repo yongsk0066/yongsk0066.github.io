@@ -193,7 +193,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
       if (navigator.share) {
         navigator.share({
           title: document.title,
-          text: document.querySelector('meta[name="description"]').content,
           url: url,
         });
       } else {
