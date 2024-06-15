@@ -187,6 +187,28 @@ const { title, description, image = "/nano.png" } = Astro.props;
     const backToPrev = document.getElementById("back-to-prev");
     backToPrev?.addEventListener("click", () => window.history.back());
 
+    const shareButton = document.getElementById("share-button");
+    shareButton?.addEventListener("click", () => {
+      const url = window.location.href;
+      if (navigator.share) {
+        navigator.share({
+          title: document.title,
+          text: document.querySelector('meta[name="description"]').content,
+          url: url,
+        });
+      } else {
+        navigator.clipboard
+          .writeText(url)
+          .then(() => {
+            alert("링크가 복사되었어요!");
+          })
+          .catch((error) => {
+            console.error("클립보드에 복사 실패:", error);
+            prompt("아래 링크를 복사하세요!", url);
+          });
+      }
+    });
+
     const lightThemeButton = document.getElementById("light-theme-button");
     lightThemeButton?.addEventListener("click", () => {
       localStorage.setItem("theme", "light");

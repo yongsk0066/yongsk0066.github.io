@@ -6,6 +6,7 @@ import FormattedDate from "@components/FormattedDate.astro";
 import { readingTime } from "@lib/utils";
 import BackToPrev from "@components/BackToPrev.astro";
 import Comments from "@components/Comments.astro";
+import Share from "@components/Share.astro";
 
 export async function getStaticPaths() {
   const posts = (await getCollection("blog"))
@@ -101,7 +102,8 @@ const { Content } = await post.render();
         </div>
       )
     }
-    <Comments />
+    <Share />
+    <Comments client:idle />
   </Container>
 </PageLayout>
 <!--- Starts script --->
