@@ -3,9 +3,10 @@ interface Props {
   src: string;
   caption?: string;
   ratio?: string;
+  control?: boolean;
 }
 
-const { src, caption, ratio } = Astro.props;
+const { src, caption, ratio, control } = Astro.props;
 ---
 
 <figure>
@@ -20,6 +21,7 @@ const { src, caption, ratio } = Astro.props;
     style={{
       ...(ratio && { aspectRatio: ratio }),
     }}
+    {...control && { controls: true }}
   >
     <source src={src} type="video/mp4" />
   </video>
