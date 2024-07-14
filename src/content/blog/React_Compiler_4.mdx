@@ -1,6 +1,6 @@
 ---
 title: React Compiler, 어떻게 동작할까 [4] - SSA변환(이론과 구현)
-description: "React Compiler의 SSA 변환에 대해 알아보자. SSA는 Static Single Assignment의 약자로, 최적화를 위해 사용되는 중간 표현 중 하나입니다. SSA는 변수가 한 번만 대입되도록 제한하는 특징이 있습니다. 이는 def-use chain을 추적하기가 쉽도록 도와줍니다. SSA 변환 알고리즘의 핵심은 phi함수를 어디에 놓을지를 결정하는 것입니다. React Compiler의 경우 Cytron et al.의 알고리즘을 사용하고 있습니다."
+description: "React Compiler의 SSA 변환에 대해 알아보자. SSA는 Static Single Assignment의 약자로, 최적화를 위해 사용되는 중간 표현 중 하나입니다. SSA는 변수가 한 번만 대입되도록 제한하는 특징이 있습니다. SSA 변환 알고리즘의 핵심은 phi함수를 어디에 놓을지를 결정하는 것입니다. React Compiler의 경우 어떤 알고리즘을 사용하고 있을까요?"
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-07-14T07:57:08.825Z'
