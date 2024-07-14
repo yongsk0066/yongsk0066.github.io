@@ -1,6 +1,6 @@
 ---
 title: React Compiler, 어떻게 동작할까 [4] - SSA변환(이론과 구현)
-description: "SSA, Static Single Assignment, 정적 단일 대입이란 뜻으로, 최적화를 위해 사용되는 중간 표현 중 하나입니다. SSA는 변수가 한 번만 대입되도록 제한하는 특징이 있습니다. 이는 def-use chain을 추적하기가 쉽도록 도와줍니다."
+description: "React Compiler의 SSA 변환에 대해 알아보자."
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-07-14T07:57:08.825Z'
@@ -1219,13 +1219,13 @@ for (const outputId of eachTerminalSuccessor(block.terminal)) {
 ```
 후속 블럭에 대해서 해당 블럭의 선행자(preds) 개수를 카운트 하게 됩니다.
 처음 훑어보는 블럭이라면 선행자 개수를 `count`에 넣어서 `unsealedPreds`에 저장하게 됩니다.
-```
-  count = output.preds.size - 1;
-  builder.unsealedPreds.set(output, count);
+```ts
+count = output.preds.size - 1;
+builder.unsealedPreds.set(output, count);
 ```
 이미 훑었던 후속 블럭이라면, 아까 set해뒀던, `count`에서 카운트를 하나 빼주게 됩니다.
-```
-  count = builder.unsealedPreds.get(output)! - 1;
+```ts
+count = builder.unsealedPreds.get(output)! - 1;
 ```
 그 `count`가 0이 되었고, 이미 방문한 블럭이라면, 모든 선행자를 방문 했음을 의미하게 됩니다.\
 이때, `fixIncompletePhis`를 통해 **phi함수**를 추가해주게 됩니다.
@@ -1313,7 +1313,7 @@ bb5의 경우 **Goto**문의 후속 블럭은 **bb4**가 됩니다.\
 ```
 bb4의 경우 **Goto**문의 후속 블럭은 **bb1**이 됩니다.\
 **bb1**은 이미 `unsealedPreds`에 있기 때문에 이전 `count`를 가져와 1을 빼줍니다.\
-`unsealedPreds`는 `{bb3: 0, bb1: 0, bb5: 0, bb2: 0, bb4: 0}`이 됩니다.\
+`unsealedPreds`는 `{bb3: 0, bb1: 0, bb5: 0, bb2: 0, bb4: 0}`이 됩니다.
 
 이때는 `visitedBlocks`에 **bb1**이 있기 때문에 `fixIncompletePhis`가 실행되게 됩니다.
 ```ts
@@ -1326,6 +1326,47 @@ fixIncompletePhis(block: BasicBlock): void {
 ```
 아까 **bb1**에서 **incompletePhis**에 추가해둔 **phi함수**를 추가해주게 됩니다.\
 이로써 루프에 대한 phi함수 처리까지 완료 할 수 있게 됩니다.
+
+마지막으로 결과를 확인해볼까요?
+```plaintext
+function foo
+bb0 (block):
+  [1] $17 = 1
+  [2] $19 = StoreLocal Let x$18 = $17
+  [3] For init=bb3 test=bb1 loop=bb5 update=bb4 fallthrough=bb2
+bb3 (loop):
+  predecessor blocks: bb0
+  [4] $20 = 0
+  [5] $22 = StoreLocal Let i$21 = $20
+  [6] Goto bb1
+bb1 (loop):
+  predecessor blocks: bb3 bb4
+  i$23: phi(bb3: i$21, bb4: i$34) // phi 함수가 추가됨
+  x$27: phi(bb3: x$18, bb4: x$31) // phi 함수가 추가됨
+  [7] $24 = LoadLocal i$23
+  [8] $25 = 10
+  [9] $26 = Binary $24 < $25
+  [10] Branch (<unknown> $26) then:bb5 else:bb2
+bb5 (block):
+  predecessor blocks: bb1
+  [11] $28 = LoadLocal x$27
+  [12] $29 = 1
+  [13] $30 = Binary $28 + $29
+  [14] $32 = StoreLocal Reassign x$31 = $30
+  [15] $33 = LoadLocal x$31
+  [16] Goto(Continue) bb4
+bb4 (loop):
+  predecessor blocks: bb5
+  [17] $35 = PostfixUpdate i$34 = i$23 ++
+  [18] Goto bb1
+bb2 (block):
+  predecessor blocks: bb1
+  [19] $36 = LoadLocal x$27
+  [20] Return $36
+```
+
+적절한 위치에 **phi함수**가 추가되어 있음을 확인할 수 있습니다.
+
 
 ## 마무리
 
