@@ -1,10 +1,11 @@
 ---
 title: React Compiler, 어떻게 동작할까 [4] - SSA변환(이론과 구현)
-description: "React Compiler의 SSA 변환에 대해 알아보자."
+description: "React Compiler의 SSA 변환에 대해 알아보자. SSA는 Static Single Assignment의 약자로, 최적화를 위해 사용되는 중간 표현 중 하나입니다. SSA는 변수가 한 번만 대입되도록 제한하는 특징이 있습니다. 이는 def-use chain을 추적하기가 쉽도록 도와줍니다. SSA 변환 알고리즘의 핵심은 phi함수를 어디에 놓을지를 결정하는 것입니다. React Compiler의 경우 Cytron et al.의 알고리즘을 사용하고 있습니다."
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-07-14T07:57:08.825Z'
 series: "React Compiler"
+heroImage: "/post/images/ReactCompiler4/thumb.png"
 ---
 import LinkPreview from '@components/LinkPreview.astro'
 import  { YouTube } from "@components/lit/youtube-element"
@@ -482,7 +483,7 @@ bb1 (block):
   [18] Return $15
 ```
 
-분기 이전의 **bbo**, if의 then블럭인 **bb2**, else블럭인 **bb3** 그리고 분기 이후의 **bb1**로 나눠진 것을 볼 수 있습니다.\
+분기 이전의 **bb0**, if의 then블럭인 **bb2**, else블럭인 **bb3** 그리고 분기 이후의 **bb1**로 나눠진 것을 볼 수 있습니다.\
 먼저 각 블럭에 대해서 **지역 값 번호 매기기**를 수행합니다.
 
 기존 **HIR**에서는 공통적으로 `x$1`이라는 변수를 사용하고 있습니다.\
@@ -526,7 +527,7 @@ bb1 (block):
 
 그런데 **bb1**에서는 **정의와 사용**이 같은 블럭에 있지 않습니다. \
 **정의**(def)부분은 찾아볼 수 없고 바로 **LoadLocal**(use)이 있습니다.\
-그러면 이 경우는 지역 값을 메길 수 없습니다. 그렇게 다음단계인 **전역 값 번호 매기기**로 넘어가게 됩니다.
+그러면 이 경우는 지역 값을 매길 수 없습니다. 그렇게 다음단계인 **전역 값 번호 매기기**로 넘어가게 됩니다.
 
 #### 전역 값 번호 매기기(Global Variable Numbering)
 
