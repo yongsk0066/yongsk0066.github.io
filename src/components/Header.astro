@@ -11,19 +11,15 @@ import HeaderClock from "./widget/HeaderClock";
         <div class="font-semibold">장용석 블로그</div>
       </Link>
       <nav class="flex gap-1">
-        <Link href="/blog"> blog </Link>
-        <!-- <span>
+        <HeaderClock client:only="react" />
+        <span>
           {`/`}
-        </span> -->
-        <!-- <Link href="/work"> work </Link> -->
+        </span>
+        <Link href="/blog"> blog </Link>
         <span>
           {`/`}
         </span>
         <Link href="/about"> about </Link>
-        <span>
-          {`/`}
-        </span>
-        <HeaderClock client:only="react" />
       </nav>
     </div>
   </Container>
