@@ -35,6 +35,9 @@ export default defineConfig({
       theme: customTheme,
     },
   },
-  site: 'https://yongsk0066.github.io',
+  image:{
+    domains: ["static.yongseok.me"]
+  },
+  site: 'https://yongseok.me',
   base: '/'
 });
