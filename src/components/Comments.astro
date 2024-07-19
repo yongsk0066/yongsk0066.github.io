@@ -1,6 +1,7 @@
 <div id="giscus-container"></div>
 
-<script>
+<script is:inline data-astro-rerun>
+  console.log("Loading Giscus...");
   const script = document.createElement("script");
   const container = document.querySelector("#giscus-container");
   const theme = localStorage.getItem("theme") || "light";
@@ -19,6 +20,8 @@
     "data-theme": theme === "dark" ? "dark" : "light",
     "data-lang": "ko",
     crossorigin: "anonymous",
+    "is:inline": "",
+    "data-astro-rerun": "",
   }).forEach(([key, value]) => {
     script.setAttribute(key, value);
   });
