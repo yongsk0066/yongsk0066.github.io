@@ -4,9 +4,16 @@ interface Props {
   src: string;
   title?: string;
   description?: string;
+  imagePosition: CSSProperties["objectPosition"];
 }
 import jsdom from "jsdom";
-const { src, title: _title, description: _description } = Astro.props;
+import type { CSSProperties } from "react";
+const {
+  src,
+  title: _title,
+  description: _description,
+  imagePosition = "center",
+} = Astro.props;
 
 let title = _title;
 let description = _description;
@@ -61,11 +68,12 @@ try {
     image && (
       <div class="overflow-hidden flex items-center">
         <img
-          class="object-cover h-full max-h-40 w-full object-center
+          class="h-full max-h-40 w-full object-center
         group-hover/item:scale-110 transition-transform duration-200 ease-in-out m-0
-        "
+        link-preview__image"
           src={image}
           alt={title}
+          style={{ objectPosition: imagePosition, objectFit: "cover" }}
         />
       </div>
     )
@@ -80,5 +88,8 @@ try {
   }
   .link-preview:not(:has(img)) {
     grid-template-columns: 1fr;
+  }
+  .link-preview__image {
+    border-radius: 0% !important;
   }
 </style>

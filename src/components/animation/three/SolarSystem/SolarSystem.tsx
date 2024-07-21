@@ -14,6 +14,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPixelatedPass } from "three/addons/postprocessing/RenderPixelatedPass.js";
 import "./styles.css";
+import { Text } from "@react-three/drei";
 
 extend({ EffectComposer, RenderPixelatedPass, OutputPass });
 
@@ -37,16 +38,40 @@ const MOON_ROTATION_SPEED = 0.8;
 
 const Sun = () => {
   const ratio = useRatio();
+  const ref = useRef<Mesh>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useFrame(() => {
+    if (ref.current) {
+      ref.current.rotation.y += 0.001;
+      ref.current.rotation.x += 0.002;
+      ref.current.rotation.z += 0.002;
+    }
+  });
+
   return (
-    <mesh rotation-x={0.35}>
-      <icosahedronGeometry args={[3 * ratio, 0]} />
-      <meshPhongMaterial
-        color={"#ff9500"}
-        emissive="#df842f"
-        shininess={20}
-        specular="#ffffff"
-      />
-    </mesh>
+    <>
+      {hovered && (
+        <Text color="black" fontSize={1.2 * ratio} position={[0, 4 * ratio, 0]}>
+          앗! 뜨거!
+        </Text>
+      )}
+      <mesh
+        ref={ref}
+        rotation-x={0.35}
+        onClick={() => {}}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
+        <icosahedronGeometry args={[3 * ratio, 0]} />
+        <meshPhongMaterial
+          color={"#ff9500"}
+          emissive="#df842f"
+          shininess={20}
+          specular="#ffffff"
+        />
+      </mesh>
+    </>
   );
 };
 
@@ -330,7 +355,7 @@ function Scene({ numStars = 300 }) {
 
     camera.position.setFromSphericalCoords(distance, yAngle, xAngle);
     camera.updateProjectionMatrix();
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, -4 * ratio, 0);
 
     composer.current?.render();
   }, 1);
