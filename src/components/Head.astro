@@ -1,6 +1,5 @@
 ---
 import "@styles/global.css";
-import { ViewTransitions } from "astro:transitions";
 
 interface Props {
   title: string;
@@ -166,8 +165,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
     f.parentNode.insertBefore(j, f);
   })(window, document, "script", "dataLayer", "GTM-THN5VFZZ");
 </script>
-
-<ViewTransitions />
 
 <script>
   import type { TransitionBeforeSwapEvent } from "astro:transitions/client";
