@@ -20,7 +20,7 @@ const question = defineCollection({
     title: z.string(),
     description: z.string().optional(),
     isSolved: z.boolean(),
-    pubDate: z.coerce.date(),
+    date: z.coerce.date(),
     solvedDate: z.coerce.date().optional(),
     categories: z.array(z.string()).optional(),
   }),

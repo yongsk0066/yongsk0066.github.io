@@ -1,13 +1,59 @@
 ---
+import { type CollectionEntry, getCollection } from "astro:content";
 import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 import PageLayout from "@layouts/PageLayout.astro";
+import QuestionItem from "@components/Question/QuestionItem.astro";
+
+const data = (await getCollection("question")).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+
+type Acc = {
+  [year: string]: CollectionEntry<"question">[];
+};
+
+const questions = data.reduce((acc: Acc, post) => {
+  const year = post.data.date.getFullYear().toString();
+  if (!acc[year]) {
+    acc[year] = [];
+  }
+  acc[year].push(post);
+  return acc;
+}, {});
+
+console.log(questions);
+const years = Object.keys(questions).sort((a, b) => parseInt(b) - parseInt(a));
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
   <div class="mx-auto max-w-screen-md px-5">
     <div class="space-y-10">
-      <div class="animate font-semibold text-black dark:text-white">
-        unknown
+      <div class="space-y-4">
+        <div class="animate font-semibold text-black dark:text-white">
+          unknown
+        </div>
+        <!-- description about page -->
+        <div class="animate text-black dark:text-white">
+          <p>나에게 아직 미지인 것들에 대한 기록</p>
+        </div>
+      </div>
+      <div class="space-y-4">
+        {
+          years.map((year) => (
+            <section class="animate space-y-4">
+              <div class="font-semibold text-black dark:text-white">{year}</div>
+              <div>
+                <ul class="flex flex-col gap-4">
+                  {questions[year].map((question) => (
+                    <li>
+                      <QuestionItem entry={question} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ))
+        }
       </div>
     </div>
   </div>
