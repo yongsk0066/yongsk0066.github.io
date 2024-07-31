@@ -1,5 +1,8 @@
 import type { Socials } from "@types";
 
+export const DEFAULT_LOCALE = "ko";
+export const OTHER_LOCALES = ["en"];
+
 export const SITE_TITLE = "장용석 블로그";
 export const SITE_DESCRIPTION = "Welcome to my website!";
 export const SOCIALS: Socials = [

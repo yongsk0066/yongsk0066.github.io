@@ -4,14 +4,19 @@ import Comments from "@components/Comments.astro";
 import Container from "@components/Container.astro";
 import FormattedDate from "@components/FormattedDate.astro";
 import Share from "@components/Share.astro";
+import { DEFAULT_LOCALE } from "@consts";
+import { useTranslations } from "@i18n/utils";
 import PageLayout from "@layouts/PageLayout.astro";
 import { readingTime } from "@lib/utils";
 import { getCollection, type CollectionEntry } from "astro:content";
+
+const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 
 export async function getStaticPaths() {
   const posts = (await getCollection("blog"))
     .filter((post) => !post.data.draft)
     .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
   return posts.map((post) => ({
     params: { slug: post.slug },
     props: post,
@@ -23,7 +28,10 @@ const post = Astro.props;
 
 const seriesPosts = (
   await getCollection("blog", ({ id }) => {
-    return !id.startsWith("en/");
+    if (currentLocale === DEFAULT_LOCALE) {
+      return !id.includes("/");
+    }
+    return id.startsWith(currentLocale);
   })
 )
   .filter(
@@ -32,6 +40,7 @@ const seriesPosts = (
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
 
 const { Content } = await post.render();
+const t = useTranslations(currentLocale as any);
 ---
 
 <PageLayout
@@ -45,7 +54,9 @@ const { Content } = await post.render();
   <!--- Ends component --->
   <Container>
     <div class="animate">
-      <BackToPrev href="/blog"> 돌아가기 </BackToPrev>
+      <BackToPrev href={t("path.blog")}>
+        {t("page.back")}
+      </BackToPrev>
     </div>
     <!-- series -->
     <div class="animate flex items-center gap-1.5"></div>
@@ -66,7 +77,7 @@ const { Content } = await post.render();
         seriesPosts.length > 1 && (
           <div class="animate text-zinc-500">
             <div class="text-base mt-8 text-zinc-600 text-bold">
-              [ {post.data.series} ] 시리즈
+              [ {post.data.series} ] {t("word.series")}
             </div>
             <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
               {seriesPosts.map((seriesPost) => {
@@ -91,7 +102,7 @@ const { Content } = await post.render();
       seriesPosts.length > 1 && (
         <div class="animate text-zinc-500">
           <div class="text-base mt-8 text-zinc-600 text-bold">
-            [ {post.data.series} ] 시리즈 더보기
+            [ {post.data.series} ] {t("word.series")}
           </div>
           <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
             {seriesPosts.map((seriesPost) => {
