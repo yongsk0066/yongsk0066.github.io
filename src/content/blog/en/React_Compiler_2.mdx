@@ -1,23 +1,23 @@
 ---
-title: React Compiler, How Does It Work? [2] - useMemoCache"
-description: "Let's take a deep dive into useMemoCache, one of the key components of the React Compiler. We'll explore how useMemoCache works, examine its implementation, and learn about the experimental feature enableNoCloningMemoCache."
+title: "React Compiler, How Does It Work? [2] - useMemoCache"
+description: "Let's take a deep dive into useMemoCache, one of the key components of React Compiler. We'll explore the operating principles of useMemoCache, examine its implementation, and learn about the experimental feature enableNoCloningMemoCache."
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-05-26T03:30:51.104Z'
 series: "React Compiler"
 ---
-import LinkPreview from '../../../components/LinkPreview.astro'
-import  { YouTube } from "../../../components/lit/youtube-element"
+import LinkPreview from '@components/LinkPreview.astro'
+import  { YouTube } from "@components/lit/youtube-element"
 
 
-In the previous post, [React Compiler, 너 누구니 [1]](https://yongsk0066.github.io/blog/react_compiler_1/), we looked at the overall structure of the React Compiler. \
-Before diving into how the compiler works, let's first take a closer look at `useMemoCache`, which was mentioned frequently.
+[React Compiler, How Does It Work? [1]](https://yongsk0066.github.io/blog/react_compiler_1/) In the previous article, we looked at the overall structure of React Compiler. \
+Before examining how the compiler works, let's first take a look at `useMemoCache`, which was mentioned frequently.
 
 <LinkPreview src="https://github.com/facebook/react/pull/25143" />
 
-This is the initial implementation PR for `useMemoCache`. Feel free to check it out if you're interested.
+This is the initial implementation PR for `useMemoCache`. If you're curious, take a look.
 
-Let's first scan through the entire code and then examine it part by part.
+Let's first skim through the entire code and then examine it part by part
 
 https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116
 
@@ -108,12 +108,12 @@ function useMemoCache(size: number): Array<any> {
 }
 ```
 
-Now, let's go through the hook step by step.
+Now let's examine the hook in order.
 
-### Fast Path
+### Fast path
 
-The first operation is to find the `memoCache` from the `updateQueue` of the currently rendering fiber.\
-If it has been called (rendered) before, it will exist. This prevents unnecessary cache allocation.
+The first operation is to find `memoCache` from the `updateQueue` of the fiber currently being rendered.\
+If it has been called (rendered) before, it will exist. This can prevent unnecessary cache allocation.
 
 ```ts
 let memoCache = null;
@@ -126,28 +126,27 @@ if (updateQueue !== null) {
 ```
 
 
-### If There's No Cache? Clone Cache from Alternate Fiber
+### If there's no cache? Clone cache from alternate fiber
 
-If there is no `memoCache` in the `updateQueue` of the currently rendering fiber, it checks the alternate fiber.
+If there's no `memoCache` in the `updateQueue` of the fiber currently being rendered, check the alternate fiber.
 
-In React's Fiber architecture, each Fiber node belongs to either the 'current' tree or the 'workInProgress' tree. 
-The 'current' tree represents the state of the components currently rendered on the screen, 
-and the 'workInProgress' tree represents the state that React is trying to apply updates to. The alternate fiber mentioned here is the alternate of currentlyRenderingFiber, 
-which is the workInProgress tree, so it points to the Fiber in the current tree.
+In React's Fiber architecture, each Fiber node belongs to either the 'current' tree or the 'workInProgress' tree. \
+The 'current' tree represents the state of components currently rendered on the screen, and the 'workInProgress' tree represents the state that React is trying to apply updates to.\
+The alternate fiber (Alternate Fiber) mentioned here is the alternate of `currentlyRenderingFiber`, i.e., the workInProgress tree, so it points to the Fiber of the current tree.\
 
-It clones the cache from this alternate fiber (current) and uses it.
+Clone the cache from this alternate fiber (current) for use.
 
-To focus on the flow of the logic, I temporarily removed the conditional statements. You can see the original code above.
+I've temporarily removed the conditional statements to see the flow of logic. You can check the original text above.
 
 ```ts
 let memoCache = null;
 // ...
-// If there's no cache, clone the cache from the alternate fiber
+// if cache is not exist, clone cache from alternate fiber
 if (memoCache == null) {
 
-  const current = currentlyRenderingFiber.alternate; // Get the alternate fiber (current)
-  const currentUpdateQueue = current.updateQueue;    // Get the updateQueue of the alternate fiber
-  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; // Get the memoCache of the alternate fiber
+  const current = currentlyRenderingFiber.alternate; // Get the alternate fiber (current).
+  const currentUpdateQueue = current.updateQueue;    // Get the updateQueue of the alternate fiber.
+  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; //Get the memoCache of the alternate fiber.
 
   memoCache = {
     data: enableNoCloningMemoCache
@@ -159,61 +158,61 @@ if (memoCache == null) {
 }
 ```
 
-During the process of copying the cache, the behavior differs based on the `enableNoCloningMemoCache`option.\
-Depending on the `enableNoCloningMemoCache` flag, it decides whether to use the cache data as is or make a shallow copy.
-- If <b>enabled</b>, it uses the cache data as is. This can reduce memory usage but carries the risk of the cache data being modified.
-- If <b>disabled</b>, it makes a shallow copy of the cache data and uses it. This allows safe usage of the cache data from the previous rendering but can increase memory usage.
+At this point, the behavior differs depending on the `enableNoCloningMemoCache` option.\
+The `enableNoCloningMemoCache` flag determines whether to use the cache data as is or make a shallow copy.
+- If <b>enabled</b>, use the cache data as is. This can reduce memory usage but carries the risk of cache data being changed.
+- If <b>disabled</b>, use a shallow copy of the cache data. This allows safe use of cache data from previous rendering, but may increase memory usage.
 
 <LinkPreview src="https://github.com/facebook/react/pull/28878" />
 
-There's a long comment attached to this part. Let's take a look at that as well. 
+There's a long comment attached to this part, let's take a look at it too.
 
 ```plaintext
-When `enableNoCloningMemoCache` is enabled, 
-instead of treating the cache as copy-on-write, 
-like we do with fibers, we share the same cache instance across all render attempts, 
-even if the component is interrupted before it commits.
+When enableNoCloningMemoCache is enabled, instead of treating the
+cache as copy-on-write, like we do with fibers, we share the same
+cache instance across all render attempts, even if the component
+is interrupted before it commits.
 
-If an update is interrupted, 
-either because it suspended or because of another update, 
-we can reuse the memoized computations from the previous attempt. 
-We can do this because the React Compiler performs atomic writes to the memo cache, 
-i.e. it will not record the inputs to a memoization without also recording its output.
+If an update is interrupted, either because it suspended or
+because of another update, we can reuse the memoized computations
+from the previous attempt. We can do this because the React
+Compiler performs atomic writes to the memo cache, i.e. it will
+not record the inputs to a memoization without also recording its
+output.
 
 This gives us a form of "resuming" within components and hooks.
 
-This only works when updating a component that already mounted. 
-It has no impact during initial render, 
-because the memo cache is stored on the fiber, 
-and since we have not implemented resuming for fibers, 
-it's always a fresh memo cache, anyway.
+This only works when updating a component that already mounted.
+It has no impact during initial render, because the memo cache is
+stored on the fiber, and since we have not implemented resuming
+for fibers, it's always a fresh memo cache, anyway.
 
-However, this alone is pretty useful 
-— it happens whenever you update the UI with fresh data after a mutation/action,
-which is extremely common in a Suspense-driven (e.g. RSC or Relay) app.
+However, this alone is pretty useful — it happens whenever you
+update the UI with fresh data after a mutation/action, which is
+extremely common in a Suspense-driven (e.g. RSC or Relay) app.
 ```
 
-What does it mean that `the React Compiler performs atomic writes to the memo cache, i.e. it will not record the inputs to a memoization without also recording its output`?
->  🤷‍♂️ Why is the word 'atomic' used here? 
+What does it mean that `This is possible because the React Compiler performs atomic writes to the memo cache. In other words, it doesn't record inputs for memoization without recording outputs`?
+>  🤷‍♂️ Why does atom come up here?
 
-The word 'atomic' is used to mean 'indivisible' here. (Let's not say "Atoms can be split too?") \
-In computer science, an 'atomic operation' refers to an operation that cannot be further divided, meaning it either executes completely in one step or not at all.
+First, the word 'atomic' is used to mean 'indivisible'. (Let's not say ~atoms can be divided too~)\
+In computer science, an 'atomic operation' means an 'indivisible operation', that is, an operation that is either completely executed or not executed at all.
 
-<aside>This concept is commonly used in multi-threaded environments. In a multi-threaded environment, multiple threads can access the same resource simultaneously, so it's important to prevent other threads from accessing the resource while one thread is using it. This is where 'atomic operations' are used.</aside>
+<aside>This is a concept often used in multi-threaded environments. In a multi-threaded environment, multiple threads can access the same resource simultaneously,
+so it's important to prevent other threads from accessing while one thread is using a resource. This is where 'atomic operations' are used.</aside>
 
 <b>Let's take an example.</b> \
-Consider a bank transfer. If we transfer $100r from account A to account B, this operation consists of two steps:
+Think about a bank transfer. When transferring 100,000 won from account A to account B, this operation is done in two steps.
+1. The operation of subtracting 100,000 won from account A
+2. The operation of adding 100,000 won to account B
 
-- Deducting $100 from account A
-- Adding $100 dollar to account B
+What happens if there's a problem between these processes and the <b>process is interrupted</b>? \
+100,000 won disappears from account A, but account B doesn't receive it. To prevent this situation, we need <b>'atomic operations'</b>.\
+In other words, the transfer operation should either be executed completely at once or not executed at all.
 
-What would happen if there's a problem between these steps and the process is <b>interrupted</b>?  \
-Account A would have lost $100, but account B wouldn't have received it. To prevent such situations, <b>'atomic operations'</b> are necessary.\
-In other words, the transfer operation should either execute completely or not at all.
+The memoization process of React Compiler uses a similar concept. Let's explain with an example.
 
-The React Compiler's memoization process uses a similar concept. Let's explain with an example.
-
-Let's compile the following code:
+Let's compile the code below.
 
 ```tsx
 function Component({ active }) {
@@ -227,7 +226,7 @@ function Component({ active }) {
 }
 ```
 
-When compiled, it gets transformed to:
+When compiled, it will be transformed as follows.
   
 ```tsx
 function Component(t0) {
@@ -258,7 +257,7 @@ function Component(t0) {
 }
 ```
 
-The part we should focus on here is:
+Now let's look at the part we should focus on.
 
 ```ts
 if ($[0] !== color) {
@@ -271,49 +270,46 @@ if ($[0] !== color) {
   t1 = $[1];
 }
 ```
-First, let's briefly explain how this code works.
+Let's briefly explain how it works.
+`$` means memoCache. The compiler stores the previously stored color value in `$[0]`, and the previously rendered result in `$[1]`.\
+`if ($[0] !== color)` compares the cached color value with the current color value. If they're different, it means we need to create a new element for the new color.\
+At this time, it creates a new element, stores the new color value in `$[0]`, and stores the new element in `$[1]`.\
+If not, it uses the previously rendered result.
 
-`$`represents memoCache. The compiler stores the previously saved color value in `$[0]`and the previously rendered result in`$[1]`.\
-`if ($[0] !== color)` compares the cached color value with the current color value. If they are different, it means a new element needs to be created for the new color.\
-At this point, it creates a new element, stores the new color value in`$[0]` and stores the new element in`$[1]`.\
-Otherwise, it uses the previously rendered result.
+The important point here is that `$[0] = color;` and `$[1] = t1;` happen consecutively in the same block.\
+This is exactly <b>'atomic writing'</b>.
 
-The important point here is that `$[0] = color;`and `$[1] = t1;`occur at the same time within the same block.
-This is <b>'atomic writing'</b>.
-
-These two lines are treated as a single atomic operation, so when a color valuee is written to the cache, the corresponding element is also guaranteed to be written to the cache. There is no intermediate state between theme.\
-Now we understand what React Compiler's atomic writing means.
+These two lines are treated as one atomic operation, so when the color value is written to the cache, the corresponding element is also definitely written to the cache. There is no intermediate state between them.\
+Now we know what React Compiler's atomic writing means.
 
 Let's go back to the original content.\
-If `enableNoCloningMemoCache`is false, it uses the cache by copying the cache from the previous rendering on each rendering attempt and modifying this copy(copy-on-write).\
-However, this method copies the cache every time the rendering is interrupted and resumed, which can be inefficient in terms of memory usage.
+If `enableNoCloningMemoCache` is false, it uses the cache from the previous rendering by copying and modifying this copy (copy-on-write) for each rendering attempt.\
+However, this method can increase memory usage because it copies the cache every time rendering is interrupted and resumed.
 
-If `enableNoCloningMemoCache` is true, the same cache instance is shared across all rendering attempts.\
+If `enableNoCloningMemoCache` is true, it shares the same cache instance across all rendering attempts.
 
+In other words, even if rendering is interrupted (suspended/interrupted) and resumed, it can use the cache from the previous rendering attempt as is.\
+This is a big advantage in terms of memory management. 
 
-In other words, even if the rendering is interrupted(suspended/interrupted) and resumed, the cache from the previous rendering attempt can be reused as is.\
-This is a significant advantage in memory management.
+For this behavior to be possible, the React compiler must perform atomic writes to the memo cache.
 
-이런 동작이 가능하려면 React 컴파일러가 메모 캐시에 대해 원자적 쓰기를 수행해야 한다는 것이다.
+For example, if it wasn't guaranteed, the following problem would have occurred:
 
-예를 들어 보장되지 않았다면, 아래와 같은 문제가 발생했을 것이다.
+1. Rendering attempt 'A' stores the color value 'red' in the cache.
+2. However, rendering is interrupted before recording the element in the cache.
+3. When rendering attempt 'B' starts, at this point the cache has input for color, but no output.
 
-1. 'A'렌더링 시도가 color 값을 'red'로 캐시에 저장한다.
-2. 그러나 엘리먼트를 캐시에 기록하기 전에, 렌더링이 중단되어버린다.
-3. 'B'렌더링 시도가 시작되면, 이때 캐시에는 color에 대한 입력은 있지만, 출력이 없는 상태가 된다.
-
-이는 캐시 불일치 문제를 발생시키고 이는 렌더링 결과의 불일치로 이어질 것이다. \
-상태에 따른 렌더링 불일치 문제... 어디서 들어본적이 있지 않나요? 'useSyncExternalStore'를 설명할 때 나오는 tearing 문제와 비슷하다.
+This will cause a cache inconsistency problem and this will lead to inconsistency in rendering results. \
+Inconsistency in rendering results due to state... Doesn't this sound familiar? It's similar to the tearing problem that comes up when explaining 'useSyncExternalStore'.
 
 <LinkPreview src="https://github.com/reactwg/react-18/discussions/69"/>
 
-하지만 '원자적 쓰기'가 보장된다면, color에 대한 캐시가 있다는 것은 반드시 엘리먼트에 대한 캐시도 있다는 것을 보장 받을 수 있다.
+However, if 'atomic writing' is guaranteed, having a cache for color ensures that there must also be a cache for the element.
 
+Whew, we've come quite far. Now let's go back to `useMemoCache`.
 
-휴, 뭔가 꽤나 멀리 왔다. 이제 다시 `useMemoCache`로 돌아가보자.
-
-`enableNoCloningMemoCache`조건에 따른 분기를 보다가 여기까지 왔다.
-그래서 `enableNoCloningMemoCache`는 참이냐 거짓이냐!
+We came this far while looking at the branch according to the `enableNoCloningMemoCache` condition.
+So is `enableNoCloningMemoCache` true or false!
 
 ```ts
 // react/shared/ReactFeatureFlags.js
@@ -321,13 +317,13 @@ This is a significant advantage in memory management.
 // Test this at Meta before enabling.
 export const enableNoCloningMemoCache = false;
 ```
-현 시점에서는 `enableNoCloningMemoCache`는 false로 설정되어 있다.
+At the current point, `enableNoCloningMemoCache` is set to false.
 
-다시 `useMemoCache`로 돌아가보자.
+Let's go back to `useMemoCache`.
 
-### 캐시가 없다면? 새로운 캐시 생성
+### If there's no cache? Create a new cache
 
-이제 마지막으로 캐시가 없다면, 새로운 캐시를 생성한다.
+Now finally, if there's no cache, create a new cache.
 
 ```ts
 if (memoCache == null) {
@@ -338,9 +334,9 @@ if (memoCache == null) {
 }
 ```
 
-### 캐시 할당
+### Cache allocation
 
-updateQueue가 없다면 새로 만들고, memoCache를 할당한다.
+If there's no updateQueue, create a new one and allocate memoCache.
 
 ```ts
 if (updateQueue === null) {
@@ -350,14 +346,12 @@ if (updateQueue === null) {
 updateQueue.memoCache = memoCache;
 ```
 
-`createFunctionComponentUpdateQueue`는 기본적인 queue객체를 return 한다. 
-enableUseMemoCacheHook 플래그에 따라 나뉘는데 현재는 true되어있다.
+`createFunctionComponentUpdateQueue` returns a basic queue object. 
+It's divided according to the enableUseMemoCacheHook flag, which is currently set to true.
 
 ```ts
 // NOTE: defining two versions of this function to avoid size impact when this feature is disabled.
 // Previously this function was inlined, the additional `memoCache` property makes it not inlined.
-// 메모 : 이 기능이 비활성화되어 있을 때 크기 영향을 피하기 위해 이 함수의 두 가지 버전을 정의합니다.
-// 이전에 이 함수는 인라인으로 정의되었으며, 추가적인 `memoCache` 속성으로 인해 인라인되지 않습니다.
 let createFunctionComponentUpdateQueue: () => FunctionComponentUpdateQueue;
 if (enableUseMemoCacheHook) {
   createFunctionComponentUpdateQueue = () => {
@@ -379,19 +373,19 @@ if (enableUseMemoCacheHook) {
 }
 ```
 
-### 캐시 데이터 반환
+### Return cache data
 
-마지막으로 캐시 데이터를 반환한다.
+Finally, return the cache data.
 
-캐새로 부터 데이터를 가져오고,
+Get data from the cache,
 
 ```ts
 let data = memoCache.data[memoCache.index]; 
 ```
 
-데이터가 없다면 새로운 데이터를 할당하고, `REACT_MEMO_CACHE_SENTINEL`로 초기화한다.\
-`REACT_MEMO_CACHE_SENTINEL`은 memoization이 되지 않은 상태를 나타낸다.\
-호출 별로 캐시는 Array형태로 사용하기 때문에 Array로 초기화한다.
+If there's no data, allocate new data and initialize it with `REACT_MEMO_CACHE_SENTINEL`.\
+`REACT_MEMO_CACHE_SENTINEL` represents the state where memoization has not been done.\
+Because cache is used in Array form for each call, it's initialized as an Array.
 
 ```ts
 if (data === undefined) { 
@@ -402,15 +396,15 @@ if (data === undefined) {
 }
 ```
 
-만약 data가 `undefined`가 아니라면, 즉 캐시 데이터가 존재한다면, data의 길이가 요청된 size와 일치하는지 확인한다.\
-확인하는 이유는, 이전 렌더링에서 사용된 캐시 데이터와 현재 렌더링에서 사용할 캐시 데이터의 길이가 다르다면, 문제가 발생할 수 있기 때문이다.
+If data is not `undefined`, that is, if cache data exists, check if the length of data matches the requested size.\
+The reason for checking is that if the length of the cache data used in the previous rendering is different from the length of the cache data to be used in the current rendering, problems may occur.
 
 ```ts
 else if (data.length !== size) {
   if (__DEV__) {
     console.error(
-      'useMemoCache의 각 호출에 대해 상수 크기 인수가 예상됩니다.' +
-        '이전 캐시는 크기 %s로 할당되었지만 크기 %s가 요청되었습니다.',
+      'Expected a constant size argument for each invocation of useMemoCache. ' + 
+      'The previous cache was allocated with size %s but size %s was requested.',
       data.length,
       size,
     );
@@ -418,20 +412,20 @@ else if (data.length !== size) {
 }
 ```
 
-마지막으로 캐시 인덱스를 증가시키고 데이터를 반환한다.
+Finally, increase the cache index and return the data.
 
 ```ts
 memoCache.index++;
 return data;
 ```
 
-이전 편에서 살펴봤던 'react-compiler-runtime'에서의 구현과 비슷하지만, 조금더 Fiber에 맞게 수정된 부분이 있다.
+It's similar to the implementation in 'react-compiler-runtime' that we looked at in the previous edition, but there are some parts that have been modified to fit Fiber better.
 
-### `useMemo`와 `useMemoCache` 차이
+### Difference between `useMemo` and `useMemoCache`
 
-우리에겐 익숙한, 그리고 이제 잊혀지게 될 `useMemo`. 이름도 비슷한 탓에 차이에 대한 의문을 가질 수 있을 것이다.
+`useMemo`, which is familiar to us and will now be forgotten. Due to the similar names, you might wonder about the difference.
 
-간단하게 `useMemo`의 구현을 돌아보자.
+Let's briefly review the implementation of `useMemo`.
 
 ```ts
 function mountMemo<T>(
@@ -456,35 +450,35 @@ function updateMemo<T>(
     // Assume these are defined. If they're not, areHookInputsEqual will warn.
     if (nextDeps !== null) {
       const prevDeps: Array<mixed> | null = prevState[1];
-      if (areHookInputsEqual(nextDeps, prevDeps)) { // 이전 deps와 현재 deps가 같다면 이전 값을 반환
+      if (areHookInputsEqual(nextDeps, prevDeps)) { // If the previous deps and the current deps are the same, return the previous value
         return prevState[0];
       }
     }
   }
-  const nextValue = nextCreate(); // 새로운 값 생성
-  hook.memoizedState = [nextValue, nextDeps]; // 새로운 값과 deps를 저장
-  return nextValue; // 새로운 값 반환
+  const nextValue = nextCreate(); // create a new value
+  hook.memoizedState = [nextValue, nextDeps]; // update the memoizedState
+  return nextValue; // return the new value
 }
 ```
 
-둘다 메모이제이션을 위한 훅이지만 조금 다르다, `useMemo`는 개발자가 직접적으로 사용하는 훅으로, 의존성 배열을 받아서 의존성이 변경되었을 때만 새로운 값을 생성한다.\
-`useMemo`는 의존성 배열을 통해 메모이제이션 여부를 훅이 책임지는 것이다.\
-반면 `useMemoCache`는 컴파일러 내부에서 사용하는 훅으로, 의존성 배열을 받지 않고, 캐시를 관리하는 것이 주 목적이다.\
-그렇기 메모이제이션의 책임은 `useMemoCache`가 아닌 컴파일러가 맡는다.
+Both are hooks for memoization, but they're a bit different. `useMemo` is a hook that developers use directly, receiving a dependency array and creating a new value only when the dependency changes.\
+`useMemo` is responsible for memoization through the dependency array.\
+On the other hand, `useMemoCache` is a hook used internally by the compiler, doesn't receive a dependency array, and its main purpose is to manage the cache.\
+Therefore, the responsibility for memoization lies with the compiler, not `useMemoCache`.
 
-### `useMemoCache`의 테스트 코드
+### Test case for `useMemoCache`
 
-이제 `useMemoCache`를 사용하는 예시 코드를 살펴보자.\
-좋은 예시들이 테스트 코드에 많이 있기 때문에, 테스트 코드를 살펴보면 동작을 이해하는데 도움이 될 것이다.
+Now let's look at example code using `useMemoCache`.\
+There are many good examples in the test code, so looking at the test code will help understand how it works.
 
 ```ts
-// 비싼 계산을 하는 함수
+// Some expensive processing...
 function someExpensiveProcessing(t) { 
   Scheduler.log(`Some expensive processing... [${t}]`);
   return t;
 }
 
-// 서스팬스를 트리거 하기위한 함수
+// function to trigger suspense
 function useWithLog(t, msg) { 
   try {
     return React.use(t); 
@@ -523,20 +517,16 @@ function App({chunkA, chunkB}) {
   );
 }
 ```
-이와 같은 형태의 컴포넌트들의 컴파일 결과물을 가지고 테스트를 진행해보자.\
-Data 컴포넌트는 chunkA와 chunkB를 받아와서, chunkA에 대한 비싼 계산을 수행하고, chunkB는 그대로 반환한다.
+These are the components in this form, let's test with the compilation results.\
+The Data component receives chunkA and chunkB, performs expensive calculations on chunkA, and returns chunkB as is.
 
 ```ts
 // react-reconciler/src/__tests__/useMemoCache-test.js
-test('업데이트 중에 중단된(suspended/interrupted) 렌더링 시도에서의 계산을 재사용합니다', async () => { 
+test('reuses computations from suspended/interrupted render attempts during an update', async () => {
   // This test demonstrates the benefit of a shared memo cache. By "shared" I
   // mean multiple concurrent render attempts of the same component/hook use
   // the same cache. (When the feature flag is off, we don't do this — the
   // cache is copy-on-write.)
-  // 이 테스트는 공유 메모 캐시의 이점을 보여줍니다. "공유"라는 말은 동일한 컴포넌트/훅의
-  // 여러 동시 렌더링 시도가 동일한 캐시를 사용한다는 것을 의미합니다. 
-  // (기능 플래그가 꺼져 있으면 이렇게 하지 않습니다 - 캐시는 복사본입니다.)
-
 
   function Data(t0) {
     const $ = useMemoCache(5);
@@ -617,7 +607,7 @@ test('업데이트 중에 중단된(suspended/interrupted) 렌더링 시도에�
     return t2;
   }
 
-  // Resolved 프로미스 생성
+  // create Resolved Promise
   function createInstrumentedResolvedPromise(value) {
     return {
       then() {},
@@ -626,7 +616,7 @@ test('업데이트 중에 중단된(suspended/interrupted) 렌더링 시도에�
     };
   }
 
-  // Pending 프로미스 생성
+  // create Pending Promise
   function createDeferred() { 
     let resolve;  
     const p = new Promise(res => { 
@@ -637,24 +627,21 @@ test('업데이트 중에 중단된(suspended/interrupted) 렌더링 시도에�
   }
 ```
 
-컴파일된 코드를 기반으로 이제 테스트를 진행해보자.
+Let's run the test based on the compiled code.
 
+#### First rendering
 
-#### 첫 번째 렌더링
-
-최초 렌더링에서는 `chunkA`와 `chunkB`를 받아와서 `Data` 컴포넌트를 렌더링한다.\
-`createInstrumentedResolvedPromise`는 Resolved된 프로미스를 생성한다. 즉 이미 받아온 데이터를 의미한다. \
-이때는 A1에 걸려있는 expensive process에 대한 로그가 찍히고, `Data` 컴포넌트는 `A1B1`을 반환한다.
-
+In the initial rendering, it receives `chunkA` and `chunkB` and renders the `Data` component.\
+`createInstrumentedResolvedPromise` creates a Resolved promise. This means data that has already been received. \
+At this time, a log for the expensive process hanging on A1 is printed, and the `Data` component returns `A1B1`.
 
 ```ts
 // Initial render. We pass the data in as two separate "chunks" to simulate a stream (e.g. RSC).
-// 최초 렌더링. 데이터를 두 개의 별도 "청크"로 전달하여 스트림(예: RSC)을 시뮬레이션합니다.
 const root = ReactNoop.createRoot();
-const initialChunkA = createInstrumentedResolvedPromise('A1'); // A1로 resolve된 프로미스 생성
-const initialChunkB = createInstrumentedResolvedPromise('B1'); // B1로 resolve된 프로미스 생성
+const initialChunkA = createInstrumentedResolvedPromise('A1'); //  create a promise resolved to A1
+const initialChunkB = createInstrumentedResolvedPromise('B1'); //  create a promise resolved to B1
 await act(() => 
-  root.render(<App chunkA={initialChunkA} chunkB={initialChunkB} />), // 초기 렌더링
+  root.render(<App chunkA={initialChunkA} chunkB={initialChunkB} />), // initial render
 );
 assertLog(['Some expensive processing... [A1]']); // 
 expect(root).toMatchRenderedOutput(
@@ -665,14 +652,14 @@ expect(root).toMatchRenderedOutput(
 );
 ```
 
-#### 전환중에 UI 업데이트
+#### UI update during transition
 
 ```ts
 const updatedChunkA = createDeferred(); 
 const updatedChunkB = createDeferred(); 
 ```
 
-`createDeferred` 함수를 사용하여 `updatedChunkA`와 `updatedChunkB`라는 두 개의 Promise 객체를 생성한다. 이 객체들은 나중에 데이터를 로드하는 데 사용된다
+The `createDeferred` function is used to create two Promise objects called `updatedChunkA` and `updatedChunkB`. These objects are used to load data later.
 
 ```ts
 await act(() => {
@@ -682,8 +669,8 @@ await act(() => {
 });
 ```
 
-`React.startTransition`을 사용하여 UI 업데이트를 시작한다. transition은 낮은 우선순위로 스케줄링되어, 다른 작업이 끝난 후에 실행된다.\
-이때 `App` 컴포넌트에 `updatedChunkA`와 `updatedChunkB`를 전달하여 렌더링한다.
+Use `React.startTransition` to start a UI update. Transition is scheduled with low priority and executed after other tasks are completed.\
+At this time, render the `App` component by passing `updatedChunkA` and `updatedChunkB`.
 
 ```ts
 assertLog(['Suspend! [chunkA]']); 
@@ -691,12 +678,12 @@ assertLog(['Suspend! [chunkA]']);
 ```ts
   const t1 = useWithLog(chunkA, 'chunkA');
 ```
-`useWithLog` 함수에서 `chunkA`에 대한 `useWithLog`가 실행되고, pending 중에 있음으로 `use`에 의해서 Suspense가 트리거 되고 'Suspend! [chunkA]'가 찍히게 된다.
+`useWithLog` function executes `useWithLog` for `chunkA`, and because it's pending, Suspense is triggered by `use` and 'Suspend! [chunkA]' is printed.
 
 ```ts
 await act(() => updatedChunkA.resolve('A2'));
 ```
-`updatedChunkA`를 'A2'로 resolve한다.
+Resolve `updatedChunkA` to 'A2'.
 
 ```ts
 const t1 = useWithLog(chunkA, 'chunkA');
@@ -713,12 +700,12 @@ const a = t2;
 const b = useWithLog(chunkB, 'chunkB');
 
 ```
-데이터가 준비되었으므로, 렌더링이 재개 되고, `useWithLog`가 실행된다.\
-이때 `t1`은 'A2'가 되고, `$[0]`에는 이전에 저장된 'A1'과 비교하여 다르기 때문에 expensive process가 실행된다.\
-그에 따라 'Some expensive processing... [A2]'가 찍히게 된다.
+Since the data is ready, rendering resumes and `useWithLog` is executed.\
+At this time, `t1` becomes 'A2', and because it's different from 'A1' stored in `$[0]` previously, the expensive process is executed.\
+Accordingly, 'Some expensive processing... [A2]' is printed.
 
-바로 다음으로 `useWithLog`가 실행되고, chunkB는 아직 resolve되지 않았기에 'Suspend! [chunkB]'가 찍히게 된다.\
-다시 렌더링이 중단되었기 때문에, 초기 UI를 그대로 보여준다.
+Immediately after, `useWithLog` is executed, and since chunkB is not yet resolved, 'Suspend! [chunkB]' is printed.\
+Because rendering is interrupted again, it shows the initial UI as is.
 
 ```ts
 expect(root).toMatchRenderedOutput(
@@ -730,36 +717,31 @@ expect(root).toMatchRenderedOutput(
 ```
 
 
-#### 업데이트 전환 중 다른 부분 업데이트
+#### Update other parts during update transition
 
 ```ts
 // While waiting for the data to finish loading, update a different part of the screen. This interrupts the refresh transition.
-// 데이터 로드가 완료될 때까지 기다리는 동안 화면의 다른 부분을 업데이트합니다. 이는 새로 고침 전환을 중단합니다.
 //
 // In a real app, this might be an input or hover event.
-// 실제 앱에서는 입력 또는 호버 이벤트일 수 있습니다.
-await act(() => setInput('hi!')); // 입력값을 'hi!'로 변경
+await act(() => setInput('hi!')); // update the input value to 'hi!'
 ```
 
-`setInput`을 사용하여 입력값을 'hi!'로 변경한다. 이 업데이트는 transition을 중단시키고, 새로운 업데이트를 시작한다.
-
+Change the input value to 'hi!' using `setInput`. This update interrupts the transition and starts a new update.
 
 ```ts
 // Once the input has updated, we go back to rendering the transition.
-// 입력이 업데이트되면 전환 렌더링으로 돌아갑니다.
 if (gate(flags => flags.enableNoCloningMemoCache)) { 
   // We did not have process the first chunk again. We reused the computation from the earlier attempt.
-  // 첫 번째 청크를 다시 처리할 필요가 없었습니다. 이전 시도에서 계산을 재사용했습니다.
   assertLog(['Suspend! [chunkB]']);
 } else {
   // Because we clone/reset the memo cache after every aborted attempt, we must process the first chunk again.
-  // 중단된 시도마다 메모 캐시를 복제/재설정하기 때문에 첫 번째 청크를 다시 처리해야합니다.
   assertLog(['Some expensive processing... [A2]', 'Suspend! [chunkB]']);
 }
 ```
 
-`enableNoCloningMemoCache`가 활성화되어 있다면, 이전에 계산된 데이터를 재사용하고, `chunkB`에 대한 `useWithLog`가 실행되어 'Suspend! [chunkB]'가 찍힌다.\
-하지만 비활성화되어 있다면, 얕은 복사를 통해 캐시를 관리하기 때문에, 2차원 배열로 관리되는 memoCache의 경우, `$[0] !== t1`이 true가 되어 expensive process가 실행된다.
+If `enableNoCloningMemoCache` is activated, it reuses the previously calculated data, and `useWithLog` for `chunkB` is executed, printing 'Suspend! [chunkB]'.\
+However, if it's deactivated, because cache is managed through shallow copying, in the case of memoCache managed as a 2D array, `$[0] !== t1` becomes true and the expensive process is executed.
+
 ```ts
 expect(root).toMatchRenderedOutput(
   <>
@@ -769,54 +751,51 @@ expect(root).toMatchRenderedOutput(
 );
 ```
 
-여전히 chunkB는 resolve되지 않았기 때문에, 이전 렌더링 결과를 보여준다.
+Since chunkB is still not resolved, it shows the previous rendering result.
 
 ```ts
-await act(() => updatedChunkB.resolve('B2')); // 청크B를 B2로 resolve
+await act(() => updatedChunkB.resolve('B2')); // resolve chunkB to B2
 ```
-`updatedChunkB`를 'B2'로 resolve한다. 다시 렌더링이 재개된다.
+Resolve `updatedChunkB` to 'B2'. Rendering resumes again.
 
 ```ts
 if (gate(flags => flags.enableNoCloningMemoCache)) { 
   // We did not have process the first chunk again. We reused the computation from the earlier attempt.
-  // 첫 번째 청크를 다시 처리할 필요가 없었습니다. 이전 시도에서 계산을 재사용했습니다.
   assertLog([]);
 } else {
   // Because we clone/reset the memo cache after every aborted attempt, we must process the first chunk again.
-  // 중단된 시도마다 메모 캐시를 복제/재설정하기 때문에 첫 번째 청크를 다시 처리해야합니다.
   //
   // That's three total times we've processed the first chunk, compared to just once when enableNoCloningMemoCache is on.
-  // enableNoCloningMemoCache가 켜져 있을 때 한 번에 비해 세 번째 청크를 처리한 총 횟수입니다.
   assertLog(['Some expensive processing... [A2]']);
 }
-expect(root).toMatchRenderedOutput( // 렌더링 결과 확인
+expect(root).toMatchRenderedOutput( // check the rendering result
   <>
     <div>Input: hi!</div>
     <div>Data: A2B2</div>
   </>,
 );
 ```
-플래그가 활성화되어 있다면, 이전에 계산된 데이터를 재사용하기에 로그 없이 렌더링이 완료된다.\
-하지만 비활성화되어 있다면, 이전에 계산된 데이터를 재사용하지 않기에 'Some expensive processing... [A2]'가 찍히게 된다.
+If the flag is activated, rendering completes without logs as it reuses previously calculated data.\
+However, if it's deactivated, 'Some expensive processing... [A2]' is printed as it doesn't reuse previously calculated data.
 
-그렇게 `Data` 컴포넌트는 `A2B2`를 반환하게 된다.
+As a result, the `Data` component returns `A2B2`.
 
-비활성화되어있으면 총 3번의 비싼 계산이 일어나게 된다.\
-하지만 활성화되어있으면 1번의 계산으로 끝난다. 꽤나 큰 차이이다. \
-현재는 false로 되어있지만, 추후 true로 변경된다면 한차례 더 성능이 좋아질 것이다.
+If deactivated, a total of 3 expensive calculations occur.\
+But if activated, it ends with 1 calculation. That's quite a big difference. \
+Currently it's set to false, but if it changes to true in the future, there will be another improvement in performance.
 
-자 이렇게 이제 테스트 코드를 통해서 까지 `useMemoCache`의 동작을 확인해보았다.
+So now we've confirmed the operation of `useMemoCache` even through test code.
 
-### 마치며
+### Conclusion
 
-이번 글에서는 `useMemoCache`에 대해서 알아보았다.\
-`useMemoCache`는 컴파일러 내부에서 사용되는 훅으로, 메모이제이션을 위한 캐시를 관리하는 것이 주 목적이다.\
-아직 실험적인 기능이지만 캐시를 공유 하는 기능도 염두해 두고 있는 것으로 보인다.
+In this article, we looked at `useMemoCache`.\
+`useMemoCache` is a hook used internally by the compiler, and its main purpose is to manage cache for memoization.\
+Although it's still an experimental feature, it seems to be considering the feature of sharing cache as well.
 
-어제보다 더 컴파일러에 대한 시야가 넓어졌다.\
-이제 기본적으로 어떤 방식을 통해 메모이제이션을 구현하는지 알게 되었으니, 다음에는 실질적으로 컴파일러가 어떻게 동작하는지에 대해 알아보면 좋을 것 같다.
+Our view of the compiler has broadened more than yesterday.\
+Now that we know how memoization is implemented basically, it would be good to look at how the compiler actually works next time.
 
-항상 글을 어떻게 마무리 지어야 할지가 고민이다. \
-이번에도 이렇게 그냥 마무리 해보겠다. 
+I always worry about how to end the article. \
+This time, I'll just end it like this. 
 
-안녕!
+Goodbye!

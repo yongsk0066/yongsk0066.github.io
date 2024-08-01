@@ -2,7 +2,9 @@
 import { type CollectionEntry, getCollection } from "astro:content";
 import PageLayout from "@layouts/PageLayout.astro";
 import ArrowCard from "@components/ArrowCard.astro";
-import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
+import { DEFAULT_LOCALE, SITE_DESCRIPTION, SITE_TITLE } from "@consts";
+
+const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 
 const data = (
   await getCollection("blog", ({ id }) => {

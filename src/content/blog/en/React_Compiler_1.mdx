@@ -1,0 +1,773 @@
+---
+title: "React Compiler, How Does It Work? [1] - Entry Point through Babel Plugin"
+description: "We aim to deeply explore the React Compiler. Let's start by examining the compiler's entry point through the Babel plugin."
+author: "Yongseok"
+categories: ["React Compiler"]
+date: '2024-05-25T11:31:51.502Z'
+series: "React Compiler"
+---
+import LinkPreview from '@components/LinkPreview.astro'
+import  { YouTube } from "@components/lit/youtube-element"
+
+It's already been a week since I returned from React Conf 2024. \
+Last week I was in Vegas, and now I'm writing this article in a cafe near Yeoksam station.
+
+React Compiler, previously known as React-Forget, which was one of the main topics of the conference, has been released.
+
+<LinkPreview src="https://github.com/facebook/react/pull/29061" />
+
+This compiler magically memoizes our React code "just right".
+
+How long must the React core team have been in seclusion to be able to cast such magic?
+
+The React team has reportedly been interested in compilers for quite some time. (Although not compilers for React) Traces of this can be seen in projects like these:
+
+<LinkPreview src="https://github.com/facebookarchive/prepack" />
+<LinkPreview src="https://prepack.io/" />
+
+
+In this series, we aim to deeply explore the React Compiler.\
+Let's gradually examine the entry point through the Babel plugin, the compilation process, memoization, and even the future.
+
+## React Compiler
+
+<LinkPreview src="https://react.dev/learn/react-compiler" />
+
+As the compiler has been released recently, the official documentation may be updated. Refer to the official documentation for detailed explanations.\
+Currently, the React compiler can be used through a Babel plugin.
+
+https://github.com/facebook/react/tree/main/compiler/packages/babel-plugin-react-compiler
+
+Let's enter the compiler through this entry point
+
+## Entry Point
+
+<aside>This article will not delve deeply into Babel.</aside>
+
+React Compiler starts compilation through the Babel plugin. \
+The entry point function `BabelPluginReactCompiler` finds the Program node through Babel and starts compilation. \
+Here, the `compileProgram` function is called, and the compilation process begins.
+
+https://github.com/facebook/react/blob/main/compiler/packages/babel-plugin-react-compiler/src/Babel/BabelPlugin.ts
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/Babel/BabelPlugin.ts
+import type * as BabelCore from "@babel/core";
+// ...
+/*
+ * The React Forget Babel Plugin
+ * @param {*} _babel
+ * @returns
+ */
+export default function BabelPluginReactCompiler(
+  _babel: typeof BabelCore
+): BabelCore.PluginObj {
+  return {
+    name: "react-forget",
+    visitor: {
+      /*
+       * Note: Babel does some "smart" merging of visitors across plugins, so even if A is inserted
+       * prior to B, if A does not have a Program visitor and B does, B will run first. We always
+       * want Forget to run true to source as possible.
+       */
+      Program(prog, pass): void {
+        // ...
+        compileProgram(prog, {
+          opts,
+          filename: pass.filename ?? null,
+          comments: pass.file.ast.comments ?? [],
+          code: pass.file.code,
+        });
+      },
+    },
+  };
+}
+
+```
+
+Let's consider Babel as a black box for now and examine the `compileProgram` function.
+
+## Program 
+
+Since the code itself is long, let's examine it in order of operation.\
+When compileProgram is executed from the top-level node, the following happens:
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  // Top level "use no forget", skip this file entirely
+  if (
+    findDirectiveDisablingMemoization(program.node.directives, options) != null
+  ) {
+    return;
+  }
+  //...
+
+}
+```
+```ts
+function findDirectiveDisablingMemoization(
+  directives: Array<t.Directive>,
+  options: PluginOptions
+): t.Directive | null {
+  for (const directive of directives) {
+    const directiveValue = directive.value.value;
+    if (
+      (directiveValue === "use no forget" ||
+        directiveValue === "use no memo") &&
+      !options.ignoreUseNoForget
+    ) {
+      return directive;
+    }
+  }
+  return null;
+}
+```
+First, it checks if there are comments like use no forget or use no memo at the top-level node, and if so, it doesn't compile.
+Forget was the previous name of the compiler, so they're changing it to a more intuitive form of comment, they say.
+
+<figure>
+<img src="/post/images/ReactCompiler1/use_memo_commit.png" />
+<figcaption>Add support for 'use memo'</figcaption>
+</figure>
+
+
+
+### 1. Node Traversal (program.traverse)
+
+It traverses starting from the program node and proceeds with compilation.
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  // Main traversal to compile with Forget
+  program.traverse(
+    {
+      ClassDeclaration(node: NodePath<t.ClassDeclaration>) {
+        node.skip(); // Skip!
+        return;
+      },
+
+      ClassExpression(node: NodePath<t.ClassExpression>) {
+        node.skip(); // Skip!
+        return;
+      },
+
+      FunctionDeclaration: traverseFunction,
+
+      FunctionExpression: traverseFunction,
+
+      ArrowFunctionExpression: traverseFunction,
+    },
+    {
+      ...pass,
+      opts: { ...pass.opts, ...options },
+      filename: pass.filename ?? null,
+    }
+  );
+  // ...
+```
+
+The `program.traverse` method takes two arguments, the first of which is an object that defines actions for nodes.
+
+This part shows which elements the compiler skips and which elements it compiles.
+
+- `ClassDeclaration` and `ClassExpression`: Functions defined inside classes can reference this, making them unsafe for compilation. \
+Therefore, when these nodes are encountered, `node.skip()` is called to skip visiting the interior.
+- `FunctionDeclaration`, `FunctionExpression`, `ArrowFunctionExpression`: These nodes are all processed through a function called `traverseFunction`. 
+
+From what we've seen so far, it appears that React Compiler only compiles functions.
+
+<aside>For each node type, refer to [Babel AST Types](https://babeljs.io/docs/babel-types).</aside>
+
+### 2. Traverse Function (traverseFunction)
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  const compiledFns: Array<CompileResult> = [];
+
+  //...
+    const traverseFunction = (fn: BabelFn, pass: CompilerPass): void => {
+    /*
+    * getReactFunctionType 
+    * ReactFunctionType ("Component" | "Hook" | "Other")
+    */
+    const fnType = getReactFunctionType(fn, pass);  // identify the type of function
+    if (fnType === null || ALREADY_COMPILED.has(fn.node)) { // 
+      return;
+    }
+    /*
+    * We can create a new FunctionDeclaration node, so we need to skip it.
+    * Otherwise, an infinite loop may occur.
+    * We need to avoid visiting the original function again.
+    */
+    ALREADY_COMPILED.add(fn.node); // mark as visited
+    fn.skip(); // Skip visiting the function
+
+    let compiledFn: CodegenFunction;
+    // ... 
+
+    compiledFn = compileFn(
+      fn,
+      config,
+      fnType,
+      useMemoCacheIdentifier.name,
+      options.logger,
+      pass.filename,
+      pass.code
+    );
+    // ... 
+
+    compiledFns.push({ originalFn: fn, compiledFn });
+  };
+```
+
+This is the `traverseFunction` function that compiles functions.\
+First, it identifies what type of function it is in React terms using `getReactFunctionType`.\
+The type itself is not very important here, but when it's `null`, compilation is not performed.
+
+The compilation result and the original function are added to the `compiledFns` array through `compileFn`.
+
+Before moving on, let's look at the internal workings of `getReactFunctionType` to see in which cases compilation is not performed.
+
+#### 1. If the function has 'use no forget', 'use no memo' comments, compilation is not performed.
+It checks for comments using the `findDirectiveDisablingMemoization` function we looked at earlier.
+```ts
+// getReactFunctionType
+const useNoForget = findDirectiveDisablingMemoization(
+  fn.node.body.directives,
+  pass.opts
+); // 'use no forget' | 'use no memo' | null
+if (useNoForget != null) {
+  return null;
+}
+```
+#### 1.1 If there's `use forget`, `use memo`, it identifies and returns immediately.
+```ts
+// getReactFunctionType
+  if (findDirectiveEnablingMemoization(fn.node.body.directives) != null) {
+    // 'use forget' | 'use memo' 인 경우
+    return getComponentOrHookLike(fn, hookPattern) ?? "Other";
+  }
+```
+#### 2. If the compilation mode is `annotation`, compilation is not performed. (In cases where compilation is activated through directives)
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "annotation": {
+    // opt-ins are checked above
+    return null;
+  }
+```
+#### 3. If the compilation mode is `infer`, it identifies components and hooks. (The default mode is `infer`.)
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "infer": {
+    // Component and hook declarations are known components/hooks
+    if (fn.isFunctionDeclaration()) {
+      if (isComponentDeclaration(fn.node)) {
+        return "Component";
+      } else if (isHookDeclaration(fn.node)) {
+        return "Hook";
+      }
+    }
+
+    // Otherwise check if this is a component or hook-like function
+    return getComponentOrHookLike(fn, hookPattern);
+    }
+```
+
+#### 4. If the compilation mode is `all`, it only compiles top-level functions.
+```ts
+// getReactFunctionType
+switch (pass.opts.compilationMode) {
+  case "all": {
+    // Compile only top level functions
+    if (fn.scope.getProgramParent() !== fn.scope.parent) {
+      return null;
+    }
+
+    return getComponentOrHookLike(fn, hookPattern) ?? "Other";
+  }
+```
+
+
+### 3. Replace with Compiled Function
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+// ...
+export function compileProgram(
+  program: NodePath<t.Program>,
+  pass: CompilerPass
+): void {
+  //...
+  /*
+   * Only insert Forget-ified functions if we have not encountered a critical
+   * error elsewhere in the file, regardless of bailout mode.
+   */
+  for (const { originalFn, compiledFn } of compiledFns) {
+    const transformedFn = createNewFunctionNode(originalFn, compiledFn);
+
+    if (gating != null) {
+      insertGatedFunctionDeclaration(originalFn, transformedFn, gating);
+    } else {
+      originalFn.replaceWith(transformedFn);
+    }
+  }
+```
+
+It creates a new function node by passing the compiled function and the original to `createNewFunctionNode` and replaces it.\
+The internal logic of `createNewFunctionNode` below is simple. It creates a new node along with some information from the original node according to each node type.\
+And it marks the compiled function as already visited.
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Program.ts
+
+export function createNewFunctionNode(
+  originalFn: BabelFn,
+  compiledFn: CodegenFunction
+): t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression {
+  let transformedFn:
+    | t.FunctionDeclaration
+    | t.ArrowFunctionExpression
+    | t.FunctionExpression;
+  switch (originalFn.node.type) {
+    case "FunctionDeclaration": {
+      const fn: t.FunctionDeclaration = {
+        type: "FunctionDeclaration",
+        id: compiledFn.id,
+        loc: originalFn.node.loc ?? null,
+        async: compiledFn.async,
+        generator: compiledFn.generator,
+        params: compiledFn.params,
+        body: compiledFn.body,
+      };
+      transformedFn = fn;
+      break;
+    }
+    case "ArrowFunctionExpression": {
+      const fn: t.ArrowFunctionExpression = {
+        //...
+      };
+      transformedFn = fn;
+      break;
+    }
+    case "FunctionExpression": {
+      const fn: t.FunctionExpression = {
+        //...
+      };
+      transformedFn = fn;
+      break;
+    }
+  }
+
+  // Avoid visiting the new transformed version
+  ALREADY_COMPILED.add(transformedFn);
+  return transformedFn;
+}
+```
+
+
+### 4. Update Import
+
+At the end, there's logic to import `useMemoCache` if any of the compiled functions are memoized.\
+`useMemoCache` is a function needed when compiled functions use memoization.\
+So this can be seen as adding an 'Import' statement to the part where it's used.
+
+```ts
+//...
+const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
+const moduleName = options.runtimeModule ?? "react/compiler-runtime";
+
+//...
+// Forget compiled the component, we need to update existing imports of useMemoCache
+if (compiledFns.length > 0) { // if there are compiled functions
+let needsMemoCacheFunctionImport = false; // check if useMemoCache function import is needed
+for (const fn of compiledFns) { // traverse the compiled functions
+  if (fn.compiledFn.memoSlotsUsed > 0) { // if memoSlotsUsed is greater than 0 (memoization is used)
+    needsMemoCacheFunctionImport = true; // needs useMemoCache function import
+    break;
+  }
+}
+
+if (needsMemoCacheFunctionImport) { // if useMemoCache function import is needed
+  updateMemoCacheFunctionImport( // update import
+    program,
+    moduleName,
+    useMemoCacheIdentifier.name
+  );
+}
+addImportsToProgram(program, externalFunctions);
+}
+```
+Let's look at the `moduleName` and `useMemoCacheIdentifier` passed as arguments to `updateMemoCacheFunctionImport` which is called to add "import".
+```ts 
+const useMemoCacheIdentifier = program.scope.generateUidIdentifier("c");
+const moduleName = options.runtimeModule ?? "react/compiler-runtime";
+```
+`generateUidIdentifier` is a Babel method. It generates a unique identifier through this.\
+In this case, it's generating an identifier `c`, and if it's duplicated, it will generate with numbers attached like `_c`, `_c2`. [Reference](https://github.com/jamiebuilds/babel-handbook/blob/master/translations/en/plugin-handbook.md#generating-a-uid)
+
+`moduleName` uses `react/compiler-runtime` if there's no `options.runtimeModule`.\
+The default value of `options.runtimeModule` is `null`. 
+
+Let's briefly look at the options. 
+
+```ts 
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Options.ts
+export type PluginOptions = {
+  // ...
+  /*
+   * in which case Forget will import `useMemoCache` from the given module instead of `react/compiler-runtime`.
+   * 
+   * ```
+   * // If set to "react-compiler-runtime"
+   * import {c as useMemoCache} from 'react-compiler-runtime';
+   * ```
+   */
+  runtimeModule?: string | null | undefined;
+}
+
+export const defaultOptions: PluginOptions = {
+  compilationMode: "infer",
+  runtimeModule: null,
+  // ...
+} as const;
+```
+
+Let's look at `updateMemoCacheFunctionImport` again.
+
+
+```ts
+// react/compiler/packages/babel-plugin-react-compiler/src/EntryPoint/Imports.ts
+export function updateMemoCacheFunctionImport(
+  program: NodePath<t.Program>,
+  moduleName: string,
+  useMemoCacheIdentifier: string
+): void {
+  /*
+   * If there isn't already an import of * as React, insert it so useMemoCache doesn't
+   * throw
+   */
+  const hasExistingImport = hasExistingNonNamespacedImportOfModule(
+    program,
+    moduleName
+  );
+
+  if (hasExistingImport) {
+    // Add useMemoCache function to existing import
+    const didUpdateImport = addMemoCacheFunctionSpecifierToExistingImport(
+      program,
+      moduleName,
+      useMemoCacheIdentifier
+    );
+    if (!didUpdateImport) {
+      throw new Error(
+        `Expected an ImportDeclaration of \`${moduleName}\` in order to update ImportSpecifiers with useMemoCache`
+      );
+    }
+  } else {
+    // add new import
+    addMemoCacheFunctionImportDeclaration(
+      program,
+      moduleName,
+      useMemoCacheIdentifier
+    );
+  }
+}
+
+function addMemoCacheFunctionImportDeclaration(
+  program: NodePath<t.Program>,
+  moduleName: string,
+  localName: string
+): void {
+  program.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
+      t.stringLiteral(moduleName)
+    )
+  );
+}
+```
+The part where the 'import' statement is actually added looks like this:
+```ts
+t.importDeclaration(
+  [t.importSpecifier(t.identifier(localName), t.identifier("c"))],
+  t.stringLiteral(moduleName)
+)
+```
+`localName` gets the passed `useMemoCacheIdentifier` "_c", and `moduleName` gets `react/compiler-runtime`.\
+After going through this part, it's updated to a form like:
+```ts
+import { c as _c } from "react/compiler-runtime";
+```
+It's updated to a form like this. \
+But why is it importing `c` and not `useMemoCache` when we've been mentioning the keyword `useMemoCache`?
+
+To track this, we need to look at `react/compiler-runtime`.\
+Unlike other parts, it's being imported from the `react` package, not from inside the compiler package. Let's go into React and take a look.
+
+<figure>
+<img src="/post/images/ReactCompiler1/use_memo_cache_commit.png" />
+<figcaption>[Commit modifying to use `react/compiler-runtime`](https://github.com/facebook/react/commit/ebe58ee619f55eefad9efd433996069af2e6a70a)</figcaption>
+</figure>
+
+
+```ts
+// react/compiler-runtime.js
+
+export {useMemoCache as c} from './src/ReactHooks';
+```
+
+It's exporting `useMemoCache` as `c`. That's why it's importing `c`.
+<aside>Let's look deeper into the [useMemoCache implementation](https://github.com/facebook/react/blob/ee5c19493086fdeb32057e16d1e3414370242307/packages/react-reconciler/src/ReactFiberHooks.js#L1116) later</aside>
+
+This is the default value, and as we saw earlier, it can be imported from a different module depending on the options. Is this considering the scalability of the memoization logic?\
+Let's also look at the implementation in `react-compiler-runtime`, which is another option.
+
+```ts
+// packages/react-compiler-runtime/src/index.ts
+type MemoCache = Array<number | typeof $empty>;
+
+const $empty = Symbol.for("react.memo_cache_sentinel");
+/**
+ * DANGER: this hook is NEVER meant to be called directly!
+ **/
+export function c(size: number) {
+  return React.useState(() => {
+    const $ = new Array(size);
+    for (let ii = 0; ii < size; ii++) {
+      $[ii] = $empty;
+    }
+    // This symbol is added to tell the react devtools that this array is from
+    // useMemoCache.
+    // @ts-ignore
+    $[$empty] = true;
+    return $;
+  })[0];
+}
+```
+Here, it's directly exporting as `c` and has a simple implementation. \
+To briefly explain the implementation, it creates an array of size using useState, initializes each element with a symbol called `$empty` (this symbol is used later in react-devtool).\
+And it returns this array. \
+For now, as we're looking at the overall application process of the compiler, let's look at how this array is used later.
+
+<aside>I'll have to ask later why they decided to call it c. Maybe c for cache?</aside>
+
+### Compile Complete!
+
+If we go any deeper, we might lose our way, so let's wrap up the compiler's application process, which was our original purpose.\
+The operation of `compileProgram` ended with adding an import statement for `c`, which is another name for `useMemoCache`.\
+That means the Babel plugin has finished its operation. 
+
+### Final Summary
+
+To summarize the application process of the React compiler:
+
+1. The compiler starts through the Babel plugin, traversing from the top-level Program node.
+2. It identifies functions among function nodes that correspond to React components and hooks, and performs compilation on these.
+3. During the compilation process, optimizations such as memoization are applied, and the compiled functions are stored along with the original functions.
+4. After compilation is complete, it replaces the original functions with the compiled functions.
+5. Finally, if there are functions where memoization has been applied, it automatically adds an import statement for the useMemoCache function.
+
+### Tasting the Compilation Result
+
+Now let's check the compiled code.
+
+To examine the compilation process, I ran the [React Compiler Playground](https://playground.react.dev/) and input some code.
+
+
+```ts
+function Component({ color }) {
+  return <div styles={{color}}>hello world</div>;
+}
+
+export default function MyApp() {
+  const color= "red"
+  return (
+      <Component color={color} />
+  )
+}
+```
+I input this code and was able to see the following compiled result:
+
+```ts
+function Component(t0) {
+  const $ = _c(2);
+
+  const { color } = t0;
+  let t1;
+
+  if ($[0] !== color) {
+    t1 = (
+      <div
+        styles={{
+          color,
+        }}
+      >
+        hello world
+      </div>
+    );
+    $[0] = color;
+    $[1] = t1;
+  } else {
+    t1 = $[1];
+  }
+
+  return t1;
+}
+
+function MyApp() {
+  const $ = _c(1);
+
+  let t0;
+
+  if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
+    t0 = <Component color="red" />;
+    $[0] = t0;
+  } else {
+    t0 = $[0];
+  }
+
+  return t0;
+}
+```
+
+<figure>
+<img src="/post/images/ReactCompiler1/playground_example.png" />
+<figcaption>playground result</figcaption>
+</figure>
+
+Wow... do you see the codes we looked at earlier?\
+Each component is calling a memoization function called `useMemoCache` (`_c`). \
+Although it's still a little, it seems our view of the compiler's output has broadened.\
+Let's take a break in our journey for now.
+
+Next time, let's look deeper into the operation of `useMemoCache` and the compilation processes.
+
+## [Learn More] But why isn't there the import statement we looked at length above?
+
+To find this, let's look at the playground code
+
+```tsx
+// compiler/apps/playground/components/Editor/EditorImpl.tsx
+
+import {
+  //...
+  run,
+} from "babel-plugin-react-compiler/src";
+  // ...
+function compile(source: string): CompilerOutput {
+  // ...
+    for (const result of run(
+    fn,
+    {
+      ...config,
+      customHooks: new Map([...COMMON_HOOKS]),
+    },
+    getReactFunctionType(id),
+    "_c",
+    null,
+    null,
+    null,
+  )) {
+    // ...
+  }
+}
+
+
+export default function Editor() {
+  // ...
+  const compilerOutput =compile(deferredStore.source)
+  // ...
+}
+```
+We looked at the statement executed at the compileProgram level, but in the playground, it's being executed through the `run` function.\
+The `run` function is a function that `compileFn` executes during the compilation process of `compileProgram`. \
+It's the part that actually executes the compilation.
+
+```ts
+// compiler/packages/babel-plugin-react-compiler/src/Entrypoint/Pipeline.ts
+
+export function compileFn(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): CodegenFunction {
+  let generator = run(
+    func,
+    config,
+    fnType,
+    useMemoCacheIdentifier,
+    logger,
+    filename,
+    code
+  );
+  while (true) {
+    const next = generator.next();
+    if (next.done) {
+      return next.value;
+    }
+  }
+}
+```
+We'll look at this part in more depth next time.
+
+That's why the import statement is not visible.\
+If it were executed as we looked at, the result would be like this. 
+
+```ts
+import { c as _c } from "react/compiler-runtime";
+
+function Component(t0) {
+  const $ = _c(2);
+
+  const { color } = t0;
+  let t1;
+
+  if ($[0] !== color) {
+    t1 = (
+      <div
+        styles={{
+          color,
+        }}
+      >
+        hello world
+      </div>
+    );
+    $[0] = color;
+    $[1] = t1;
+  } else {
+    t1 = $[1];
+  }
+
+  return t1;
+}
+// ...
+```
+
+I don't have the energy to dive deeper today. Goodbye!
+

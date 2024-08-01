@@ -92,24 +92,24 @@ Let's look at the example we saw earlier through **reaching definition analysis*
 
 
 ```js
-노드 1 : `x = 5`
-GEN[1] = {x1} // x1이 생성됨
-KILL[1] = {} // 덮어씌워지는 것이 없음
-IN[1] = {} // 들어오는 것이 없음
-OUT[1] = {x1} // x1이 나감
+Node 1 : `x = 5`
+GEN[1] = {x1} // x1 is generated
+KILL[1] = {} // Nothing is overwritten
+IN[1] = {} // Nothing comes in
+OUT[1] = {x1} // x1 goes out
 
 /*
 * In node 1, x1 is generated (GEN) and goes out to the world (OUT).
 * There's nothing overwritten or used, so KILL and IN are empty.
 */
 
-노드 2 : `y = x + 2`
-GEN[2] = {y2} // y2가 생성됨
-KILL[2] = {} // 덮어씌워지는 것이 없음
-IN[2] = OUT[1] = {x1} // 이전 노드에서 나온 x1이 들어옴
+Node 2 : `y = x + 2`
+GEN[2] = {y2} // y2 is generated
+KILL[2] = {} // Nothing is overwritten
+IN[2] = OUT[1] = {x1} // x1 from the previous node comes in
 OUT[2] = (IN[2] - KILL[2]) ∪ GEN[2] = {x1, y2} 
-// 들어온 x1에서 덮어씌워지는 것을 제외하고 생성된 것과의 합집합 
-// 즉 덮어씌워진것 빼고 들어온것과 생성된것을 합침
+// Union of what came in (x1) excluding what's overwritten, and what's generated
+// In other words, combine what came in and what's generated, excluding what's overwritten
 
 /*
 * In node 2, y2 is generated (GEN).
@@ -117,12 +117,12 @@ OUT[2] = (IN[2] - KILL[2]) ∪ GEN[2] = {x1, y2}
 */
 
 
-노드 3 : `x = 10`
-GEN[3] = {x3} // x3이 생성됨
-KILL[3] = {x1} // x1이 덮어씌워짐
-IN[3] = OUT[2] = {x1, y2} // 이전 노드에서 나온 x1, y2가 들어옴
+Node 3 : `x = 10`
+GEN[3] = {x3} // x3 is generated
+KILL[3] = {x1} // x1 is overwritten
+IN[3] = OUT[2] = {x1, y2} // x1, y2 from the previous node come in
 OUT[3] = (IN[3] - KILL[3]) ∪ GEN[3] = {y2, x3} 
-// 들어온 {x1, y2}에서 덮어씌워지는 것{x1}을 제외하고 생성된 것과의 합집합
+// Union of what came in ({x1, y2}) excluding what's overwritten ({x1}), and what's generated
 
 /*
 * In node 3, x3 is generated (GEN).
@@ -130,10 +130,10 @@ OUT[3] = (IN[3] - KILL[3]) ∪ GEN[3] = {y2, x3}
 * x1 that came in (IN) was overwritten (KILL), so y2 that came in (IN) from node 2 and newly generated x3 go out (OUT).
 */
 
-노드 4 : `z = x + y`
-GEN[4] = {z4} // z4가 생성됨
-KILL[4] = {} // 덮어씌워지는 것이 없음
-IN[4] = OUT[3] = {y2, x3} // 이전 노드에서 나온 y2, x3가 들어옴
+Node 4 : `z = x + y`
+GEN[4] = {z4} // z4 is generated
+KILL[4] = {} // Nothing is overwritten
+IN[4] = OUT[3] = {y2, x3} // y2, x3 from the previous node come in
 OUT[4] = (IN[4] - KILL[4]) ∪ GEN[4] = {y2, x3, z4}
 
 /*
@@ -205,14 +205,14 @@ if(condition){
 We've successfully changed to a new variable every time we encounter a new x.\
 We've transformed smoothly up to this point, but we hit a snag in the next line.
 ```js
-y1 = x + 2 // 🤔 y는 y1로 바꾸면 되겠는데... x는 뭐로 바꾸지?
+y1 = x + 2 // 🤔 We can change y to y1... but what should we change x to?
 ```
 **x** should be determined according to the **condition**, but we don't know how to indicate which x goes in.
 
 The above case is where `x` can have different values depending on the condition of the **if-else** statement.\
 We can't know which `x` is used in `y = x + 2`. We can't easily put in `x` like in the previous example when we encounter a conditional statement.
 
-Unable to hold back, let's look at the answer sheet first.\
+Let's take a sneak peek at the solution first.\
 When transformed into **SSA**, it becomes like this:
 
 ```js
@@ -674,13 +674,13 @@ Then we'll need to process the parameters, which are the starting part of the fu
 ```ts
 for (const [blockId, block] of func.body.blocks) {
   // ...
-  if (blockId === rootEntry) { // rootEntry인 경우
+  if (blockId === rootEntry) { // if it's the rootEntry
     func.params = func.params.map((param) => {
-      // 일반적인 파라미터인 경우, foo(a, b, c)에서 a, b, c
+      // case of general parameters, a, b, c in foo(a, b, c)
       if (param.kind === "Identifier") {
         return builder.definePlace(param);
       } else {
-        // Spread 파라미터인 경우, foo(...rest)에서 ...rest
+        // case of Spread parameters, ...rest in foo(...rest)
         return {
           kind: "Spread",
           place: builder.definePlace(param.place),
@@ -820,10 +820,10 @@ The instruction is composed of `left-hand value (lvalue) = right-hand value (val
 
 ```ts
 export type Instruction = {
-  id: InstructionId;    // 명령어의 고유 식별자
-  lvalue: Place;        // 결과값이 저장될 위치
-  value: InstructionValue; // 명령어의 실제 값/연산
-  loc: SourceLocation;  // 원본 소스 코드에서의 위치
+  id: InstructionId;    // unique identifier of the instruction
+  lvalue: Place;        // location where the result is stored
+  value: InstructionValue; // actual value/operation of the instruction 
+  loc: SourceLocation;  // location in the original source code
 };
 ```
 Let's check with a few instructions:
@@ -1185,7 +1185,7 @@ Let's draw the **CFG** for easier understanding.
 
 <figure><img src="/post/images/ReactCompiler4/loop.png"  /><figcaption>figure 9. CFG of loop</figcaption></figure>
 
-We were supposed to place phi functions at the point where branches merge, right?\
+We're supposed to place phi functions at the point where branches merge, aren't we?\
 Then it seems we should place a phi function in bb1, which merges from bb3 and bb4.
 
 Coincidentally, when we look at the bb1 block, the **predecessor** is also given. Then can we go up to the previous block through the recursive method we looked at earlier?\
@@ -1323,7 +1323,7 @@ fixIncompletePhis(block: BasicBlock): void {
 It adds the **phi function** that was added to **incompletePhis** in **bb1** earlier.\
 With this, we can complete the phi function processing for loops as well.
 
-Finally, let's check the result?
+Finally, Let's take a look at the result.
 ```plaintext
 function foo
 bb0 (block):
@@ -1337,8 +1337,8 @@ bb3 (loop):
   [6] Goto bb1
 bb1 (loop):
   predecessor blocks: bb3 bb4
-  i$23: phi(bb3: i$21, bb4: i$34) // phi 함수가 추가됨
-  x$27: phi(bb3: x$18, bb4: x$31) // phi 함수가 추가됨
+  i$23: phi(bb3: i$21, bb4: i$34) // phi function added
+  x$27: phi(bb3: x$18, bb4: x$31) // phi function added
   [7] $24 = LoadLocal i$23
   [8] $25 = 10
   [9] $26 = Binary $24 < $25

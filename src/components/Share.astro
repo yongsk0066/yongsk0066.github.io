@@ -1,3 +1,11 @@
+---
+import { DEFAULT_LOCALE } from "@consts";
+import { useTranslations } from "@i18n/utils";
+
+const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
+const t = useTranslations(currentLocale as any);
+---
+
 <div class="mx-auto my-4 flex gap-2 justify-center">
   <button
     id="share-button"
@@ -14,7 +22,7 @@
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
       ></path>
     </svg>
-    <div class="text-sm">공유 하기</div>
+    <div class="text-sm">{t("word.share")}</div>
   </button>
   <a
     href="/rss.xml"
@@ -33,6 +41,6 @@
       ></path>
       <circle cx="6" cy="18" r="2"></circle>
     </svg>
-    <div class="text-sm">RSS 구독</div>
+    <div class="text-sm">{t("word.rss_subscribe")}</div>
   </a>
 </div>
