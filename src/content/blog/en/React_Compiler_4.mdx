@@ -212,7 +212,7 @@ y1 = x + 2 // 🤔 y는 y1로 바꾸면 되겠는데... x는 뭐로 바꾸지?
 The above case is where `x` can have different values depending on the condition of the **if-else** statement.\
 We can't know which `x` is used in `y = x + 2`. We can't easily put in `x` like in the previous example when we encounter a conditional statement.
 
-Unable to hold back, let's look at the answer sheet first.\
+Let's take a sneak peek at the solution first.\
 When transformed into **SSA**, it becomes like this:
 
 ```js
@@ -1185,7 +1185,7 @@ Let's draw the **CFG** for easier understanding.
 
 <figure><img src="/post/images/ReactCompiler4/loop.png"  /><figcaption>figure 9. CFG of loop</figcaption></figure>
 
-We were supposed to place phi functions at the point where branches merge, right?\
+We're supposed to place phi functions at the point where branches merge, aren't we?\
 Then it seems we should place a phi function in bb1, which merges from bb3 and bb4.
 
 Coincidentally, when we look at the bb1 block, the **predecessor** is also given. Then can we go up to the previous block through the recursive method we looked at earlier?\
@@ -1323,7 +1323,7 @@ fixIncompletePhis(block: BasicBlock): void {
 It adds the **phi function** that was added to **incompletePhis** in **bb1** earlier.\
 With this, we can complete the phi function processing for loops as well.
 
-Finally, let's check the result?
+Finally, Let's take a look at the result.
 ```plaintext
 function foo
 bb0 (block):
@@ -1337,8 +1337,8 @@ bb3 (loop):
   [6] Goto bb1
 bb1 (loop):
   predecessor blocks: bb3 bb4
-  i$23: phi(bb3: i$21, bb4: i$34) // phi 함수가 추가됨
-  x$27: phi(bb3: x$18, bb4: x$31) // phi 함수가 추가됨
+  i$23: phi(bb3: i$21, bb4: i$34) // phi function added
+  x$27: phi(bb3: x$18, bb4: x$31) // phi function added
   [7] $24 = LoadLocal i$23
   [8] $25 = 10
   [9] $26 = Binary $24 < $25

@@ -1,0 +1,1088 @@
+---
+title: React Compiler, How Does It Work? [3] - HIR Transformation (Lowering)
+description: "React Compiler의 Lowering 과정을 살펴보자. AST를 HIR로 변환하는 과정이다."
+author: "Yongseok"
+categories: ["React Compiler"]
+date: '2024-06-10T15:10:03.760Z'
+series: "React Compiler"
+heroImage: "/post/images/ReactCompiler3/thumb.png"
+---
+import LinkPreview from '@components/LinkPreview.astro'
+import  { YouTube } from "@components/lit/youtube-element"
+
+## Previously
+
+In the last two parts, we looked at the **compiler's entry point** and **useMemoCache**, which is a caching method. \
+From now on, let's look at how the compiler **parses** and **compiles** through various processes.
+
+Let's revisit the `compileFn` function that actually performs the compilation, which we looked at in Part 1.
+
+```ts
+export function compileFn(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): CodegenFunction {
+  let generator = run(
+    func,
+    config,
+    fnType,
+    useMemoCacheIdentifier,
+    logger,
+    filename,
+    code
+  );
+  while (true) {
+    const next = generator.next();
+    if (next.done) {
+      return next.value;
+    }
+  }
+}
+```
+
+The `compileFn` function generates code through the `run` function and repeats the code generation process through `generator.next()`.
+
+```ts
+// packages/babel-plugin-react-compiler/src/Entrypoint/Pipline.ts
+export type CompilerPipelineValue =
+  | { kind: "ast"; name: string; value: CodegenFunction }
+  | { kind: "hir"; name: string; value: HIRFunction }
+  | { kind: "reactive"; name: string; value: ReactiveFunction }
+  | { kind: "debug"; name: string; value: string };
+
+export function* run(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): Generator<CompilerPipelineValue, CodegenFunction> {
+  const contextIdentifiers = findContextIdentifiers(func);
+  const env = new Environment(
+    fnType,
+    config,
+    contextIdentifiers,
+    logger,
+    filename,
+    code,
+    useMemoCacheIdentifier
+  );
+  yield {
+    kind: "debug",
+    name: "EnvironmentConfig",
+    value: prettyFormat(env.config),
+  };
+  const ast = yield* runWithEnvironment(func, env);
+  return ast;
+}
+
+```
+
+The `run` function creates an `Environment` and generates code through the `runWithEnvironment` function.\
+`Environment` is an object that manages global state and settings during the compilation process. \
+Let's skip the details for now and move on.
+
+Now let's look at the `runWithEnvironment` function.\
+This is the function that actually generates the code.
+
+## runWithEnvironment
+
+```ts
+// packages/babel-plugin-react-compiler/src/Entrypoint/Pipline.ts
+function* runWithEnvironment(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  env: Environment
+): Generator<CompilerPipelineValue, CodegenFunction> {
+  const hir = lower(func, env).unwrap();
+  yield log({ kind: "hir", name: "HIR", value: hir });
+
+  pruneMaybeThrows(hir);
+  yield log({ kind: "hir", name: "PruneMaybeThrows", value: hir });
+
+  validateContextVariableLValues(hir);
+  validateUseMemo(hir);
+
+  dropManualMemoization(hir);
+  yield log({ kind: "hir", name: "DropManualMemoization", value: hir });
+
+  // ~~~~~~~~~~~~~~~~~~~~~
+  // --- 중간 여러 과정들 ---
+  // ~~~~~~~~~~~~~~~~~~~~~
+
+  const ast = codegenFunction(reactiveFunction, uniqueIdentifiers).unwrap();
+  yield log({ kind: "ast", name: "Codegen", value: ast });
+
+  /**
+   * This flag should be only set for unit / fixture tests to check
+   * that Forget correctly handles unexpected errors (e.g. exceptions
+   * thrown by babel functions or other unexpected exceptions).
+   */
+  if (env.config.throwUnknownException__testonly) {
+    throw new Error("unexpected error");
+  }
+
+  
+  // return the finally generated code
+  return ast;
+}
+```
+
+The entire process goes through about 40 steps to generate code.\
+Let's first broadly categorize these steps as follows:
+
+1. **'Lowering'**: Convert AST to HIR (High-level Intermediate Representation)
+2. **'Normalization, Optimization'**: Process of normalizing and optimizing HIR
+3. **'Static Analysis, Type Inference'**: Convert to SSA form and infer types
+4. **'Reactive Optimization'**: Reactive optimization
+5. **'Code Generation'**: Code generation
+
+
+Let's break it down more specifically.\
+Don't look too deeply into it yet, just skim through what processes there are.
+
+1. **'Lowering'**
+    - `lower`: Convert AST to HIR
+2. **'Optimization and Normalization'**
+    - `pruneMaybeThrows`: Remove `MaybeThrows` from HIR
+    - `validateContextVariableLValues`: Validate LValues of Context variables in HIR
+    - `validateUseMemo`: Validate `useMemo` in HIR
+    - `dropManualMemoization`: Remove manual memoization
+    - `inlineImmediatelyInvokedFunctionExpressions`: Inline immediately invoked function expressions (IIFE)
+    - `mergeConsecutiveBlocks`: Merge consecutive blocks
+3. **'Static Analysis and Type Inference'**
+    - `enterSSA`: Convert to SSA (Static Single Assignment) form
+    - `eliminateRedundantPhi`: Remove redundant Phi nodes
+    - `constantPropagation`: Constant propagation
+    - `inferTypes`: Type inference
+    - `validateHooksUsage`: Validate hooks usage
+    - `validateNoCapitalizedCalls`: Check for function calls starting with capital letters
+    - `analyseFunctions`: Analyze functions
+    - `inferReferenceEffects`: Infer reference effects
+    - `deadCodeElimination`: Remove dead code
+    - `inferMutableRanges`: Infer mutable ranges
+    - `inferReactivePlaces`: Infer reactive places
+    - `leaveSSA`: Return from SSA form to normal form
+4. **'Reactive Optimization (HIR)'**
+    - `inferReactiveScopeVariables`: Infer reactive scope variables
+    - `alignMethodCallScopes`: Align method call scopes
+    - `alignObjectMethodScopes`: Align object method scopes
+    - `memoizeFbtOperandsInSameScope`: Memoize Fbt operands in the same scope
+    - `pruneUnusedLabelsHIR`: Remove unused labels
+    - `alignReactiveScopesToBlockScopesHIR`: Align reactive scopes to block scopes
+    - `mergeOverlappingReactiveScopesHIR`: Merge overlapping reactive scopes
+    - `buildReactiveScopeTerminalsHIR`: Build reactive scope terminals
+    - `buildReactiveFunction`: Build reactive function
+5. **'Reactive Optimization (Reactive function)'**
+    - `pruneUnusedLabels`: Remove unused labels
+    - `flattenReactiveLoops`: Flatten reactive loops
+    - `propagateScopeDependencies`: Propagate scope dependencies
+    - `pruneNonReactiveDependencies`: Remove non-reactive dependencies
+    - `pruneUnusedScopes`: Remove unused scopes
+    - `mergeReactiveScopesThatInvalidateTogether`: Merge reactive scopes that invalidate together
+    - `pruneAlwaysInvalidatingScopes`: Remove always invalidating scopes
+    - `propagateEarlyReturns`: Propagate early returns
+    - `promoteUsedTemporaries`: Promote used temporaries
+    - `pruneUnusedLValues`: Remove unused LValues
+    - `extractScopeDeclarationsFromDestructuring`: Extract scope declarations from destructuring
+    - `stabilizeBlockIds`: Stabilize block IDs
+    - `renameVariables`: Rename variables
+    - `pruneHoistedContexts`: Remove hoisted contexts
+5. **'Code Generation'**
+    - `codegenFunction`: Generate final code
+
+We may not look at all the processes, but let's start for now.
+
+## Lowering
+
+```ts
+const hir = lower(func, env).unwrap();
+```
+
+The first step of the React compiler, **Lowering**, is the process of converting **AST** (Abstract Syntax Tree) to **HIR** (High-level Intermediate Representation).
+
+Let's first revisit the concept of **compilation**.
+> to collect information from different places and arrange it in a book, report, or list \
+[\[Cambridge Dictionary\]](https://dictionary.cambridge.org/dictionary/english/compile)
+
+The dictionary meaning is to collect various information and organize it into a book, report, or list.\
+In **computer science**, compilation refers to the process of converting **source code** to **machine code**.
+
+Changing to machine code. In simple terms, it means **changing to a language that computers can understand**.
+<figure><img src="/post/images/ReactCompiler3/Compiler.png" />
+<figcaption>Compiler</figcaption>
+</figure>
+
+<aside>
+<b>Compiler or Transpiler?</b>\
+After React Compiler was unveiled at React Conf 2024, there was a lot of debate about whether React Compiler is a compiler or a transpiler.\
+Compilers are known to perform unidirectional transformation from high-level to low-level, but since the output of React Compiler is optimized React code, it's argued that it's difficult to call it a compiler. Let's look into this debate further if you're interested.
+</aside>
+
+The **source code** was converted to **AST** by Babel, and this AST is further lowered to an **intermediate representation** (IR), hence it's called **Lowering**.
+
+Now let's look at the `lower` function that converts to HIR.
+
+```ts
+// packages/babel-plugin-react-compiler/src/HIR/BuildHIR.ts
+
+/*
+ * Converts a function into a high-level intermediate form (HIR) which represents
+ * the code as a control-flow graph. All normal control-flow is modeled as accurately
+ * as possible to allow precise, expression-level memoization. The main exceptions are
+ * try/catch statements and exceptions: we currently bail out (skip compilation) for
+ * try/catch and do not attempt to model control flow of exceptions, which can occur
+ * ~anywhere in JavaScript. The compiler assumes that exceptions will be handled by
+ * the runtime, ie by invalidating memoization.
+ */
+export function lower(
+  func: NodePath<t.Function>,
+  env: Environment,
+  bindings: Bindings | null = null,
+  capturedRefs: Array<t.Identifier> = [],
+  // the outermost function being compiled, in case lower() is called recursively (for lambdas)
+  parent: NodePath<t.Function> | null = null
+): Result<HIRFunction, CompilerError> {
+// ...
+}
+```
+Referring to the comment above the function, it says that it converts **AST** (Abstract Syntax Tree) to a **high-level intermediate representation** (HIR) that represents it as a **CFG** (Control-Flow Graph, hereafter CFG).
+
+**AST** (Abstract Syntax Tree) is a tree-like data structure representing the syntax of a program, while **CFG** (Control Flow Graph) is a graph-like data structure representing the control flow of a program.\
+Each node in the graph represents a continuous part of the code called a **basic block**, and the **edges** represent the control flow from one basic block to another.\
+Control flow structures refer to branches and loops such as if/else, switch, and loop.\
+**CFG** captures all possible execution paths of a program and is used for code optimization and analysis.
+<figure><img src="/post/images/ReactCompiler3/ast_hir.png" />
+<figcaption>AST & HIR</figcaption>
+</figure>
+
+The diagram is drawn like this, but each node doesn't match each other.\
+To help understanding, let's first look at the result. \
+The following is the result of converting simple code to AST and HIR.
+
+```tsx
+function Component({ color }: { color: string }) {
+  if (color === "red") {
+    return (<div styles={{ color }}>hello red</div>)
+  } else {
+    return (<div styles={{ color }}>hello etc</div>)
+  }
+}
+```
+This is an example code to help understanding. The `Component` function returns different JSX depending on whether `color` is `red` or not.
+When this code is represented as AST, it will be expressed as a tree for the following syntax.
+```ts
+// Component Function
+FunctionDeclaration
+  Identifier
+  Parameter
+    ObjectBindingPattern
+      BindingElement
+        Identifier
+    TypeLiteral
+  Block
+    IfStatement
+      BinaryExpression
+        Identifier
+        EqualsEqualsEqualsToken
+        StringLiteral
+      Block
+        ReturnStatement
+          ParenthesizedExpression
+            JsxElement
+              JsxOpeningElement
+                Identifier
+                //...
+//...
+```
+The graph representation would look like this:
+<figure><img src="/post/images/ReactCompiler3/ast.png" />
+<figcaption>AST Graph (for short)</figcaption>
+</figure>
+
+
+Now when this AST is converted to HIR, it looks like this:
+```plaintext
+function Component
+bb0 (block):
+  [1] <unknown> $2 = Destructure Let { color: <unknown> color$1 } = <unknown> $0
+  [2] <unknown> $11 = LoadLocal <unknown> color$1
+  [3] <unknown> $12 = "red"
+  [4] <unknown> $13 = Binary <unknown> $11 === <unknown> $12
+  [5] If (<unknown> $13) then:bb2 else:bb4 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [6] <unknown> $3 = LoadLocal <unknown> color$1
+  [7] <unknown> $4 = Object { color: <unknown> $3 }
+  [8] <unknown> $5 = JSXText "hello red"
+  [9] <unknown> $6 = JSX <div styles={<unknown> $4} >{<unknown> $5}</div>
+  [10] Return <unknown> $6
+bb4 (block):
+  predecessor blocks: bb0
+  [11] <unknown> $7 = LoadLocal <unknown> color$1
+  [12] <unknown> $8 = Object { color: <unknown> $7 }
+  [13] <unknown> $9 = JSXText "hello etc"
+  [14] <unknown> $10 = JSX <div styles={<unknown> $8} >{<unknown> $9}</div>
+  [15] Return <unknown> $10
+bb1 (block):
+  [16] Unreachable
+```
+You don't need to understand the code here. Just skim through it.\
+In this example code, the control flow is the `if` statement within the `Component` function. Accordingly, the `Component` function is divided into four basic blocks: **bb0**, **bb2**, **bb4**, and **bb1**.
+```ts
+  [5] If (<unknown> $13) then:bb2 else:bb4 fallthrough=bb1
+```
+This part shows the flow going to `bb2` through the `If` statement, the case going to `bb4`, and the flow going to `bb1` through `fallthrough`.
+`fallthrough` represents the flow after passing through the `if` statement. In this case, it's marked as unreachable code.\
+To help understanding, if we draw it as a picture, it looks like this:
+<figure><img src="/post/images/ReactCompiler3/cfg.png" />
+<figcaption>Control Flow Graph (CFG)</figcaption>
+</figure>
+
+Ah~ Now we're starting to get a sense of what the transformation looks like.\
+This transformation process of expressing a **syntax tree** in this form of a graph according to **control flow** is called **Lowering**.\
+And the **representation form** after transformation is called **HIR**. (In React Compiler)
+
+## Exit Point
+
+Even if we only look this far, we can roughly understand what kind of data structure HIR represents, which should be sufficient for understanding the compilation process. \
+Therefore, you can move on to the next part right away.
+
+Detach!
+
+<YouTube src="https://youtu.be/_GdEsdEfZvc?t=154" />
+
+
+## Back to the lower function
+
+From here on, we'll look at the lowering process out of simple intellectual curiosity. It includes the lowering process for all statements. The code itself is about 4,000 lines long. \
+So let's take a look step by step.
+
+Let's go back to the beginning and look at the `lower` function again.
+
+
+```ts
+export function lower(
+  func: NodePath<t.Function>,
+  env: Environment,
+  bindings: Bindings | null = null,
+  capturedRefs: Array<t.Identifier> = [],
+  // the outermost function being compiled, in case lower() is called recursively (for lambdas)
+  parent: NodePath<t.Function> | null = null
+): Result<HIRFunction, CompilerError> {}
+```
+The `lower` function takes a `NodePath<t.Function>` derived from Babel as input and returns an `HIRFunction`. (It returns a `CompilerError` if an error occurs.) \
+Other arguments include the `Environment` object, `Bindings`, `capturedRefs`, and `parent`.
+
+What is the unit of the func that comes in as input? \
+Let's recall what we looked at in Part 1.
+
+We traversed through the program node's traverse method, found nodes for functions, and passed those nodes to the `compileFn` function. \
+Therefore, `func` will be a node for a function coming from the Babel AST. \
+It will be either `FunctionDeclaration`, `FunctionExpression`, or `ArrowFunctionExpression`.
+
+<aside>
+🤔 Wait a moment before moving on... Huh? But didn't `compileFn` only have two arguments when calling the `lower` function earlier? It's taking more arguments!
+```ts
+const hir = lower(func, env).unwrap();
+```
+This is because the `lower` function can call the `lower` function **recursively**. \
+Since `lower` is a function that converts to HIR on a function-by-function basis, if there's a function inside a function, it needs to call the `lower` function for that function as well. \
+So there must be a part where it's called recursively during the process, and at that time, arguments like `bindings`, `capturedRefs`, `parent` will be needed. **Definitely!**
+</aside>
+
+Continuing on...
+
+```ts
+const builder = new HIRBuilder(env, parent ?? func, bindings, capturedRefs);
+const context: Array<Place> = [];
+```
+An instance of `HIRBuilder` is created and assigned, and the `context` array is initialized. This is an array that holds function context information.
+
+```ts
+for (const ref of capturedRefs ?? []) {
+  context.push({
+    kind: "Identifier",
+    identifier: builder.resolveBinding(ref),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: ref.loc ?? GeneratedSource,
+  });
+}
+```
+It iterates through the `capturedRefs` array and adds a `Place` object to the `context` array. \
+This part is for recursive calls, so let's skip it for now and come back to it later.
+
+### 함수 이름 추출(식별자, Identifier)
+
+If the function is a `FunctionDeclaration` or `FunctionExpression`, it gets the function's `id` (Identifier) and assigns it to the `id` variable.
+
+```ts
+let id: string | null = null;
+if (func.isFunctionDeclaration() || func.isFunctionExpression()) {
+  const idNode = (
+    func as NodePath<t.FunctionDeclaration | t.FunctionExpression>
+  ).get("id");
+  if (hasNode(idNode)) {
+    id = idNode.node.name;
+  }
+}
+```
+[**FunctionDeclaration**](https://babeljs.io/docs/babel-types#functiondeclaration) nodes and [**FunctionExpression**](https://babeljs.io/docs/babel-types#functionexpression) nodes can have identifiers, but [**ArrowFunctionExpression**](https://babeljs.io/docs/babel-types#arrowfunctionexpression) nodes cannot have identifiers.
+
+```js
+// FunctionDeclaration
+function foo() {}
+// FunctionExpression
+const foo = function bar() {}
+// ArrowFunctionExpression
+const foo = () => {}
+```
+
+### Extracting Arguments (Parameters)
+
+It extracts the function's arguments and adds `Place` objects to the `params` array.
+```ts
+params: Array<Identifier | Pattern | RestElement> (required)
+```
+`params` can contain `Identifier`, `Pattern`, `RestElement`. \
+`Identifier` is an identifier, `Pattern` is an object or array pattern, and `RestElement` represents the rest element.
+
+```ts
+const params: Array<Place | SpreadPattern> = [];
+func.get("params").forEach((param) => {
+  if (param.isIdentifier()) {}
+  else if (param.isObjectPattern() || param.isArrayPattern() || param.isAssignmentPattern()) {}
+  else if (param.isRestElement()) {}
+  else {}
+  // ...
+});
+```
+
+**Identifier (single variable name)**
+```ts
+// example
+const greet = function(name) { // name is Identifier
+  console.log(`Hello, ${name}!`);
+};
+```
+If the argument is an `Identifier`, it creates a `Place` object and adds it to the `params` array.
+
+```ts
+if (param.isIdentifier()) {
+  const binding = builder.resolveIdentifier(param);
+  const place: Place = {
+    kind: "Identifier",
+    identifier: binding.identifier,
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push(place);
+}
+```
+The `Place` object that will appear frequently from now on is defined as follows:
+```ts
+export type Place = {
+  kind: "Identifier"; 
+  identifier: Identifier; 
+  effect: Effect; // The effect with which a value is modified.
+  reactive: boolean;
+  loc: SourceLocation;
+};
+```
+**ObjectPattern (object pattern), ArrayPattern (array pattern), AssignmentPattern (assignment pattern)**
+```ts 
+// example
+// ObjectPattern
+const greet = function({ name }) { 
+  console.log(`Hello, ${name}!`);
+};
+
+// ArrayPattern
+const greet = function([name]) { 
+  console.log(`Hello, ${name}!`);
+};
+
+// AssignmentPattern
+const greet = function(name = 'world') { 
+  console.log(`Hello, ${name}!`);
+};
+
+```
+If the argument is `ObjectPattern`, `ArrayPattern`, or `AssignmentPattern`, it creates a temporary variable, creates a `Place` object, and adds it to the `params` array.
+It handles the assignment through the `lowerAssignment` function.
+
+```ts
+else if (
+  param.isObjectPattern() ||
+  param.isArrayPattern() ||
+  param.isAssignmentPattern()
+) {
+  const place: Place = {
+    kind: "Identifier",
+    identifier: builder.makeTemporary(),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push(place);
+  lowerAssignment(
+    builder,
+    param.node.loc ?? GeneratedSource,
+    InstructionKind.Let,
+    param,
+    place,
+    "Assignment"
+  );
+}
+```
+
+**RestElement (rest element)**
+```ts
+// example
+const greet = function(...names) { 
+  console.log(`Hello, ${names.join(', ')}!`);
+};
+```
+If the argument is `RestElement`, it creates a temporary variable, creates a `Spread` object, and adds it to the `params` array.
+
+```ts
+else if (param.isRestElement()) {
+  const place: Place = {
+    kind: "Identifier",
+    identifier: builder.makeTemporary(),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push({
+    kind: "Spread",
+    place,
+  });
+  lowerAssignment(
+    builder,
+    param.node.loc ?? GeneratedSource,
+    InstructionKind.Let,
+    param.get("argument"),
+    place,
+    "Assignment"
+  );
+}
+```
+
+This is the process of extracting the function's arguments and adding `Place` objects to the `params` array.
+
+Now let's look at the process of extracting the function's body and adding `Instruction` objects to the `body` array.
+
+### Extracting Function Body (Body)
+
+```ts
+let directives: Array<string> = [];
+const body = func.get("body");
+```
+
+It extracts the function's body and initializes the `directives` array.
+
+**Expression**
+
+
+```ts
+if (body.isExpression()) {
+  const fallthrough = builder.reserve("block");
+  const terminal: ReturnTerminal = {
+    kind: "return",
+    loc: GeneratedSource,
+    value: lowerExpressionToTemporary(builder, body),
+    id: makeInstructionId(0),
+  };
+  builder.terminateWithContinuation(terminal, fallthrough);
+}
+```
+
+**BlockStatement**
+
+In the case of a block statement, it processes the `body` through the `lowerStatement` function.
+
+```ts
+else if (body.isBlockStatement()) {
+  lowerStatement(builder, body);
+  directives = body.get("directives").map((d) => d.node.value.value);
+}
+```
+
+This part can actually be considered the core part. \
+Let's look at the `lowerStatement` function.
+
+```ts
+function lowerStatement(
+  builder: HIRBuilder,
+  stmtPath: NodePath<t.Statement>,
+  label: string | null = null
+): void {
+  const stmtNode = stmtPath.node;
+  switch (stmtNode.type) {
+    case "ThrowStatement":
+    case "ReturnStatement":
+    case "IfStatement":
+    case "BlockStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+    case "ForStatement":
+    case "WhileStatement":
+    case "LabeledStatement":
+    case "SwitchStatement":
+    case "VariableDeclaration":
+    case "ExpressionStatement":
+    case "DoWhileStatement":
+    case "FunctionDeclaration":
+    case "ForOfStatement":
+    case "ForInStatement":
+    case "DebuggerStatement":
+    case "EmptyStatement":
+    case "TryStatement":
+    // ------- skip -------
+    case "TypeAlias":
+    case "TSTypeAliasDeclaration":
+
+    // --- unsupported ---
+    case "ClassDeclaration":
+    // ~
+    case "WithStatement":
+    default:
+```
+The `lowerStatement` function performs various processes depending on the node type of `stmtPath` (Statement Path). \
+When called by the `lower` function, `stmtPath` will be a `BlockStatement`. So let's look at an example.
+
+```tsx
+// example
+function complexExample(x) {
+  let result = 0;
+  if (x > 0) {
+    result = x * 2;
+  } else {
+    result = x * 3;
+  }
+  return result;
+}
+```
+function `complexExample` has a `BlockStatement` as its body. Let's pass this `BlockStatement` to the `lowerStatement` function.
+
+```ts
+case "BlockStatement": {
+  const stmt = stmtPath as NodePath<t.BlockStatement>;
+  const statements = stmt.get("body");
+```
+It type casts `stmtPath` to `BlockStatement` and extracts the `body`. \
+`body` is of type `NodePath<t.Statement>[]`, representing each statement in the block statement.
+
+```ts
+for (const s of statements) {
+  lowerStatement(builder, s);
+}
+```
+It iterates through the **statements**, calling the `lowerStatement` function recursively.
+
+Besides the process of recursively processing during blockStatement handling, there's one more process.
+
+#### Handling 'const' Variable Declaration Hoisting
+
+First, it checks if a binding can be hoisted before it's declared, \
+then hoists the declaration as a context variable to the earliest point where it's referenced (i.e., right before the topmost statement).
+
+
+```ts
+const hoistableIdentifiers: Set<t.Identifier> = new Set();
+
+for (const [, binding] of Object.entries(stmt.scope.bindings)) {
+  // refs to params are always valid / never need to be hoisted
+  if (binding.kind !== "param") {
+    hoistableIdentifiers.add(binding.identifier);
+  }
+}
+```
+It creates a `Set` called `hoistableIdentifiers` and iterates through `stmt.scope.bindings`, 
+adding identifiers to `hoistableIdentifiers`. \
+stmt.scope.bindings contains binding information for the current block. \
+It doesn't include binding information for parent or child blocks. \
+At this time, `const`, `let`, `var` are added to `hoistableIdentifiers`.
+
+<aside>
+**[Try it yourself]**\
+We could run it through the playground, but since the playground code itself is also compiled by the compiler, the playground's compilation results are mixed in, making it difficult to clearly confirm. \
+Therefore, let's run it locally.
+```js
+const babel = require('@babel/core');
+const parser = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
+
+const code = `
+function complexExample(x) {
+  let result = 0;
+  const a = 1;
+  var b = 10;
+  function foo() {
+    return a;
+  }
+  if (x > 0) {
+    const c = 100;
+    result = x * 2;
+  } else {
+   function bar() {
+     return a;
+    }
+    result = x * 3;
+  }
+  return result;
+}
+`;
+
+const ast = parser.parse(code);
+
+traverse(ast, {
+  BlockStatement(path) {
+    console.log("--- Block ---")
+    const bindings = path.scope.bindings;
+    for(const [, binding] of Object.entries(bindings)) {
+      if (binding.kind !== "param") {
+        console.log(binding.identifier);
+      }
+    }
+    console.log("--- End Block ---")
+  }
+});
+```
+When you run it, you can see that only `result`, `a`, and `foo`, which are in the current block in the main block, are printed to the console (added to `hoistableIdentifiers`).
+```js
+Node {
+  type: "Identifier",
+  name: "result",
+  //...
+}
+Node {
+  type: "Identifier",
+  name: "a",
+  //...
+}
+Node {
+  type: "Identifier",
+  name: "foo",
+  //...
+}
+```
+</aside>
+
+When iterating through each statement, it creates a `Set` called `willHoist` to contain elements that need to be hoisted.
+
+```ts
+for (const s of statements) {
+  const willHoist = new Set<NodePath<t.Identifier>>();
+  // ...
+}
+```
+
+It tracks the depth of the function context. This is to track whether identifier references occur in inner functions. \
+While traversing through `traverse`, when it encounters `FunctionExpression`, `FunctionDeclaration`, `ArrowFunctionExpression`, `ObjectMethod` nodes, it increases the function depth, and when it exits the node, it decreases the function depth.
+```ts
+let fnDepth = s.isFunctionDeclaration() ? 1 : 0;
+const withFunctionContext = {
+  enter: (): void => {
+    fnDepth++; // function depth increase
+  },
+  exit: (): void => {
+    fnDepth--; // function depth decrease
+  },
+};
+s.traverse({
+  FunctionExpression: withFunctionContext, // function expression
+  FunctionDeclaration: withFunctionContext, // function declaration
+  ArrowFunctionExpression: withFunctionContext,  // arrow function expression
+  ObjectMethod: withFunctionContext, // object method
+  // ...
+});
+```
+
+While iterating through the statements, it looks for identifiers. \
+If the identifier is not referenced or its parent is not an assignment expression, it skips. \
+If the identifier is referenced and is in `hoistableIdentifiers`, and the function depth is greater than 0 or the binding is `hoisted`, it's added to `willHoist`.
+
+```ts
+s.traverse({
+  // ...
+  Identifier(id: NodePath<t.Identifier>) {
+    const id2 = id;
+    if (
+      !id2.isReferencedIdentifier() &&
+      // isReferencedIdentifier is broken and returns false for reassignments
+      id.parent.type !== "AssignmentExpression"
+    ) {
+      return;
+    }
+    const binding = id.scope.getBinding(id.node.name);
+    /*
+    * The cases where an identifier declaration can be hoisted are as follows:
+    * 1. When the reference occurs within an inner function
+    * or
+    * 2. When the declaration itself is hoistable
+    */
+    if (
+      binding != null &&
+      hoistableIdentifiers.has(binding.identifier) &&
+      (fnDepth > 0 || binding.kind === "hoisted")
+    ) {
+      willHoist.add(id);
+    }
+  },
+});
+```
+Then it iterates through the node again, removing identifiers that are in `hoistableIdentifiers`.
+
+```ts
+s.traverse({
+  Identifier(path: NodePath<t.Identifier>) {
+    if (hoistableIdentifiers.has(path.node)) {
+      hoistableIdentifiers.delete(path.node);
+    }
+  },
+});
+```
+
+It iterates through `willHost`, converts the `identifier` to a unique identifier through `resolveIdentifier`, 
+creates `DeclareContext` in a temporary variable through the `lowerValueToTemporary` function and **pushes it to the builder**. \
+Then it adds to the global environment's `#contextIdentifiers`, `#hoistedIdentifiers`.
+
+```ts
+// Hoist declarations that need it to the earliest point where they are needed
+for (const id of willHoist) {
+  const binding = stmt.scope.getBinding(id.node.name);
+  if (builder.environment.isHoistedIdentifier(binding.identifier)) {
+    // Already hoisted
+    continue;
+  }
+  const identifier = builder.resolveIdentifier(id);
+  const place: Place = {
+    effect: Effect.Unknown,
+    identifier: identifier.identifier,
+    kind: "Identifier",
+    reactive: false,
+    loc: id.node.loc ?? GeneratedSource,
+  };
+  lowerValueToTemporary(builder, {
+    kind: "DeclareContext",
+    lvalue: {
+      kind: InstructionKind.HoistedConst,
+      place,
+    },
+    loc: id.node.loc ?? GeneratedSource,
+  });
+  builder.environment.addHoistedIdentifier(binding.identifier);
+```
+Later, before code generation, it removes `DeclareContext` and retransforms the associated `StoreContext` to restore the original source code. \
+Hoisting for other types of declarations is planned to be implemented in the future.
+
+#### Why do we do hoisting?
+
+<aside>
+**Hoisting in JavaScript**\
+In JavaScript, hoisting refers to pulling the variable declarations to the top of their scope. \
+JavaScript stores function declarations and variable declarations in memory before executing the code, so it pulls up function declarations and variable declarations. \
+In the case of **const**, it is hoisted but falls into the TDZ (Temporal Dead Zone).
+
+This is the general JavaScript hoisting that we know.
+</aside>
+
+However, what we've just looked at is hoisting done by the compiler. \
+<aside>🤔 From here on, this is speculation.</aside>
+Why do we do **const hoisting**? Let's look at an example. We can get quality examples through test code. Let's move to `/src/__tests__/fixtures/compiler`. \
+I picked one code that looks concise. Let's open the "hoisting-simple-const-declaration.expected.md" file.
+
+```js
+function hoisting() {
+  const foo = () => {
+    return bar + baz;
+  };
+  const bar = 3;
+  const baz = 2;
+  return foo(); // OK: called outside of TDZ for bar/baz
+}
+```
+This is a simple hoisting example. When this is **converted to HIR**, it changes like this:
+
+```js
+function hoisting
+bb0 (block):
+  [1] <unknown> $1 = DeclareContext HoistedConst <unknown> bar$0
+  [2] <unknown> $3 = DeclareContext HoistedConst <unknown> baz$2
+  [3] <unknown> $4 = LoadContext <unknown> bar$0
+  [4] <unknown> $5 = LoadContext <unknown> baz$2
+  [5] <unknown> $10 = Function  @deps[<unknown> $4,<unknown> $5] @context[<unknown> bar$0,<unknown> baz$2] @effects[]:
+      bb1 (block):
+        [1] <unknown> $6 = LoadContext <unknown> bar$0
+        [2] <unknown> $7 = LoadContext <unknown> baz$2
+        [3] <unknown> $8 = Binary <unknown> $6 + <unknown> $7
+        [4] Return <unknown> $8
+  [6] <unknown> $12 = StoreLocal Const <unknown> foo$11 = <unknown> $10
+  [7] <unknown> $13 = 3
+  [8] <unknown> $14 = StoreContext Reassign <unknown> bar$0 = <unknown> $13
+  [9] <unknown> $15 = 2
+  [10] <unknown> $16 = StoreContext Reassign <unknown> baz$2 = <unknown> $15
+  [11] <unknown> $17 = LoadLocal <unknown> foo$11
+  [12] <unknown> $18 = Call <unknown> $17()
+  [13] Return <unknown> $18
+```
+You can see that `bar` and `baz` have been hoisted through `DeclareContext HoistedConst` at the top. \
+Hmm, nothing particularly striking so far.
+
+
+Then let's try generating with **all hoisting turned off**. I commented out everything and ran the compiler again.
+
+```ts
+// 😴
+case "BlockStatement": {
+  const stmt = stmtPath as NodePath<t.BlockStatement>;
+  const statements = stmt.get("body");
+  // const hoistableIdentifiers: Set<t.Identifier> = new Set();
+  // for (const [, binding] of Object.entries(stmt.scope.bindings)) {
+  //   // refs to params are always valid / never need to be hoisted
+  //   if (binding.kind !== "param") {
+  //     hoistableIdentifiers.add(binding.identifier);
+  //   }
+  // }
+
+  for (const s of statements) {
+    // const willHoist = new Set<NodePath<t.Identifier>>();
+    // /*
+    //  * If we see a hoistable identifier before its declaration, it should be hoisted just
+    //  * before the statement that references it.
+    //  */
+    // let fnDepth = s.isFunctionDeclaration() ? 1 : 0;
+    // const withFunctionContext = {
+    //   enter: (): void => {
+    //     fnDepth++;
+    //   },
+    //   exit: (): void => {
+    //     fnDepth--;
+    //   },
+    // ...
+    lowerStatement(builder, s);
+  }
+```
+First, this error occurred:
+```plaintext
+Todo: [hoisting] EnterSSA: Expected identifier to be defined before being used. \
+Identifier bar$0 is undefined (5:5)
+```
+Something has changed. An error occurred saying that `bar$0` was used before it was defined. \
+Let's also look at the **HIR** code. **What difference** has occurred?
+
+```js
+function hoisting
+bb0 (block):
+  [1] <unknown> $1 = LoadLocal <unknown> bar$0
+  [2] <unknown> $3 = LoadLocal <unknown> baz$2
+  [3] <unknown> $8 = Function  @deps[<unknown> $1,<unknown> $3] @context[<unknown> bar$0,<unknown> baz$2] @effects[]:
+      bb1 (block):
+        [1] <unknown> $4 = LoadLocal <unknown> bar$0
+        [2] <unknown> $5 = LoadLocal <unknown> baz$2
+        [3] <unknown> $6 = Binary <unknown> $4 + <unknown> $5
+        [4] Return <unknown> $6
+  [4] <unknown> $10 = StoreLocal Const <unknown> foo$9 = <unknown> $8
+  [5] <unknown> $11 = 3
+  [6] <unknown> $12 = StoreLocal Const <unknown> bar$0 = <unknown> $11
+  [7] <unknown> $13 = 2
+  [8] <unknown> $14 = StoreLocal Const <unknown> baz$2 = <unknown> $13
+  [9] <unknown> $15 = LoadLocal <unknown> foo$9
+  [10] <unknown> $16 = Call <unknown> $15()
+  [11] Return <unknown> $16
+```
+Oh... `DeclareContext HoistedConst` disappeared. This is natural, of course. We didn't do **hoisting**. \
+As a result, `LoadLocal` occurred before definition in **[1]**, causing an error. Although it was defined later with `StoreLocal Const` in **[6]** and **[8]**, an error occurred because it had already been used.
+
+In the environment where JavaScript is executed, the engine does the hoisting, but once it's converted to HIR, it's no different from being converted to another language.
+Therefore, I think they had to model JavaScript as much as possible. 
+Besides, I think it could be used later in other optimization processes such as DCE or Const Propagation.
+
+So out of curiosity, I asked the Compiler developer lauren. Only after asking the question did I embarrassingly find the example code and realized that the implementation was inevitable. \
+(The front part of the question got cut off)
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">it’s more because it’s a todo 🤣 const hoisting was the most straightforward to support, and at the moment it’s not used in any other passes</p>&mdash; lauren 나은 (@potetotes) <a href="https://twitter.com/potetotes/status/1799899243395604762?ref_src=twsrc%5Etfw">June 9, 2024</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+I received such a kind answer. I think I've gained a little courage to ask questions right away when I'm curious. \
+She says that **const hoisting** was the simplest form to support, so it was implemented first, and it hasn't been used in other optimization processes yet.
+
+Then, let's go back to the `lowerStatement` function and look at other parts.
+Now it will perform lowering according to each case while recursively turning. If I were to write all of this, I think the reader would get bored too. So I'll briefly look at a few in the next time or append it to this article later. 
+Anyway, after recursively lowering the body part, it will fall out below.
+
+```ts
+builder.terminate(
+  {
+    kind: "return",
+    loc: GeneratedSource,
+    value: lowerValueToTemporary(builder, {
+      kind: "Primitive",
+      value: undefined,
+      loc: GeneratedSource,
+    }),
+    id: makeInstructionId(0),
+  },
+  null
+);
+
+return Ok({
+  id,
+  params,
+  fnType: parent == null ? env.fnType : "Other",
+  returnType: null, // TODO: extract the actual return type node if present
+  body: builder.build(),
+  context,
+  generator: func.node.generator === true,
+  async: func.node.async === true,
+  loc: func.node.loc ?? GeneratedSource,
+  env,
+  effects: null,
+  directives,
+});
+```
+
+It generates a `return` through `builder.terminate` and returns by generating through `builder.build()`. \
+That's how it returns an `HIRFunction`.
+
+```ts
+const hir = lower(func, env).unwrap();
+```
+The builder plays a big role in the process of converting to **HIR**, which we didn't look at in depth. We'll look at this more specifically next time.
+
+## Wrap-up
+
+In this article, we looked at the `lower` function. 
+- The `lower` function is a function that returns an `HIRFunction` from the Babel AST.
+- It extracts the function's arguments, identifiers, and body and creates `Instruction` objects through `HIRBuilder`.
+- It handles hoisting of `const` variable declarations.
+- It processes various statements through the `lowerStatement` function.
+- The `lower` function is called recursively, processes the function's body, and returns an `HIRFunction`.
+
+Goodbye then!
+
+
+Tools used
+- [AST Explorer](https://astexplorer.net/)
+- [Babel](https://babel.dev/)
+
+
+References
+- https://groups.seas.harvard.edu/courses/cs153/2018fa/lectures/Lec17-CFG-dataflow.pdf
+- https://rustc-dev-guide.rust-lang.org/hir.htmlimport 
+
+

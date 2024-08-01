@@ -2,20 +2,26 @@
 import Container from "./Container.astro";
 import Link from "./Link.astro";
 import HeaderClock from "./widget/HeaderClock";
+
+import { DEFAULT_LOCALE } from "@consts";
+import { useTranslations } from "@i18n/utils";
+
+const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
+const t = useTranslations(currentLocale as any);
 ---
 
 <header>
   <Container>
     <div class="flex flex-wrap gap-y-2 justify-between">
       <Link href="/" underline={false}>
-        <div class="font-semibold">장용석 블로그</div>
+        <div class="font-semibold">{t("page.title")}</div>
       </Link>
       <nav class="flex gap-1">
         <HeaderClock client:only="react" />
         <span>
           {`/`}
         </span>
-        <Link href="/blog"> blog </Link>
+        <Link href={t("path.blog")}> blog </Link>
         <span>
           {`/`}
         </span>

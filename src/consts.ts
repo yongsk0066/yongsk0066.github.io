@@ -16,6 +16,6 @@ export const SOCIALS: Socials = [
   },
   {
     NAME: "linkedin",
-    HREF: "https://www.linkedin.com/in/%EC%9A%A9%EC%84%9D-%EC%9E%A5-129267181/",
+    HREF: "https://www.linkedin.com/in/yongseok-jang-129267181/",
   },
 ];
