@@ -1,6 +1,6 @@
 ---
 title: React Compiler, How Does It Work? [3] - HIR Transformation (Lowering)
-description: "React Compiler의 Lowering 과정을 살펴보자. AST를 HIR로 변환하는 과정이다."
+description: "Let's explore the Lowering process of React Compiler. We'll examine how it converts AST to HIR, how it handles hoisting during this process, and why it's done this way."
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-06-10T15:10:03.760Z'
@@ -134,8 +134,8 @@ function* runWithEnvironment(
     throw new Error("unexpected error");
   }
 
-  
   // return the finally generated code
+  
   return ast;
 }
 ```

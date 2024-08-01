@@ -6,8 +6,8 @@ categories: ["React Compiler"]
 date: '2024-05-26T03:30:51.104Z'
 series: "React Compiler"
 ---
-import LinkPreview from '../../components/LinkPreview.astro'
-import  { YouTube } from "../../components/lit/youtube-element"
+import LinkPreview from '@components/LinkPreview.astro'
+import  { YouTube } from "@components/lit/youtube-element"
 
 
 [React Compiler, How Does It Work? [1]](https://yongsk0066.github.io/blog/react_compiler_1/) In the previous article, we looked at the overall structure of React Compiler. \
@@ -141,12 +141,12 @@ I've temporarily removed the conditional statements to see the flow of logic. Yo
 ```ts
 let memoCache = null;
 // ...
-// 캐시가 없다면, 대체 파이버에서 캐시 복제
+// if cache is not exist, clone cache from alternate fiber
 if (memoCache == null) {
 
-  const current = currentlyRenderingFiber.alternate; // 대체 파이버(current)를 가져온다.
-  const currentUpdateQueue = current.updateQueue;    // 대체 파이버의 updateQueue를 가져온다.
-  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; // 대체 파이버의 memoCache를 가져온다.
+  const current = currentlyRenderingFiber.alternate; // Get the alternate fiber (current).
+  const currentUpdateQueue = current.updateQueue;    // Get the updateQueue of the alternate fiber.
+  const currentMemoCache: ?MemoCache = currentUpdateQueue.memoCache; //Get the memoCache of the alternate fiber.
 
   memoCache = {
     data: enableNoCloningMemoCache
