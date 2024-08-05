@@ -1,11 +1,11 @@
 ---
-title: React Compiler,How Does It Work? [4] - SSA Transformation (Theory and Implementation)
+title: React Compiler, How Does It Work? [4] - SSA Transformation (Theory and Implementation)
 description: "Let's explore the SSA transformation in React Compiler. SSA stands for Static Single Assignment, which is one of the intermediate representations used for optimization. SSA has the characteristic of restricting variables to be assigned only once. The core of the SSA transformation algorithm is deciding where to place phi functions. What algorithm does React Compiler use?"
 author: "Yongseok"
 categories: ["React Compiler"]
 date: '2024-07-14T07:57:08.825Z'
 series: "React Compiler"
-heroImage: "/post/images/ReactCompiler4/thumb.png"
+heroImage: "/post/images/ReactCompiler4/en/thumb.png"
 ---
 import LinkPreview from '@components/LinkPreview.astro'
 import  { YouTube } from "@components/lit/youtube-element"
@@ -318,13 +318,13 @@ Intuitively, DF(N) can be thought of as **the point where N's domination ends**.
 What does this mean? 😥 It's not immediately understandable.\
 Let's look at the process of finding the DF of **2 and 5** together with a diagram.
 
-<figure><img src="/post/images/ReactCompiler4/df_1.png" /><figcaption>figure 3. 2's DF</figcaption></figure>
+<figure><img src="/post/images/ReactCompiler4/df_1_en.png" /><figcaption>figure 3. 2's DF</figcaption></figure>
 
 In the case of **2**, it dominates **3,4,6 and 2** (itself). \
 If we look for **nodes that 2 does not dominate** among the children of the nodes it's dominating **2, 3, 4, 6**, we can find **7**, which is a child of 6. \
 Therefore, **DF(2) is 7**.
 
-<figure><img src="/post/images/ReactCompiler4/df_2.png" /><figcaption>figure 4. 5's DF</figcaption></figure>
+<figure><img src="/post/images/ReactCompiler4/df_2_en.png" /><figcaption>figure 4. 5's DF</figcaption></figure>
 
 In the case of **5**, looking at the dominator tree, there's only itself. \
 The **node that 5 does not dominate** in the CFG is its child **7**.\
@@ -357,7 +357,7 @@ Summing up, **Y can be reached through X**, but **can also be reached through ot
 This means that Y can be reached through at least two paths.\
 In other words, it means that it's **a point where branches merge**.
 
-<figure><img src="/post/images/ReactCompiler4/y_route.png"  style={{maxHeight: "400px"}} /><figcaption>figure 5. meaing of DF</figcaption></figure>
+<figure><img src="/post/images/ReactCompiler4/y_route_en.png"  style={{maxHeight: "400px"}} /><figcaption>figure 5. meaing of DF</figcaption></figure>
 
 Therefore, we place **phi functions** at the **point where branches merge**, that is, at the **dominance frontier DF**.\
 Now that we roughly understand, let's look at the code.
