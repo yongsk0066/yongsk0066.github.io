@@ -36,7 +36,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
 <meta name="generator" content={Astro.generator} />
 
 <!-- Font preloads -->
-<!-- Font preloads -->
 <link
   rel="preload"
   href="/fonts/atkinson-regular.woff"
@@ -131,6 +130,13 @@ const { title, description, image = "/nano.png" } = Astro.props;
 
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />
+<!-- RSS -->
+<link
+  rel="alternate"
+  type="application/rss+xml"
+  title={title}
+  href={new URL("rss.xml", Astro.site)}
+/>
 
 <!-- Primary Meta Tags -->
 <title>{title}</title>

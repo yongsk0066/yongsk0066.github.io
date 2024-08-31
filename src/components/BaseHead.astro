@@ -118,6 +118,14 @@ const { title, description, image = "/blog-placeholder-1.jpg" } = Astro.props;
   crossorigin
 />
 
+<!-- RSS -->
+<link
+  rel="alternate"
+  type="application/rss+xml"
+  title={title}
+  href={new URL("rss.xml", Astro.site)}
+/>
+
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />
 
