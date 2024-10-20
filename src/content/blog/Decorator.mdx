@@ -121,8 +121,8 @@ func()
 # Decorator
 
 <LinkPreview src="https://github.com/tc39/proposal-decorators" />
-decorator는 아직 ECMAScript 표준에는 포함되지 않았지만, stage 3까지 진행되었다.\
-그렇기에 babel을 통해 변환되어 사용하거나, Typescript의 `experimentalDecorators` 옵션을 사용하여 사용할 수 있다. 
+decorator는 아직 ECMAScript 표준에는 포함되지 않았지만, stage 3까지 진행되었다.
+이미 TypeScript(5.0이상)에서는 decorator를 사용할 수 있으니, TypeScript를 사용해보기로 했다.
 
 <LinkPreview src="https://www.typescriptlang.org/ko/docs/handbook/decorators.html"/>
 
@@ -131,13 +131,13 @@ decorator는 아직 ECMAScript 표준에는 포함되지 않았지만, stage 3�
 네모는 문서를 더 깊이 들여다보기전에, 먼저 간단하게 만들어보기로 했다.
 
 ```ts
-function log(target: any, context: ClassMethodDecoratorContext) {
+function log(value: any, context: ClassMethodDecoratorContext) {
   const methodName = String(context.name);
 
   return function(this: any, ...args: any[]) {
     console.group(`[${methodName}]`);
     console.log('==> 입력:', args);
-    const result = target.call(this, ...args);
+    const result = value.call(this, ...args);
     console.log("<== 출력:", result);
     console.groupEnd();
     return result;
