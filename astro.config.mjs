@@ -14,7 +14,8 @@ import customTheme from './shiki/github-dark-default.json'
 // https://astro.build/config
 export default defineConfig({
   prefetch: {
-    prefetchAll: true
+    prefetchAll: true,
+    defaultStrategy: 'viewport'
   },
   i18n: {
     defaultLocale: 'ko',
