@@ -43,6 +43,10 @@ const { Content } = await post.render();
 const t = useTranslations(currentLocale as any);
 ---
 
+<script>
+  import "../../components/thumbnail-element";
+  import "../../components/lit/youtube-element";
+</script>
 <PageLayout
   title={post.data.title}
   description={post.data.description ?? ""}

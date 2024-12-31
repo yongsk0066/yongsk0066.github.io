@@ -15,7 +15,7 @@ import { AsciiElement } from '../../components/lit/asciiScreen/ascii-element';
 
 [미드저니 랜딩페이지](https://www.midjourney.com/home)가 너무 맘에들어서 무슨 라이브러리 썼나 찾아보다가. 클로닝한 영상을 찾게되었다.
 
-<YouTube src="https://youtu.be/YCJgQI71jEE?si=KOp-YtU2n-yCZR8z" />
+<youtube-element src="https://youtu.be/YCJgQI71jEE?si=KOp-YtU2n-yCZR8z" />
 
 이분 작업을 보니깐 코드양이 그리 많지는 않아서, 나도 한번 클로닝을 해보았다.
 
@@ -28,7 +28,7 @@ import { AsciiElement } from '../../components/lit/asciiScreen/ascii-element';
 
 <AsciiElement 
   transforms={[]}
-  client:only="lit"/>
+  />
 
 ### 미드저니 스타일 spiral
 
@@ -39,7 +39,7 @@ import { AsciiElement } from '../../components/lit/asciiScreen/ascii-element';
 
 <AsciiElement 
   transforms={['spiral']}
-  client:only="lit"/>
+  />
 
 ### spiral -> zoom -> wave
 
@@ -50,14 +50,14 @@ import { AsciiElement } from '../../components/lit/asciiScreen/ascii-element';
 
 <AsciiElement 
   transforms={['spiral', 'zoom', 'wave']}
-  client:only="lit"/>
+  />
 
 
 ### 기다리다 보면 은하 모양이됨
 
 <AsciiElement 
   transforms={['hurricane', 'spiral']}
-  client:only="lit"/>
+  />
 
 
 

@@ -1,24 +1,27 @@
 ---
 import PageLayout from "@layouts/PageLayout.astro";
 import BaseHead from "../components/BaseHead.astro";
-import { HomeCoverElement } from "../components/lit/asciiScreen/home-cover-element";
 import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
 ---
 
-<!doctype html>
 <html lang="ko">
-  <head>
-    <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
-    <style>
-      main {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-  </head>
+  <script>
+    import "../components/lit/asciiScreen/home-cover-element";
+    import "../components/thumbnail-element";
+    import "../components/lit/youtube-element";
+  </script>
+
+  <BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+  <style>
+    main {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+
   <body>
     <!-- Google Tag Manager (noscript) -->
     <noscript
@@ -32,8 +35,7 @@ import { SITE_DESCRIPTION, SITE_TITLE } from "../consts";
     <!-- <Header title={SITE_TITLE} /> -->
     <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
       <div class="mx-auto animate-expand px-8 max-sm:px-4 max-sm:-mt-8">
-        <!-- <SolarSystem client:only="react" /> -->
-        <HomeCoverElement client:only="lit" />
+        <home-cover-element></home-cover-element>
       </div>
     </PageLayout>
   </body>
