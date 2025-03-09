@@ -2,181 +2,179 @@
 @tailwind components;
 @tailwind utilities;
 
-
 @font-face {
-	font-family: 'Atkinson';
-	src: url('/fonts/atkinson-regular.woff') format('woff');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Atkinson";
+  src: url("/fonts/atkinson-regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 @font-face {
-	font-family: 'Atkinson';
-	src: url('/fonts/atkinson-bold.woff') format('woff');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Atkinson";
+  src: url("/fonts/atkinson-bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 @font-face {
-	font-family: 'JetBrains Mono';
-	src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
-}
-
-@font-face {
-	font-family: 'JetBrains Mono';
-	src: url('/fonts/JetBrainsMono-Medium.woff2') format('woff');
-	font-weight: 500;
-	font-style: normal;
-	font-display: swap;
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'JetBrains Mono';
-	src: url('/fonts/JetBrainsMono-SemiBold.woff2') format('woff');
-	font-weight: 600;
-	font-style: normal;
-	font-display: swap;
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'JetBrains Mono';
-	src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-Regular.ttf') format('ttf');
-	font-weight: 800;
-	font-style: normal;
-	font-display: swap;
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-Bold.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-Regular.ttf") format("ttf");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-SemiBold.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-Bold.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-Medium.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-SemiBold.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-Light.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-Medium.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-ExtraLight.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-Light.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Oswald';
-	src: url('/fonts/Oswald-Medium.ttf') format('ttf');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-ExtraLight.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Thin.woff2') format('woff');
-	font-weight: 100;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Oswald";
+  src: url("/fonts/Oswald-Medium.ttf") format("ttf");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-ExtraLight.woff2') format('woff');
-	font-weight: 200;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Thin.woff2") format("woff");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Light.woff2') format('woff');
-	font-weight: 300;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-ExtraLight.woff2") format("woff");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Regular.woff2') format('woff');
-	font-weight: 400;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Light.woff2") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Medium.woff2') format('woff');
-	font-weight: 500;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Regular.woff2") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-SemiBold.woff2') format('woff');
-	font-weight: 600;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Medium.woff2") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Bold.woff2') format('woff');
-	font-weight: 700;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-SemiBold.woff2") format("woff");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-ExtraBold.woff2') format('woff');
-	font-weight: 800;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Bold.woff2") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
-	font-family: 'Pretendard';
-	src: url('/fonts/Pretendard-Black.woff2') format('woff');
-	font-weight: 900;
-	font-style: normal;
-	font-display: swap;
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-ExtraBold.woff2") format("woff");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
 }
 
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/Pretendard-Black.woff2") format("woff");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 html {
   overflow-y: scroll;
@@ -193,7 +191,7 @@ body {
 }
 
 body {
-  font-family: 'Pretendard','Oswald', 'Atkinson', sans-serif;
+  font-family: "Pretendard", "Oswald", "Atkinson", sans-serif;
   @apply flex flex-col;
   @apply bg-zinc-100 dark:bg-zinc-900;
   @apply text-black/50 dark:text-white/75;
@@ -217,12 +215,12 @@ article {
   @apply max-w-full prose dark:prose-invert prose-img:mx-auto prose-img:my-auto;
   @apply prose-headings:font-semibold prose-p:font-serif;
   @apply prose-headings:text-black prose-headings:dark:text-white;
-	@apply max-sm:text-sm max-sm:leading-7;
+  @apply max-sm:text-sm max-sm:leading-7;
 }
 
 @layer utilities {
   article a {
-    font-family: 'Pretendard','Oswald', 'Atkinson', sans-serif;
+    font-family: "Pretendard", "Oswald", "Atkinson", sans-serif;
     @apply font-sans text-current underline underline-offset-2;
     @apply decoration-black/15 dark:decoration-white/30;
     @apply transition-colors duration-300 ease-in-out;
@@ -234,43 +232,43 @@ article {
 }
 
 @layer components {
-	article aside {
-		@apply bg-gray-300 dark:bg-zinc-800 p-4 rounded-lg my-4;
-	}
-	article aside p {
-		/* @apply m-0; */
-	}
+  article aside {
+    @apply bg-gray-300 dark:bg-zinc-800 p-4 rounded-lg my-4;
+  }
+  article aside p {
+    /* @apply m-0; */
+  }
 
-	figure:has(> img) {
-		@apply flex flex-col items-center;
-	}
+  figure:has(> img) {
+    @apply flex flex-col items-center;
+  }
 
-	img {
-		@apply rounded-lg shadow-xl hover:shadow-3xl  hover:-translate-y-2 hover:scale-105 transition-all duration-300 ease-in-out my-4 !important;
-	}
+  img {
+    @apply rounded-lg shadow-xl hover:shadow-3xl  hover:-translate-y-2 hover:scale-105 transition-all duration-300 ease-in-out my-4 !important;
+  }
 
-	code {
-		@apply font-mono text-sm bg-gray-200 dark:bg-black  py-1 px-1.5 rounded-md;
-	}
-	code::after {
-		content: none !important;
-	}
-	code::before {
-		content: none !important;
-	}
+  code {
+    @apply font-mono text-sm bg-gray-200 dark:bg-black  py-1 px-1.5 rounded-md;
+  }
+  code::after {
+    content: none !important;
+  }
+  code::before {
+    content: none !important;
+  }
 
-	pre {
-		@apply max-sm:text-xs !important;
-	}
+  pre {
+    @apply max-sm:text-xs !important;
+  }
 }
 
 *::selection {
-	@apply bg-orange-500;
+  @apply bg-orange-500;
 }
 
 .animate {
   @apply opacity-0 translate-y-3;
-  @apply transition-all duration-700 ease-out;
+  @apply transition-all duration-300 ease-out;
 }
 
 .animate.show {
@@ -285,3 +283,74 @@ html.scrolled #back-to-top {
   @apply opacity-100 pointer-events-auto;
 }
 
+details {
+  transition: all 0.5s ease;
+  background: white;
+}
+
+details {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+summary {
+  transition: all 0.5s ease;
+  padding: 0.5em 1em;
+}
+[open] summary {
+  padding: 1em 1em;
+}
+
+summary {
+  cursor: pointer;
+
+  display: flex;
+  justify-content: space-between;
+
+  &::marker {
+    content: "";
+  }
+  &::after {
+    content: "";
+    background: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgYmFzZVByb2ZpbGU9InRpbnkiIGhlaWdodD0iMjRweCIgaWQ9IkxheWVyXzEiIHZlcnNpb249IjEuMiIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjRweCIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+PHBhdGggZD0iTTguNTg2LDUuNTg2Yy0wLjc4MSwwLjc4MS0wLjc4MSwyLjA0NywwLDIuODI4TDEyLjE3MSwxMmwtMy41ODUsMy41ODZjLTAuNzgxLDAuNzgxLTAuNzgxLDIuMDQ3LDAsMi44MjggIEM4Ljk3NiwxOC44MDUsOS40ODgsMTksMTAsMTlzMS4wMjQtMC4xOTUsMS40MTQtMC41ODZMMTcuODI5LDEybC02LjQxNS02LjQxNEMxMC42MzQsNC44MDUsOS4zNjYsNC44MDUsOC41ODYsNS41ODZ6Ii8+PC9zdmc+);
+    background-size: cover;
+    width: 1.25rem;
+    aspect-ratio: 1;
+    display: block;
+    transform: rotate(90deg);
+    transition: transform 0.5s ease;
+    transform-origin: 50% 50%;
+  }
+  [open] &::after {
+    transform: rotate(270deg);
+  }
+
+  /* Hover state */
+  &:hover {
+    color: #666;
+  }
+}
+
+::details-content {
+  transition:
+    all 0.5s ease,
+    content-visibility 0.5s allow-discrete;
+  height: 0;
+  overflow: clip;
+  padding: 0 1em;
+}
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  [open]::details-content {
+    height: auto;
+  }
+}
+@supports not (interpolate-size: allow-keywords) {
+  [open]::details-content {
+    height: 150px; /* In the future to be replaced by `height: auto` */
+    overflow-y: scroll; /* In case the contents should be taller than 150px */
+  }
+}
