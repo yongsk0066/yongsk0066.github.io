@@ -39,6 +39,19 @@ const seriesPosts = (
   )
   .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
 
+let hasTranslation = false;
+let translationSlug = "";
+
+const allPosts = await getCollection("blog");
+
+if (currentLocale === DEFAULT_LOCALE) {
+  translationSlug = `en/${post.slug}`;
+  hasTranslation = allPosts.some((p) => p.slug === translationSlug);
+} else {
+  translationSlug = post.slug.replace("en/", "");
+  hasTranslation = allPosts.some((p) => p.slug === translationSlug);
+}
+
 const { Content } = await post.render();
 const t = useTranslations(currentLocale as any);
 ---
@@ -65,15 +78,34 @@ const t = useTranslations(currentLocale as any);
     <!-- series -->
     <div class="animate flex items-center gap-1.5"></div>
     <div class="space-y-1 my-10">
-      <div class="animate flex items-center gap-1.5">
-        <div class="font-base text-sm">
-          <FormattedDate date={post.data.date} />
+      <div class="animate flex items-center gap-1.5 justify-between">
+        <div class="flex items-center gap-1.5">
+          <div class="font-base text-sm">
+            <FormattedDate date={post.data.date} />
+          </div>
+          &bull;
+          <div class="font-base text-sm">
+            {readingTime(post.body)}
+          </div>
         </div>
-        &bull;
-        <div class="font-base text-sm">
-          {readingTime(post.body)}
-        </div>
+
+        {
+          hasTranslation && (
+            <a
+              href={`/blog/${translationSlug}`}
+              class="inline-flex items-center px-3 py-1 rounded-md border border-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              title={
+                currentLocale === DEFAULT_LOCALE
+                  ? "View in English"
+                  : "한국어로 보기"
+              }
+            >
+              {currentLocale === DEFAULT_LOCALE ? "🇺🇸 EN" : "🇰🇷 KR"}
+            </a>
+          )
+        }
       </div>
+
       <div class="animate text-3xl font-bold text-black dark:text-white">
         {post.data.title}
       </div>
