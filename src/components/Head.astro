@@ -138,6 +138,68 @@ const { title, description, image = "/nano.png" } = Astro.props;
 
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />
+
+<!-- hreflang tags -->
+{
+  Astro.url.pathname.includes("/blog/en") ? (
+    <>
+      <link
+        rel="alternate"
+        hreflang="en"
+        href={new URL(Astro.url.pathname, Astro.site)}
+      />
+      <link
+        rel="alternate"
+        hreflang="ko"
+        href={
+          new URL(Astro.url.pathname.replace(/\/blog\/en/, "/blog"), Astro.site)
+        }
+      />
+      <link
+        rel="alternate"
+        hreflang="x-default"
+        href={
+          new URL(Astro.url.pathname.replace(/\/blog\/en/, "/blog"), Astro.site)
+        }
+      />
+    </>
+  ) : Astro.url.pathname.startsWith("/blog") &&
+    !Astro.url.pathname.includes("/en") ? (
+    <>
+      <link
+        rel="alternate"
+        hreflang="ko"
+        href={new URL(Astro.url.pathname, Astro.site)}
+      />
+      <link
+        rel="alternate"
+        hreflang="en"
+        href={
+          new URL(Astro.url.pathname.replace(/^\/blog/, "/blog/en"), Astro.site)
+        }
+      />
+      <link
+        rel="alternate"
+        hreflang="x-default"
+        href={new URL(Astro.url.pathname, Astro.site)}
+      />
+    </>
+  ) : (
+    <>
+      <link
+        rel="alternate"
+        hreflang="ko"
+        href={new URL(Astro.url.pathname, Astro.site)}
+      />
+      <link
+        rel="alternate"
+        hreflang="x-default"
+        href={new URL(Astro.url.pathname, Astro.site)}
+      />
+    </>
+  )
+}
+
 <!-- RSS -->
 <link
   rel="alternate"

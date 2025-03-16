@@ -1,0 +1,531 @@
+---
+title: 'Practical Uses of Proxy and Reflect'
+description: "Proxy and Reflect are features added in ES6. Proxy provides functionality to intercept the basic operations of an object, while Reflect provides methods that replicate these basic operations. Let's explore through examples."
+author: "Yongseok"
+categories: ["javascript"]
+date: '2024-08-04T22:00:00.000Z'
+heroImage: "/post/images/proxy_reflect_case/thumb.png"
+---
+import LinkPreview from '@components/LinkPreview.astro'
+import  { YouTube } from "@components/lit/youtube-element"
+
+
+
+I've been experimenting with Proxy and Reflect – features I've occasionally heard about but rarely used in practice.
+Proxy and Reflect were added in ES6. Proxy provides functionality to intercept the basic operations of an object, while Reflect provides methods that replicate these basic operations.
+
+
+## Before We Begin
+
+I've always enjoyed adding small decorative touches to my code, and have been a fan of a library called [chalk](https://github.com/chalk/chalk). \
+In case you're not familiar with it, let's briefly go over the specs of console.log.
+
+```js
+console.log('%cHello', 'color: blue;');
+```
+
+When you write a console statement like this, the word `Hello` will be displayed in blue. \
+The console.log specification includes implementations for format specifiers.
+
+<LinkPreview src="https://console.spec.whatwg.org/#logger" />
+
+<aside>
+2.2.1. Summary of formatting specifiers
+The following is an informative summary of the format specifiers processed by the above algorithm.
+
+|Specifier|Purpose|Type Conversion|
+|---|---|---|
+|%s|Element which substitutes is converted to a string|	%String%(element)|
+|%d or %i|Element which substitutes is converted to an integer|%parseInt%(element, 10)|
+|%f|Element which substitutes is converted to a float|%parseFloat%(element, 10)|
+|%o|Element is displayed with optimally useful formatting|n/a|
+|%O|Element is displayed with generic JavaScript object formatting|n/a|
+|%c|Applies provided CSS|n/a|
+</aside>
+
+The Chromium formatting implementation can be found here. First for the devtools, then for the v8 engine:
+<LinkPreview src="https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/panels/console/ConsoleFormat.ts;drc=b36375ce9ad77da9c8eb0791755b4a14ca0b76de;l=40" />
+<LinkPreview src="https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/builtins-console.cc;drc=b36375ce9ad77da9c8eb0791755b4a14ca0b76de;l=64?q=builtins-co&ss=chromium%2Fchromium%2Fsrc"/>
+
+Chromium also has some non-standard formatting like `%_`, but let's not get sidetracked.\
+The important thing to understand is that we can style `console.log` output.
+
+## How to Style Console Output
+
+So why are we talking about `console.log`? 
+
+When you try to style console output with the basic format, you'll encounter several inconveniences.
+
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: skyblue">[function 1] </span><span style="color: green">result : 1234</span> 
+</div>
+How would you apply different styles within a single line like this?
+
+```js
+console.log('%c[function 1]', 'color: skyblue;', '%cresult : 1234', 'color: green;');
+```
+Will this work? Unfortunately not. Format specifiers only work in the first argument. The rest are simply treated as strings if they're not styles.
+Let's look at the implementation I mentioned earlier.
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: skyblue">[function 1]</span><span> %cresult : 1234 color: green;</span>
+</div>
+
+To get the desired output, you need to write it like this:
+```js
+console.log('%c[function 1] %cresult : 1234', 'color: skyblue;', 'color: green;');
+```
+Alternatively, you can use `ANSI_escape_code` for styling. (This approach has more limitations compared to CSS. For example, you can't add background images.)
+```js
+console.log('\x1B[34m[function 1]\x1B[0m\x1B[32mresult : 1234\x1B[0m')
+```
+For more details on `ANSI_escape_code`, check the wiki (https://en.wikipedia.org/wiki/ANSI_escape_code)\
+When using ASCII format in a Node environment, you can separate arguments and still have them styled. If you run this in a browser, the latter part will appear as a plain string.
+```js
+console.log('\x1B[34m[function 1]\x1B[0m','\x1B[32mresult : 1234\x1B[0m')
+```
+
+
+Neither method is particularly convenient.\
+The first method has better readability, while the second has poorer readability since everything is in one line, but it's better for creating structured output.
+
+This is where `chalk` comes in handy.
+
+```js
+import chalk from 'chalk';
+
+console.log(chalk.skyblue('[function 1]') + chalk.green('result : 1234'));
+
+// You can also apply multiple styles in a chain
+console.log(chalk.blue.bgWhite.bold('Hello world!'));
+```
+It's a simple console styling library that allows you to apply styles through chaining, as shown in the examples above.
+
+The impressive part here is the chaining approach.
+
+Let's try to implement this ourselves.
+
+## Implementing Chalk
+
+### Defining Styles
+
+From the styling methods we've seen, `ANSI_escape_code` should be sufficient for our needs.\
+Let's start by defining our styles:
+```js
+const styles = {
+  // Colors
+  black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  // Backgrounds
+  bgBlack: "\x1b[40m",
+  bgRed: "\x1b[41m",
+  bgGreen: "\x1b[42m",
+  bgYellow: "\x1b[43m",
+  bgBlue: "\x1b[44m",
+  bgMagenta: "\x1b[45m",
+  bgCyan: "\x1b[46m",
+  bgWhite: "\x1b[47m",
+  // Styles
+  bold: "\x1b[1m",
+  italic: "\x1b[3m",
+  underline: "\x1b[4m",
+  // Reset
+  reset: "\x1b[0m",
+}
+```
+
+### Defining Requirements
+
+Before implementing, let's examine our desired input and expected output:
+```js
+// 1. Applying a single style
+console.log(c.blue("Hello")) // outputs in blue
+
+// This actually outputs as:
+console.log("\x1B[34mHello\x1B[0m");
+// {\x1B[34m} Hello {\x1B[0m}
+// {style(color blue)} Hello {reset}
+
+// 2. Applying multiple styles
+console.log(c.blue.bgWhite.bold("Hello world!"));
+console.log("\x1B[34m\x1B[47m\x1B[1mHello\x1B[0m");
+// {\x1B[34m} {\x1B[47m} {\x1B[1m} Hello {\x1B[0m}
+// {style(color blue)} {style(background white)} {style(bold)} Hello {reset}
+```
+
+Each chained call should add a new layer of style. How would we implement this?\
+Take a moment to think about it.
+
+Have you thought about it?\
+Let's implement it.
+
+First, let's clarify our requirements:
+
+1. Take a string as an argument and return a string with the style applied.
+2. Allow styles to be applied through chaining.
+3. Each chained call should add a new style.
+4. Reset style should be added at the end.
+
+
+### Implementing the Styling Function
+
+
+We need to create a function that takes a string and returns a styled string.
+Let's start by implementing a function that applies a single style:
+```js
+c.blue("Hello") // \x1B[34mHello\x1B[0m
+```
+`c.blue` will do the following: find the 'blue' style from our defined styles, apply it, and add a reset.
+```js
+c.blue = (text) => {
+  return `${styles.blue}${text}${styles.reset}`;
+}
+```
+How can we apply styles in the form `c.{style}`?\
+We need an object `c` with properties that are functions.\
+Let's create the `c` object:
+
+```js
+const c = {
+  blue: (text) => {
+    return `${styles.blue}${text}${styles.reset}`;
+  }
+  // ...
+}
+```
+This allows us to apply styles with `c.blue`.\
+But this seems inefficient. We already have style information defined in `styles`, and now we're defining the same information again in `c`.
+
+It would be better if the `c` object could automatically find and apply the right style when accessed.\
+We can implement this using `Proxy`.
+
+<LinkPreview src="https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Proxy"/>
+
+`Proxy` has something called a `get trap` that is called whenever a property is accessed.
+```js
+const c = new Proxy({}, {
+  get: function(target, prop) {
+    // ...
+  }
+});
+```
+The `get` trap is called whenever the `c` object is accessed.\
+When `c.blue` is accessed, the `get` trap is called and `prop` is set to `blue`.\
+Let's use this to find and apply styles from our `styles` object:
+
+```js
+const c = new Proxy({}, {
+  get: function(target, prop) {
+    return function(text) {
+      if (prop in styles) { // Apply the style if it exists in styles
+        return `${styles[prop]}${text}${styles.reset}`;
+      }
+      return text;
+    };
+  }
+});
+
+console.log(c.blue("Hello"));
+```
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: #3e71e8">Hello</span> 
+</div>
+This is how we can implement the `c` object. Try running it yourself.\
+`c.blue` outputs text in blue, and `c.red` outputs text in red.
+
+We've completed the first stage.\
+Now let's implement chaining.
+
+### Implementing Chaining
+
+The chaining in this implementation has a recursive structure.\
+Each function call returns a new function, and at the end, it returns a string with all the accumulated styles.
+
+Previously, we made a function that returns a simple string.\
+Let's change it to a function that returns another function.
+
+To build it recursively, let's first create the base function that will be executed at the end:
+```js
+const styleFunction = (text) => {
+  return `${currentStyle}${text}${styles.reset}`;
+};
+```
+This function carries the styles and returns a string with the final compiled styles.\
+Let's apply `Proxy` to this function to implement chaining.
+When a property of this function is accessed, we'll add a new style and return a new `styleFunction`.
+
+```js
+new Proxy(styleFunction, {
+  get(target, prop) {
+    if (prop in styles) {
+      return createStyleFunction(currentStyle + styles[prop]);
+    }
+    return target[prop];
+  },
+});
+```
+
+To set the initial value, let's create a `createStyleFunction` function:
+
+```js
+function createStyleFunction(currentStyle = "") {
+  const styleFunction = (text) => {
+    return `${currentStyle}${text}${styles.reset}`;
+  };
+
+  return new Proxy(styleFunction, {
+    get(target, prop) {
+      if (prop in styles) {
+        return createStyleFunction(currentStyle + styles[prop]);
+      }
+      return target[prop];
+    },
+  });
+}
+
+export const c = createStyleFunction();
+
+console.log(c.blue.bgWhite("Hello"));
+```
+
+This is the final implementation.
+
+### How It Works
+
+Now that we've completed it, let's see how it works:
+
+```js
+console.log(c.blue.bgWhite("Hello"));
+```
+
+1. When the `c.blue` property is accessed, the `get` trap is called.
+2. The `createStyleFunction` function is called, and a `styleFunction` with `styles.blue` added to `currentStyle` is returned.
+3. When the `bgWhite` property is accessed on the returned `Proxy`-wrapped `c.blue`, the `get` trap is called again.
+4. The `createStyleFunction` function is called, and a `styleFunction` with `styles.bgWhite` added to `currentStyle` is returned.
+5. At this point, currentStyle is `styles.blue` + `styles.bgWhite`.
+6. "Hello" is passed to the returned `styleFunction`, and ultimately `styles.blue` + `styles.bgWhite` + "Hello" + `styles.reset` is returned.
+
+This is how we can apply styles through chaining.
+
+### Interim Summary
+
+Rather than diving deep into **Proxy** itself, we've explored it through use cases.\
+As we've seen in the implementation above, **Proxy** provides functionality to intercept basic operations.\
+The concept of interception can be understood as having an original object that is extended or overridden.\
+This makes it useful for implementing features like chaining.
+
+## Reflect
+
+When it comes to extension and inheritance, **Reflect** becomes even more powerful when used together with **Proxy**.\
+Proxy and Reflect have methods that correspond to each other one-to-one.\
+While Proxy provides methods to intercept operations, Reflect provides methods to replicate these original operations.\
+You can think of Reflect as safely delivering the original operation.
+
+Let's explore **Reflect** through a simple example.
+
+### Example 1 - ORM Library
+
+Let's imagine we're creating an **ORM** library. Using the chaining technique we learned above, let's create a **query builder** that generates **SQL statements**.\
+First, let's define how we want to use it (think of query builders from libraries like TypeORM):
+  
+```js
+const query = createQueryBuilder()
+  .select('name', 'email')
+  .from('users')
+  .where('age > 18')
+  .status('active')  // Dynamically generated WHERE clause
+  .createdAt('2024-08-04')  // Another dynamic WHERE clause
+  .toSQL();
+
+
+console.log(query);
+// SELECT name, email FROM users WHERE age > 18 AND 
+// status = 'active' AND createdAt = '2024-08-04'
+```
+This is a declarative way to define operations and generate **SQL statements**.\
+We'll have basic definitions for **SQL** statements and add methods to extend them.
+
+Let's first create the base **QueryBuilder**:
+
+I've defined the basic methods and made them return an instance of **QueryBuilder** for chaining.
+Then I added a **toSQL** method to return the **SQL** statement.
+
+```ts
+class QueryBuilder {
+  private query: any = {};
+
+  select(...fields: string[]): this {
+    this.query.select = fields;
+    return this;
+  }
+
+  from(table: string): this {
+    this.query.from = table;
+    return this;
+  }
+
+  where(condition: string): this {
+    this.query.where = this.query.where || [];
+    this.query.where.push(condition);
+    return this;
+  }
+
+  toSQL(): string {
+    let sql = `SELECT ${this.query.select ? this.query.select.join(', ') : '*'} FROM ${this.query.from}`;
+    if (this.query.where) {
+      sql += ` WHERE ${this.query.where.join(' AND ')}`;
+    }
+    return sql;
+  }
+}
+
+```
+We've created a basic **QueryBuilder** that generates **SQL** statements.\
+Now let's use **Proxy** to add functionality for dynamically generating **WHERE** clauses:
+
+```ts
+
+function createQueryBuilder(): QueryBuilderProxy {
+  const builder = new QueryBuilder();
+  
+  const handler: ProxyHandler<QueryBuilder> = {
+    get(target: QueryBuilder, prop: string | symbol, receiver: any): any {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      // Dynamic WHERE clause generation
+      return (value: any) => {
+        target.where(`${prop.toString()} = '${value}'`);
+        return receiver;
+      };
+    }
+  };
+  
+  return new Proxy(builder, handler) as QueryBuilderProxy;
+}
+```
+Using **Proxy**, the **get** trap is called whenever a property of the **QueryBuilder** instance is accessed.\
+We've used this to add functionality for dynamically generating **WHERE** clauses.
+
+This allows us to generate WHERE clauses dynamically like `.status('active')`.
+
+## Example 2 - State Management
+
+Besides the **get** trap, **Proxy** also provides a **set** trap.\
+This means we can intercept values being set as well.\
+Since we can detect changes, we could use this for state management.
+
+Let's create a simple **state management** tool:
+
+```ts
+type Listener = () => void;
+
+export class StateManager<T extends object> {
+  private state: T;
+  private listeners = new Set<Listener>();
+
+  constructor(initialState: T) {
+    this.state = new Proxy<T>(initialState, {
+      get: (target: T, prop: string | symbol): any => {
+        return Reflect.get(target, prop);
+      },
+      set: (target: T, prop: string | symbol, value: any): boolean => {
+        const oldState = { ...target };
+        const result = Reflect.set(target, prop, value);
+        if (prop in target && oldState[prop as keyof T] !== target[prop as keyof T]) {
+          this.notifyListeners();
+        }
+        return result;
+      },
+    });
+  }
+
+  getState = (): T => this.state;
+
+  setState = <K extends keyof T>(key: K, value: T[K]): void => {
+    if (this.state[key] !== value) {
+      this.state = { ...this.state, [key]: value };
+      this.notifyListeners();
+    }
+  };
+
+  subscribe = (listener: Listener): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  private notifyListeners = (): void => {
+    this.listeners.forEach((listener) => listener());
+  };
+}
+```
+
+**StateManager** uses **Proxy** to intercept **state** and uses the **set** trap to detect state changes.\
+It notifies registered listeners whenever a new value is set.
+
+What if we integrate this state management with **React**?\
+Since it's an external state, it would be good to use it with **useSyncExternalState**.
+
+```ts
+interface GlobalState {
+  count: number;
+}
+
+// Create global state instance
+const globalState = new StateManager<GlobalState>({
+  count: 0,
+});
+
+export function useGlobalState<K extends keyof GlobalState>(
+  key: K
+): [GlobalState[K], (value: GlobalState[K]) => void] {
+  const value = useSyncExternalStore(
+    globalState.subscribe,
+    () => globalState.getState()[key],
+    () => globalState.getState()[key]
+  );
+
+  const setValue = (newValue: GlobalState[K]) => {
+    globalState.setState(key, newValue);
+  };
+
+  return [value, setValue];
+}
+```
+
+By properly subscribing to events, we can integrate with **React** using **useSyncExternalState**.
+Here's how to use it in practice, and it works well:
+
+```tsx
+import { useGlobalState } from './store';
+
+function Counter() {
+  const [count, setCount] = useGlobalState('count');
+
+  return (
+    <div>
+      Count: {count}
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+Since it's not dependent on React, it could be used with other frameworks as well.\
+I believe [Valtio](https://github.com/pmndrs/valtio) is based on **Proxy**, and it probably works similarly.
+
+## Conclusion
+
+We've explored the once unfamiliar **Proxy** and **Reflect**.\
+**Proxy** provides functionality to intercept basic operations, while **Reflect** provides methods that replicate these basic operations.\
+Using these, we've created a **console styling library**, an **ORM library**, and a **state management library**.
+
+
+I've left the final words to GitHub Copilot.
+I'm extremely hungry since I haven't had dinner. That's all for this post. 
