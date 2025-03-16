@@ -1,0 +1,744 @@
+---
+title: "useActionState (What is form 2)"
+author: "Yongseok"
+pubDate: "2024-04-28"
+date: "2024-04-28"
+categories: [""]
+heroImage: "/blog-placeholder-3.jpg"
+description: "React has hooks related to forms such as form action, useFormState, and useFormStatus. 
+I want to explore how these hooks work. useActionState is a hook for handling asynchronous actions. I was looking at useFormState, but it has been renamed to useActionState."
+---
+
+import LinkPreview from "../../../components/LinkPreview.astro";
+
+In the previous post, we looked at the basic implementation of forms.
+React also has form-related hooks such as form action, useFormState, and useFormStatus.\
+I'd like to explore how these hooks work.
+
+### useActionState
+
+A hook for handling asynchronous actions.
+
+https://react.dev/reference/react/useActionState
+
+```tsx
+import { useActionState } from "react"; // not react-dom
+
+function Form({ formAction }) {
+  const [state, action, isPending] = useActionState(formAction);
+
+  return (
+    <form action={action}>
+      <input type="email" name="email" disabled={isPending} />
+      <button type="submit" disabled={isPending}>
+        Submit
+      </button>
+      {state.errorMessage && <p>{state.errorMessage}</p>}
+    </form>
+  );
+}
+```
+
+I was looking at useFormState, but it has been renamed to useActionState.
+
+<LinkPreview src="https://github.com/facebook/react/pull/28491" />
+
+This change was made to handle asynchronous actions independently from forms.
+
+Let's look at the source code to understand how it works.
+
+First, let's examine the mounting process.
+When mounted, the mountActionState function is called to set the initial state.
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js
+(HooksDispatcherOnMountInDEV: Dispatcher).useActionState =
+      function useActionState<S, P>(
+        action: (Awaited<S>, P) => S,
+        initialState: Awaited<S>,
+        permalink?: string,
+      ): [Awaited<S>, (P) => void, boolean] {
+        currentHookNameInDev = 'useActionState';
+        mountHookTypesDev();
+        return mountActionState(action, initialState, permalink);
+      };
+```
+
+```ts
+// Function called when the hook is mounted
+function mountActionState<S, P>(
+  action: (Awaited<S>, P) => S,
+  initialStateProp: Awaited<S>,
+  permalink?: string,
+): [Awaited<S>, (P) => void, boolean] {
+  // Get the initial state
+  let initialState: Awaited<S> = initialStateProp;
+
+  // During hydration
+  if (getIsHydrating()) {
+    // Get the form state rendered from the server
+    const root: FiberRoot = (getWorkInProgressRoot(): any);
+    const ssrFormState = root.formState;
+    // If a formState option was passed to the root, there are form state
+    // markers that we need to hydrate. These indicate whether the form state
+    // matches this hook instance.
+    if (ssrFormState !== null) {
+      // Find a matching form marker for the current Fiber through tryToClaimNextHydratableFormMarkerInstance
+      // and if there's a match, get the initial state
+      const isMatching = tryToClaimNextHydratableFormMarkerInstance(
+        currentlyRenderingFiber,
+      );
+      if (isMatching) {
+        initialState = ssrFormState[0];
+      }
+    }
+  }
+  // ...
+```
+
+useActionState takes action and initialState as arguments (plus an optional permalink).\
+Because it handles asynchronous processing, the initial value can be Awaited.
+
+useActionState combines three hooks. It returns the following values:
+
+- state: the current state value of the action
+- dispatch: a function to dispatch actions
+- isPending: a boolean indicating whether an action is currently in progress
+
+With these, a component can read the current state, dispatch new actions, and know when actions are completed.
+
+## stateHook - A hook for storing state
+
+Creates a hook to store the action's state.\
+The initial value is initialState, with the type `Awaited<S>`.\
+It uses the `Awaited<S>` type to store the result of asynchronous actions.
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountActionState function
+
+// ...
+// ========================================================
+// Hook for storing state
+// ========================================================
+
+// State hook. The state is stored in a thenable which is then unwrapped by
+// the `use` algorithm during render.
+
+  // Create a new hook with mountWorkInProgressHook
+  const stateHook = mountWorkInProgressHook();
+  stateHook.memoizedState = stateHook.baseState = initialState;
+  // TODO: Typing this "correctly" results in recursion limit errors
+  // const stateQueue: UpdateQueue<S | Awaited<S>, S | Awaited<S>> = {
+  const stateQueue = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: (null: any),
+    lastRenderedReducer: actionStateReducer,
+    lastRenderedState: initialState,
+  };
+  // Create stateQueue object and assign it to stateHook.queue
+  stateHook.queue = stateQueue;
+  // Bind dispatchSetState function with currentlyRenderingFiber and stateQueue to create setState function
+  // Assign setState function to stateQueue.dispatch
+
+  // This part is similar to useState
+  const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+  ): any);
+  stateQueue.dispatch = setState;
+```
+
+<aside>
+  <b>Thought:</b>
+  It has a similar name to useState and also stores state, so what's the difference?
+</aside>
+
+It has familiar operations from useState.
+
+Let's briefly look at the mounting process of useState (mountState).
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountState function
+
+// ...
+function mountState<S>(
+  initialState: (() => S) | S,
+): [S, Dispatch<BasicStateAction<S>>] {
+  const hook = mountStateImpl(initialState);
+  const queue = hook.queue;
+  const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    queue,
+  ): any);
+  queue.dispatch = dispatch;
+  return [hook.memoizedState, dispatch];
+}
+
+function mountStateImpl<S>(initialState: (() => S) | S): Hook {
+  const hook = mountWorkInProgressHook();
+  // Similarly creates a hook
+  if (typeof initialState === 'function') {
+    // ...
+  }
+  // Initialize the state
+  hook.memoizedState = hook.baseState = initialState;
+  // Create a queue
+  const queue: UpdateQueue<S, BasicStateAction<S>> = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: null,
+    lastRenderedReducer: basicStateReducer,
+    lastRenderedState: (initialState: any),
+  };
+
+  // Assign the queue to the hook
+  hook.queue = queue;
+  // Return the hook
+  return hook;
+}
+```
+
+Let's examine the differences between the two.
+
+```ts
+// useState (mountState) type
+type BasicStateAction<S> = (S => S) | S;
+
+const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  queue, // UpdateQueue<S, BasicStateAction<S>>
+): any);
+```
+
+In the case of useState, the queue is cast to the type `UpdateQueue<S, BasicStateAction<S>>`.
+
+```ts
+// useActionState (mountActionState's stateHook) type
+
+const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+): any);
+```
+
+On the other hand, useActionState is cast to the type `UpdateQueue<S | Awaited<S>, S | Awaited<S>>` to store the result of asynchronous actions.
+
+Awaited is defined as follows:
+
+Interestingly, it returns the final resolved value even from nested Thenables using recursion.
+
+```ts
+// packages/shared/ReactTypes.js
+export type Awaited<T> = T extends null | void
+  ? T // return as is if null or undefined
+  : T extends Object // if T is an object type
+    ? T extends { then(onfulfilled: infer F): any } // if it's a Thenable object with a then method
+      ? F extends (value: infer V) => any // if the first argument of then is a function
+        ? Awaited<V> // recursively wrap the first argument type of the function with Awaited
+        : empty // if the first argument of then is not a function (invalid Thenable)
+      : T // if it's a regular object without a then method
+    : T; // if it's not an object (number, string, etc.)
+```
+
+## pendingStateHook - Part for handling pending state
+
+This part handles the pending state of asynchronous actions.
+pendingStateHook is also similar to useState in basic functionality.
+It creates a hook using mountStateImpl.
+
+Also, since the pending state needs to be updated immediately, it uses optimistic updates.\
+I'll explain this with dispatchOptimisticSetState below.
+
+One difference is that it passes `Thenable<boolean> | boolean` as the initial value (with a default of false).
+
+<aside>
+  <b>Thought:</b>
+  Looking at the code overall, it's a target for optimistic updates, but does the
+  pending state need to be Thenable?
+</aside>
+
+I wondered about this and submitted a PR.
+
+<LinkPreview src="https://github.com/facebook/react/pull/28942" />
+
+It seems to reference code from useTransition, where booleanOrThenable is valid, but in this case, I think boolean would be more appropriate...
+
+```ts
+// ========================================================
+// Part for handling pending state
+// ========================================================
+// Pending state. This is used to store the pending state of the action.
+// Tracked optimistically, like a transition pending state.
+
+  // Create a hook for pending state using mountStateImpl
+  const pendingStateHook = mountStateImpl((false: Thenable<boolean> | boolean));
+  // Bind dispatchOptimisticSetState function with currentlyRenderingFiber, false,
+  // and pendingStateHook.queue to create setPendingState function
+  const setPendingState: boolean => void = (dispatchOptimisticSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    false,
+    ((pendingStateHook.queue: any): UpdateQueue<
+      S | Awaited<S>, // S can be Promise or Thenable
+      S | Awaited<S>,
+    >),
+  ): any);
+```
+
+Here's the Thenable type for those curious:
+
+```ts
+// packages/shared/ReactTypes.js
+
+// The subset of a Thenable required by things thrown by Suspense.
+// This doesn't require a value to be passed to either handler.
+export interface Wakeable {
+  then(onFulfill: () => mixed, onReject: () => mixed): void | Wakeable;
+}
+
+// The subset of a Promise that React APIs rely on. This resolves a value.
+// This doesn't require a return value neither from the handler nor the
+// then function.
+interface ThenableImpl<T> {
+  then(
+    onFulfill: (value: T) => mixed,
+    onReject: (error: mixed) => mixed
+  ): void | Wakeable;
+}
+interface UntrackedThenable<T> extends ThenableImpl<T> {
+  status?: void;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface PendingThenable<T> extends ThenableImpl<T> {
+  status: "pending";
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface FulfilledThenable<T> extends ThenableImpl<T> {
+  status: "fulfilled";
+  value: T;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface RejectedThenable<T> extends ThenableImpl<T> {
+  status: "rejected";
+  reason: mixed;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export type Thenable<T> =
+  | UntrackedThenable<T>
+  | PendingThenable<T>
+  | FulfilledThenable<T>
+  | RejectedThenable<T>;
+```
+
+## actionQueueHook - Action queue hook
+
+This part is for managing actions in a queue.
+Both dispatches from the hooks created earlier are passed together.
+
+```ts
+// ========================================================
+// Action queue hook
+// ========================================================
+
+// Action queue hook. This is used to queue pending actions. The queue is
+// shared between all instances of the hook. Similar to a regular state queue,
+// but different because the actions are run sequentially, and they run in
+// an event instead of during render.
+
+  const actionQueueHook = mountWorkInProgressHook();
+  // memorizedState is not done here
+  const actionQueue: ActionStateQueue<S, P> = {
+    state: initialState, // initialState is set here
+    dispatch: (null: any), // circular
+    action,
+    pending: null,
+  };
+  actionQueueHook.queue = actionQueue;
+  // This part creates the queue and passes it
+  const dispatch = (dispatchActionState: any).bind(
+    null,
+    currentlyRenderingFiber,
+    actionQueue,
+    setPendingState, // Pass the setPendingState function
+    setState, // Pass the setState function
+  );
+  actionQueue.dispatch = dispatch;
+
+  // Stash the action function on the memoized state of the hook. We'll use this
+  // to detect when the action function changes so we can update it in
+  // an effect.
+
+  actionQueueHook.memoizedState = action;
+
+  // Finally, return [state, dispatch, isPending]
+  return [initialState, dispatch, false];
+}
+```
+
+Another difference between these three hooks is that they each change state through different functions: `dispatchSetState`, `dispatchOptimisticSetState`, and `dispatchActionState`.
+
+Let's compare these three.
+
+## Comparing dispatches
+
+### dispatchSetState
+
+```ts
+function dispatchSetState<S, A>(
+  fiber: Fiber,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const lane = requestUpdateLane(fiber);
+  // Request a lane for the update
+
+  const update: Update<S, A> = {
+    lane,
+    revertLane: NoLane, // Not an optimistic update, so NoLane
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+  // Create an update object
+
+  // Check if it's in the rendering phase
+  if (isRenderPhaseUpdate(fiber)) {
+    // If in rendering phase
+    enqueueRenderPhaseUpdate(queue, update);
+  } else {
+    // If not in rendering phase
+    const alternate = fiber.alternate;
+    // Get the previous Fiber
+    if (
+      fiber.lanes === NoLanes && // If current Fiber's lanes are NoLanes
+      (alternate === null || alternate.lanes === NoLanes) // And previous Fiber's lanes are NoLanes
+    ) { // This means there are no previously scheduled updates
+      const lastRenderedReducer = queue.lastRenderedReducer; // lastRenderedReducer is the last rendered reducer function
+      // If the queue is currently empty, we can eagerly compute the next state
+      // before entering the render phase. This is calculation is done eagerly.
+      // If the new state is the same as the current state, we can bail out completely.
+      if (lastRenderedReducer !== null) {
+        let prevDispatcher = null;
+        try {
+          const currentState: S = (queue.lastRenderedState: any);
+          const eagerState = lastRenderedReducer(currentState, action);
+          // Store the eagerly calculated state and the reducer used to calculate it in the update object.
+          // If the reducer hasn't changed by the time we enter the render phase,
+          // we can use the eager state without calling the reducer again.
+          update.hasEagerState = true;
+          update.eagerState = eagerState;
+          if (is(eagerState, currentState)) {
+            // Fast path. We can bail out without scheduling React to re-render.
+            // It's still possible that the component will re-render for other reasons,
+            // and we might have to reconsider this update later. This might happen if
+            // the reducer changes between now and then.
+            // TODO: Do we need to entangle transitions in this case as well?
+
+            // If rerendering is not needed
+            enqueueConcurrentHookUpdateAndEagerlyBailout(fiber, queue, update);
+            return;
+          }
+        } catch (error) {
+        // Suppress the error. It will throw again in the render phase.
+        } finally {
+        }
+      }
+    }
+
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
+    if (root !== null) {
+      scheduleUpdateOnFiber(root, fiber, lane);
+      entangleTransitionUpdate(root, queue, lane);
+    }
+  }
+
+  markUpdateInDevTools(fiber, lane, action);
+}
+```
+
+```ts
+function isRenderPhaseUpdate(fiber: Fiber): boolean {
+  const alternate = fiber.alternate;
+  return (
+    fiber === currentlyRenderingFiber ||
+    (alternate !== null && alternate === currentlyRenderingFiber)
+  );
+}
+
+function enqueueRenderPhaseUpdate<S, A>(
+  queue: UpdateQueue<S, A>,
+  update: Update<S, A>
+): void {
+  // This is a render phase update. Stash it in a lazily-created map of
+  // queue -> linked list of updates. After this render pass, we'll restart
+  // and apply the stashed updates on top of the work-in-progress hook.
+  didScheduleRenderPhaseUpdateDuringThisPass = didScheduleRenderPhaseUpdate =
+    true;
+  const pending = queue.pending;
+  if (pending === null) {
+    // This is the first update. Create a circular list.
+    update.next = update;
+  } else {
+    update.next = pending.next;
+    pending.next = update;
+  }
+  queue.pending = update;
+}
+```
+
+### dispatchOptimisticSetState
+
+This function is for handling optimistic updates.\
+The purpose of optimistic updates is to immediately update the state, so it operates synchronously and uses syncLane.
+
+It also uses revertLane to revert the state after the transition is complete.
+
+This is why I don't think it should be Thenable... so I submitted that PR.
+
+```ts
+function dispatchOptimisticSetState<S, A>(
+  fiber: Fiber,
+  throwIfDuringRender: boolean,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const transition = requestCurrentTransition();
+
+  const update: Update<S, A> = {
+    // Optimistic updates happen synchronously, so SyncLane is used. This is because they need to be shown to the user immediately.
+    lane: SyncLane,
+    // After committing, the optimistic update is "reverted" using the same
+    // lane as the transition it's associated with.
+    // Optimistic updates happen immediately, so there might be inconsistencies with actual data later.
+    // revertLane is used to solve this.
+    // The transitionLane is used to revert the state at the appropriate time.
+    // When the transition ends
+    revertLane: requestTransitionLane(transition),
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+
+  if (isRenderPhaseUpdate(fiber)) {
+    // When calling startTransition during rendering, we issue a warning rather than throwing an exception. Throwing would be a breaking change.
+    // Since setOptimisticState is a new API, it's allowed to throw an exception.
+    if (throwIfDuringRender) {
+      throw new Error('Cannot update optimistic state while rendering.');
+    } else {
+      // startTransition was called during rendering.
+      // We don't need to do anything here other than warn, since the render phase update will be overwritten by the second update anyway.
+      // We could remove this branch and make it throw in future releases.
+    }
+  } else {
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, SyncLane);
+    if (root !== null) {
+      // The optimistic update implementation assumes that a Transition isn't attempted before the optimistic update.
+      // This is valid currently because optimistic updates are always processed synchronously.
+      // If this behavior changes, we'll need to account for it.
+      scheduleUpdateOnFiber(root, fiber, SyncLane);
+      // Optimistic updates are always synchronous, so we don't need to call entangleTransitionUpdate here.
+    }
+  }
+
+  markUpdateInDevTools(fiber, SyncLane, action);
+}
+```
+
+### dispatchActionState
+
+This function is for handling actions.\
+It basically uses a circular linked list data structure to queue actions.
+
+This ensures that actions are executed sequentially.
+
+<aside>
+  <b>Thought:</b>
+  Is there a more direct reason for using a circular linked list? I think it might
+  be because it requires less additional implementation than an array-based approach...
+</aside>
+
+This is where actions are actually executed.
+
+```ts
+function dispatchActionState<S, P>(
+  fiber: Fiber,
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+): void {
+  if (isRenderPhaseUpdate(fiber)) {
+    // Cannot update form state while rendering!
+    throw new Error('Cannot update form state while rendering.');
+  }
+  // Check if the action queue is empty
+  const last = actionQueue.pending;
+  if (last === null) {
+    // If empty (no pending actions), this is the first action so execute immediately
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: (null: any), // circular (similar to state updates, implemented as a linked list)
+    };
+    // Create a circular linked list
+    newLast.next = actionQueue.pending = newLast; // Add the newly created action to the queue
+    // actionQueue.pending = newLast; Set the starting point
+    // Set the next property of the new action node to itself. The next node becomes itself.
+
+    runActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+      payload,
+    );
+  } else {
+
+    // If there's already an action running, add to the queue
+    const first = last.next; // Get the next action (the first node is the next node of the last node in a circular linked list)
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: first, // Set the retrieved next action as the next of the new action
+    };
+    actionQueue.pending = last.next = newLast; // Add the new action to the queue
+    // actionQueue.pending = last.next = newLast; Set the next node of the last node to the new node
+  }
+}
+
+function runActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+) {
+  const action = actionQueue.action; // Get the action
+  const prevState = actionQueue.state; // Get the previous state
+
+  // Part taken from startTransition
+  const prevTransition = ReactSharedInternals.T;
+  const currentTransition: BatchConfigTransition = {
+    _callbacks: new Set<(BatchConfigTransition, mixed) => mixed>(),
+  };
+  ReactSharedInternals.T = currentTransition;
+  if (__DEV__) {
+    ReactSharedInternals.T._updatedFibers = new Set();
+  }
+
+  // Optimistically update the pending state. Similar to useTransition.
+  // Automatically reverts when all actions are complete.
+  setPendingState(true);
+
+  try {
+    const returnValue = action(prevState, payload); // Execute the action
+    if (
+      returnValue !== null &&
+      typeof returnValue === 'object' &&
+      typeof returnValue.then === 'function'
+    ) {
+      // If the action returns something that's not null, is an object, and has a then method
+      // convert it to a thenable
+      const thenable = ((returnValue: any): Thenable<Awaited<S>>);
+      notifyTransitionCallbacks(currentTransition, thenable);
+
+      // Add a listener to read the return state of the action.
+      // When this resolves, we can run the next action in the sequence.
+      thenable.then( // Use thenable to handle asynchronous actions
+        (nextState: Awaited<S>) => { // If successful
+          actionQueue.state = nextState; // Update the state
+          finishRunningActionStateAction(  // Execute after the action is complete
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          );
+        },
+        () => // If failed
+          finishRunningActionStateAction(
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          ),
+      );
+
+      setState((thenable: any)); // Call setState of stateHook. Pass the thenable.
+    } else { // If the return value is not a thenable, i.e., synchronous
+      setState((returnValue: any)); // Call setState of stateHook. Pass the return value.
+
+      const nextState = ((returnValue: any): Awaited<S>); // Assign the return value to nextState
+      actionQueue.state = nextState; // Update the state
+      finishRunningActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+      );
+    }
+  } catch (error) {
+    // This is a trick to get the `useActionState` hook to rethrow the error.
+    // When it unwraps the thenable with the `use` algorithm, the error
+    // will be thrown.
+    const rejectedThenable: S = ({
+      then() {},
+      status: 'rejected',
+      reason: error,
+      // $FlowFixMe: Not sure why this doesn't work
+    }: RejectedThenable<Awaited<S>>);
+    setState(rejectedThenable);
+    finishRunningActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+    );
+  } finally {
+    ReactSharedInternals.T = prevTransition;
+  }
+}
+
+// Function executed after an action completes
+function finishRunningActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: Dispatch<S | Awaited<S>>,
+  setState: Dispatch<S | Awaited<S>>,
+) {
+  // The action finished running. Pop it from the queue and run the next pending
+  // action, if there are any.
+  const last = actionQueue.pending; // Get the last action
+  if (last !== null) { // If the last action is not null
+    const first = last.next; // Get the next action
+    if (first === last) { // If the last action is the first action (because it's a circular linked list)
+      // It was the last action in the queue
+      actionQueue.pending = null;  // Empty the queue
+    } else { // If the last action is not the first action
+      // Remove the first node from the circular queue
+      const next = first.next; // Get the next node
+      last.next = next; // Set the next node of the last node to the next node
+
+      // Run the next action
+      runActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+        next.payload,
+      );
+    }
+  }
+}
+```
+
+Through this process, the useActionState hook manages state, dispatches actions, and tracks action completion.
+
+## Conclusion
+
+The useActionState hook was introduced to resolve the confusion and limitations of the previous useFormState hook.\
+As a result, it can now be used independently of the renderer.
+
+I hope the PR I submitted while examining the code gets accepted.
+
+In the next article, I'll look at useFormStatus, which is more closely related to forms.
