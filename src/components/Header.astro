@@ -13,7 +13,7 @@ const t = useTranslations(currentLocale as any);
 <header>
   <Container>
     <div class="flex flex-wrap gap-y-2 justify-between">
-      <Link href="/" underline={false}>
+      <Link href="/" underline={false} fetchpriority="high">
         <div class="font-semibold">{t("page.title")}</div>
       </Link>
       <nav class="flex gap-1">
@@ -21,7 +21,7 @@ const t = useTranslations(currentLocale as any);
         <span>
           {`/`}
         </span>
-        <Link href={t("path.blog")}> blog </Link>
+        <Link href={t("path.blog")} fetchpriority="high"> blog </Link>
         <span>
           {`/`}
         </span>
@@ -34,3 +34,9 @@ const t = useTranslations(currentLocale as any);
     </div>
   </Container>
 </header>
+
+<style>
+  header {
+    content-visibility: auto;
+  }
+</style>

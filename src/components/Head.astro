@@ -37,7 +37,25 @@ const { title, description, image = "/nano.png" } = Astro.props;
 <link rel="icon" type="image/x-icon" href="/favicon-light.svg" />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Font preloads -->
+<!-- High priority font preloads for LCP -->
+<link
+  rel="preload"
+  href="/fonts/Pretendard-SemiBold.woff2"
+  as="font"
+  type="font/woff2"
+  crossorigin
+  fetchpriority="high"
+/>
+<link
+  rel="preload"
+  href="/fonts/Pretendard-Regular.woff2"
+  as="font"
+  type="font/woff2"
+  crossorigin
+  fetchpriority="high"
+/>
+
+<!-- Other Font preloads -->
 <link
   rel="preload"
   href="/fonts/atkinson-regular.woff"
