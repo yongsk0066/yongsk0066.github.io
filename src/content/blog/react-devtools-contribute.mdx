@@ -59,7 +59,7 @@ const SomeDialog = ({ onClose, children, ...rest }) => {
 const SomeButton = ()=>{
 
   const handleClick = ()=>{
-    overlay.open(({unmount })=> <SomeDialog onClose={unmount}>)
+    overlay.open(({ unmount })=> <SomeDialog onClose={unmount}>)
   }
 
   return <button onClick={handleClick}>버튼</button>
@@ -226,6 +226,13 @@ function drawWeb(nodeToData: Map<HostInstance, Data>) {
 
 랜더링된 요소를 그리게 될때 **hidePopover 해주었다가 다시 바로 열리게 해주는 형태**로 구현하였다. \
 이렇게 하면 **새로그려질때마다 TopLayer 에 다시 추가되기 때문에 TopLayer 상에서도 우선순위를 유지**할 수 있게 된다.
+
+<figure>
+  <img src="/post/images/react-devtools/devtool_tobe.gif" />
+  <figcaption>
+    <span>TopLayer 에서도 정상적으로 표시되는 하이라이트</span>
+  </figcaption>
+</figure>
 
 Inspector Overlay 쪽에서도 동일하게 구현해보았다.
 
