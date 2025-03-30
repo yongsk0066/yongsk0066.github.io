@@ -1,0 +1,256 @@
+---
+title: "React Devtools에 기능 추가하기"
+description: "TopLayer(dialog, popover API)를 사용할 때 React DevTools의 하이라이트와 인스펙터가 정상적으로 표시되지 않는 문제와 이를 해결하기 위해 React 오픈소스에 직접 기여한 경험을 공유합니다."
+author: "Yongseok"
+date: "2025-03-31T00:00:00.000Z"
+categories: ["react", "opensource"]
+heroImage: "/post/images/react-devtools/thumb.png"
+---
+
+import LinkPreview from "@components/LinkPreview.astro";
+import { YouTube } from "@components/lit/youtube-element";
+
+## [발단] Top Layer의 등장
+
+등장한지는 좀 되어 이제는 열심히 써보고 있는 **TopLayer**라는 것이 있다.
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Glossary/Top_layer" />
+
+**dialog 태그**나 **popover api** 같은 것들로 특정 엘리먼트를 현재 모든 엘리먼트 위에 띄울 수 있는 기능이다. 여러개를 호출하면 순서대로 쌓이게 된다.\
+우리를 **z-index 지옥에서 구원해주는 빛과 같은 기능**이다.
+
+그래서 최근 작업들에서 모달에는 **dialog**를 적극 이용하고 **popover, dropdown** 같은 요소에는 **popover api**를 사용하고 있다.\
+다만 열고 닫는 방식은 아래와 같이 **명령적으로 사용**하도록 구현되어 있다.
+
+```js
+dialog.showModal();
+dialog.close();
+```
+
+그래서 [overlay-kit](https://github.com/toss/overlay-kit)과 같은 **선언적으로 overlay를 다루려는 툴들**과도 잘 이용할 수 있게 나름 잘 다듬어서 사용하고 있다.
+
+```tsx
+const SomeDialog = ({ onClose, children, ...rest }) => {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  return (
+    <dialog
+      ref={(node) => {
+        if (!node) return;
+
+        dialogRef.current = node;
+        node.showModal();
+        // 마운트 되었을때 열리도록 구현
+      }}
+      onClick={(e) => {
+        if (e.target instanceof HTMLElement && e.target.nodeName === "DIALOG") {
+          ref.current?.close();
+        }
+      }}
+      {...rest}
+    >
+      {children}
+    </dialog>
+  );
+};
+```
+
+```tsx
+const SomeButton = ()=>{
+
+  const handleClick = ()=>{
+    overlay.open(({unmount })=> <SomeDialog onClose={unmount}>)
+  }
+
+  return <button onClick={handleClick}>버튼</button>
+}
+```
+
+이런 식으로 사용하고 있다. 쨋든 TopLayer 활용방식에 대해 이야기하고자 하는 것은 아니고, **TopLayer 를 React 에서 사용하게 될때 겪는 문제**가 있다.
+
+## [전개/절정] 문제 발견
+
+React 자체의 문제라기 보단 **React DevTools에 대한 문제**이다.\
+DevTools에는 뷰포트에 노출되는 **두가지 기능**이 있다.
+
+1. **React rendering 하이라이트**
+2. **React 컴포넌트 inspector**
+
+Rendering 하이라이트는 **렌더링 되는 컴포넌트를 하이라이트 해주는 기능**이고,
+
+<div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+  <figure>
+    <img src="/post/images/react-devtools/image_1.png" />
+  </figure>
+  <figure>
+    <img src="/post/images/react-devtools/image_2.png" />
+  </figure>
+</div>
+
+Inspector는 **표지된 컴포넌트위에 오버레이를 띄워 정보를 보여주는 기능**이다.
+
+<figure>
+  <img src="/post/images/react-devtools/gif_1.gif" />
+</figure>
+
+이 기능들이 **TopLayer 가 도입되면서 문제가 발생**하게 된다.
+
+해당 기능들은 **높은 z-index를 가진 canvas위에 띄워지는 형태**로 구현되어있다.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+function initialize(): void {
+  canvas = window.document.createElement("canvas");
+  canvas.style.cssText = `
+    xx-background-color: red;
+    xx-opacity: 0.5;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 1000000000;
+  `;
+
+  const root = window.document.documentElement;
+  root.insertBefore(canvas, root.firstChild);
+}
+```
+
+https://github.com/facebook/react/blob/6377903074d4b3a2de48c4da91783a5af9fc5237/packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js#L216
+
+기존 환경에서는 웬만한 z-index 들 위에 위치하고 있었지만, **TopLayer 가 도입되면서
+높이 위치하지 못하는 문제**가 발생하게 된다.
+
+<aside>
+  재현은 여기서 해볼 수 있다.
+  <ul>
+    <li>페이지 : https://devtools-toplayer-demo.vercel.app/</li>
+    <li>
+      코드 :
+      https://github.com/yongsk0066/devtools-toplayer-demo/blob/main/src/App.jsx
+    </li>
+  </ul>
+</aside>
+
+<figure>
+  <img src="/post/images/react-devtools/devtool_as.gif" />
+  <figcaption>
+    <span>Dialog 뒤로 숨어버린 하이라이트</span>
+  </figcaption>
+</figure>
+
+위의 영상에서도 볼 수 있듯이 **Dialog뒤에 하이라이트가 업데이트 되고 있으나, Dialog 는 TopLayer에 위치하고 있어 노출되지 않는다**.\
+React-DevTools 쪽을 수정해야할텐데 이를 어떻게 해결할 수 있을까?
+
+## [하강] 해결 방법
+
+작업자체는 이미 다 끝난지라 해당 PR 에서 미리 살펴볼 수 있다.
+
+<LinkPreview src="https://github.com/facebook/react/pull/32614/" />
+<LinkPreview src="https://github.com/facebook/react/pull/32703" />
+
+먼저 생각해본 **요구사항**은 아래와 같았다.
+
+1. **highlight, inspector 를 TopLayer로 띄워야한다.**
+2. **유저의 액션및 스타일에 방해가 되지 않아야한다.**
+3. **DevTools요소를 제외한 다른 TopLayer 요소들 보다 높은 위치에 위치해야한다.**
+
+### 1. highlight, inspector 를 TopLayer로 띄워야한다.
+
+이를 위해 DevTools의 캔버스를 **Dialog로 감싸서 띄워야 하나 고민**을 하다가 **popover api를 통해서 띄우는 편이 구조를 많이 건들이지 않는 방향**이라 이 방향으로 진행하기로 했다.\
+이 구현을 위해서는 **canvas에 popover 속성을 주고 Dom에 추가된 이후 showPopover 함수를 호출**해주면 된다.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function initialize(): void {
+  canvas = window.document.createElement('canvas');
+  canvas.setAttribute('popover', 'manual');
+
+  // $FlowFixMe[incompatible-use]: Flow doesn't recognize Popover API
+  canvas.style.cssText = `
+    xx-background-color: red;
+    xx-opacity: 0.5;
+    position: fixed;
+    right: 0;
+    top: 0;
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+    border: none;
+  `;
+
+// ...
+canvas.showPopover();
+
+```
+
+### 2. 유저의 액션및 스타일에 방해가 되지 않아야한다.
+
+dialog나 popover 는 기본적으로 **esc를 눌러서 닫는다거나 하는 지정된 액션들**이 있다. 그래서 그냥 popover 를 쓰게 되면, 유저가 esc 를 눌렀을때,
+**의도한 toplayer 요소가 닫히는게 아니라, devtools의 highlight 가 먼저 이벤트를 받고 닫히게 되는 불상사**가 발생 할 수 있다.\
+이를 예방하기 위해 **popover manual 속성으로 설정하여 개입하지 않도록** 하였다.
+
+스타일 또한 동일하게 **기본 스타일을 제거**해주었다.
+
+### 3. DevTools요소를 제외한 다른 TopLayer 요소들 보다 높은 위치에 위치해야한다.
+
+첫 구현상에서는 발견하지 못하고, **리뷰과정에서 발견했던 케이스**이다. TraceUpdate 의 방식을 살펴보면 **렌더링이될때마다 캔버스가 다시 생성되는 형태는 아니고 그 위에 갱신되는 형태로 동작**한다.
+그리고 인지를 위해서 일정시간 남아있는다. 그렇기 때문에 **빠르게 Dialog가 닫혔다가 다시 열리게 된다면 Devtools의 하이라이트는 TopLayer 에 잔존한채로 우선순위에서 밀려 다시 뒤에 노출되는 상황**이 발생된다.
+
+이를 막기 위해서는 **popover 갱신 시점을 조정**해주어야한다. **highlight 가 노출되는 시점인 drawWeb 메서드 쪽으로 조정**해주어야 한다.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function drawWeb(nodeToData: Map<HostInstance, Data>) {
+  if (canvas === null) {
+    initialize();
+  }
+  // ...
+  if (canvas !== null) {
+    if (nodeToData.size === 0 && canvas.matches(':popover-open')) {
+      canvas.hidePopover();
+      return;
+    }
+    if (canvas.matches(':popover-open')) {
+      canvas.hidePopover();
+    }
+  canvas.showPopover();
+}
+```
+
+랜더링된 요소를 그리게 될때 **hidePopover 해주었다가 다시 바로 열리게 해주는 형태**로 구현하였다. \
+이렇게 하면 **새로그려질때마다 TopLayer 에 다시 추가되기 때문에 TopLayer 상에서도 우선순위를 유지**할 수 있게 된다.
+
+Inspector Overlay 쪽에서도 동일하게 구현해보았다.
+
+## [결말] 머지 기다리기
+
+해당 기능을 추가한 빌드로 **테스트겸 일주일정도 실제 업무에서 사용**해보았는데, 큰 문제 없이 만족스럽게 사용할 수 있었다.\
+실제 사용을 하고 싶다면 **해당 PR 브랜치를 받아 빌드**하면 사용할 수 있다.
+
+이 PR 들은 아직 **머지되진 않았다**.\
+올린지는 2주정도 되었고, **메인테이너와 한 일주일 정도의 티키타카**가 있었는데, 생각보다 긍정적인 의견이여서 머지가 되기만을 기다리고 있었다.\
+메인테이너가 내 코드가 맘에 안들어서 따로 만들고 있으면 어쩌나 맘졸이기도 했는데, **gpt와 심도 깊은 심리 상담**을 하면서 회복하여 큰 신경쓰지 않기로 했다.
+
+쨋든 **필요한 기능을 직접 추가하여 사용했던 의미있는 경험**이라 짧게나마 남기려 적어보았다.
+
+## [번외] Flow 타입 문제
+
+PR 내용을 보면 **Flow관련 ignore 주석이 많은데**, 이는 **flow 에서 아직 popover 관련 속성들이 정의되지 않아서 타입 문제**가 발생하는 것이다.\
+**React Compiler 같은 코드들은 typescript 로 되어있으나, React 자체나, Devtools 은 flow로 타입체크**를 하고 있다.
+셋팅 없이 React 레포를 받아보면 js 파일인데 type이 적혀있고, 붉은 줄이 많이 보이는 것이 Flow 기반이기 때문이다.
+이는 [flow lsp](https://github.com/facebook/flow/tree/main/packages/flow-for-vscode) 설치하고, 타입체크도한번 해주면 해결된다.
+
+언젠가 **FlowFixMe 도 없어지길 바라는 마음**에서 **Flow 쪽에도 직접 popover 관련 타입을 추가**해보았다.
+
+<LinkPreview src="https://github.com/flow-typed/flow-typed/pull/4607" />
+
+이 작업은 생각보다 빠르게 **한큐에 머지**되었다.\
+React의 flow 버전이 낮아서 바로 주석이 제거되진 않겠지만, 언젠가 버전이 올라가고나면 주석도 제거해볼 수 있을 것이다.\
+혹은 설마 그사이에 **typescript 로 전환**될 일은 없겠지만...?
