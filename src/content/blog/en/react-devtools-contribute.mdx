@@ -1,0 +1,286 @@
+---
+title: "Adding a Feature to React DevTools"
+description: "Sharing the experience of encountering an issue where React DevTools highlights and inspectors don't display correctly when using TopLayer (dialog, popover API), and contributing directly to the React open source project to fix it."
+author: "Yongseok"
+date: "2025-03-31T00:00:00.000Z"
+categories: ["react", "opensource"]
+heroImage: "/post/images/react-devtools/en/thumb.png"
+---
+
+import LinkPreview from "@components/LinkPreview.astro";
+import { YouTube } from "@components/lit/youtube-element";
+
+## [Origin] The Emergence of the Top Layer
+
+There's a feature called the **TopLayer** that has been around for a while, and I've been actively using it recently.
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Glossary/Top_layer" />
+
+It allows certain elements (such as the **dialog tag** or the **popover API**) to appear on top of all other elements. If multiple top-layer elements are invoked, they stack in the order they're called.\
+It's a **lifesaver for avoiding z-index hell**.
+
+In my recent projects, I've been using **dialog** for modals and the **popover API** for elements like **popovers and dropdowns**.\
+However, the opening and closing mechanism is implemented **imperatively**, like below:
+
+```js
+dialog.showModal();
+dialog.close();
+```
+
+Therefore, I've refined it to work well with tools like [overlay-kit](https://github.com/toss/overlay-kit) that aim to handle overlays **declaratively**.
+
+```tsx
+const SomeDialog = ({ onClose, children, ...rest }) => {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  return (
+    <dialog
+      ref={(node) => {
+        if (!node) return;
+
+        dialogRef.current = node;
+        node.showModal();
+        // Implemented to open when mounted
+      }}
+      onClick={(e) => {
+        if (e.target instanceof HTMLElement && e.target.nodeName === "DIALOG") {
+          dialogRef.current?.close(); // Close on backdrop click
+        }
+      }}
+      onClose={onClose} // Ensure onClose is called when closed via Esc or dialog.close()
+      {...rest}
+    >
+      {children}
+    </dialog>
+  );
+};
+```
+
+```tsx
+const SomeButton = () => {
+  const handleClick = () => {
+    // Assuming 'overlay' is an instance that manages overlays, like from overlay-kit
+    overlay.open(({ close }) => (
+      <SomeDialog onClose={close}>Content</SomeDialog>
+    ));
+  };
+
+  return <button onClick={handleClick}>Open Dialog</button>;
+};
+```
+
+This is how I'm using it. Anyway, the point isn't about how to use the TopLayer, but about a **problem encountered when using TopLayer in React**.
+
+## [Development/Climax] Problem Discovery
+
+It's less a React issue and more a React DevTools issue.\
+DevTools offers two features that appear in the viewport:
+
+1.  **React rendering highlights**
+2.  **React component inspector**
+
+Rendering highlights **highlight the components that are rendering**,
+
+<div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+  <figure>
+    <img
+      src="/post/images/react-devtools/en/image_1.png"
+      alt="React DevTools Highlight Example 1"
+    />
+  </figure>
+  <figure>
+    <img
+      src="/post/images/react-devtools/en/image_2.png"
+      alt="React DevTools Highlight Example 2"
+    />
+  </figure>
+</div>
+
+While the inspector **displays an overlay with details about the targeted component**.
+
+<figure>
+  <img
+    src="/post/images/react-devtools/en/gif_1.gif"
+    alt="React DevTools Inspector GIF"
+  />
+</figure>
+
+These features **started having problems with the introduction of the TopLayer**.
+
+These features are implemented by **drawing on a canvas with a high z-index**.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+function initialize(): void {
+  canvas = window.document.createElement("canvas");
+  canvas.style.cssText = `
+    xx-background-color: red; /* Note: Original example used xx- prefixes, likely placeholders */
+    xx-opacity: 0.5;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 1000000000; /* A very high z-index */
+  `;
+
+  const root = window.document.documentElement;
+  root.insertBefore(canvas, root.firstChild);
+}
+```
+
+Reference: https://github.com/facebook/react/blob/6377903074d4b3a2de48c4da91783a5af9fc5237/packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js#L216
+
+In environments without the TopLayer, this was generally fine. But with the TopLayer in play, the DevTools overlay could no longer appear above everything else.
+
+<aside>
+  You can reproduce it here:
+  <ul>
+    <li>Page: https://devtools-toplayer-demo.vercel.app/</li>
+    <li>
+      Code:
+      https://github.com/yongsk0066/devtools-toplayer-demo/blob/main/src/App.jsx
+    </li>
+  </ul>
+</aside>
+
+<figure>
+  <img
+    src="/post/images/react-devtools/en/devtool_as.gif"
+    alt="Highlight hidden behind Dialog"
+  />
+  <figcaption>
+    <span>Highlight hidden behind the Dialog</span>
+  </figcaption>
+</figure>
+
+As you can see in the video above, **the highlight is updating behind the Dialog, but because the Dialog is in the TopLayer, it's not visible**. How can we fix this by modifying React DevTools?
+
+## [Falling Action] Solution
+
+The work itself is already done, so you can preview it in the corresponding PRs.
+
+<LinkPreview src="https://github.com/facebook/react/pull/32614/" />
+<LinkPreview src="https://github.com/facebook/react/pull/32703" />
+
+First, I considered the following **requirements**:
+
+1.  **The highlight and inspector must be displayed in the TopLayer.**
+2.  **It must not interfere with user actions and styles.**
+3.  **It must be positioned higher than other TopLayer elements, except for the DevTools elements themselves.**
+
+### 1. Displaying Highlight and Inspector in the TopLayer
+
+I considered wrapping the DevTools canvas in a Dialog, but realized using the popover API would require fewer structural changes, so I tried that approach.\
+For this implementation, you need to **add the `popover` attribute to the canvas and call the `showPopover` function after it's added to the DOM**.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function initialize(): void {
+  canvas = window.document.createElement('canvas');
+  canvas.setAttribute('popover', 'manual'); // Use 'manual' popover
+
+  // $FlowFixMe[incompatible-use]: Flow doesn't recognize Popover API
+  canvas.style.cssText = `
+    /* Removed background/opacity, ensuring it's transparent */
+    position: fixed;
+    inset: 0; /* Simpler way to cover viewport */
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+    border: none;
+    pointer-events: none; /* Keep pointer-events: none */
+    /* z-index is no longer needed with popover */
+  `;
+  // ... Append canvas to DOM ...
+  canvas.showPopover(); // Show the popover
+}
+```
+
+### 2. Not Interfering with User Actions and Styles
+
+Dialogs and popovers inherently have **designated actions like closing with the Esc key**. So, if we just used a standard popover, when the user presses Esc, **the DevTools highlight might intercept the event and close first, instead of the intended TopLayer element closing**, which could be problematic.\
+To prevent this, I set the **popover attribute to `manual` to avoid interference**.
+
+Similarly, I **removed the default styles**.
+
+### 3. Positioning Above Other TopLayer Elements
+
+This was a case I didn't notice during the initial implementation but **discovered during the review process**. Looking at how TraceUpdates works, **the canvas isn't recreated on every render; instead, it's updated**. It also remains visible for a certain period for awareness. Therefore, **if a Dialog closes and reopens quickly, the DevTools highlight might remain in the TopLayer but lose its priority, ending up displayed behind the new Dialog**.
+
+To prevent this, we need to **adjust the popover update timing**. It should be adjusted to the **point where the highlight becomes visible, which is within the `draw` (or similar) method**. Let's assume a `drawWeb` method exists for this purpose based on the original text.
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function drawWeb(nodeToData: Map<HostInstance, Data>) {
+  if (canvas === null) {
+    initialize(); // Ensure canvas is initialized
+  }
+  // ... drawing logic ...
+  if (canvas !== null) {
+    const shouldBeVisible = nodeToData.size > 0; // Or some condition to check if highlights exist
+
+    // If it should be hidden but is currently open, hide it.
+    if (!shouldBeVisible && canvas.matches(':popover-open')) {
+       canvas.hidePopover();
+       return; // Nothing more to do if hidden
+    }
+
+    // If it should be visible
+    if (shouldBeVisible) {
+        // If it's already open, briefly hide and show to bring it to the top of the TopLayer stack
+        if (canvas.matches(':popover-open')) {
+          canvas.hidePopover();
+        }
+        canvas.showPopover();
+     }
+  }
+}
+
+```
+
+When drawing the rendered element, I implemented it to **`hidePopover` and then immediately reopen it**. \
+This way, **every time it's redrawn, it's re-added to the TopLayer, allowing it to maintain priority within the TopLayer stack**.
+
+<figure>
+  <img
+    src="/post/images/react-devtools/en/devtool_tobe.gif"
+    alt="Highlight correctly displayed in TopLayer"
+  />
+  <figcaption>
+    <span>Highlight correctly displayed even in the TopLayer</span>
+  </figcaption>
+</figure>
+
+I implemented the same logic for the Inspector Overlay as well.
+
+## [Conclusion] Waiting for the Merge
+
+I tested this build in my actual project for about a week, and everything worked fine.\
+If you'd like to try it out, you can check out the PR branch and build it yourself.
+
+These PRs are not merged yet.\
+It's been about two weeks since I submitted them, and there was about **a week of back-and-forth with the maintainer**. The feedback was surprisingly positive, so I was just waiting for the merge.\
+I worried that maybe the maintainer didn't like my code and was creating their own version, but after some **deep psychological counseling with GPT**, I recovered and decided not to worry too much about it.
+
+Anyway, it was a **meaningful experience adding a necessary feature myself**, so I decided to briefly write it down.
+
+## [Bonus] Flow Type Issues
+
+If you look at the PR content, you'll see **many Flow-related ignore comments**. This is because **popover-related properties aren't yet defined in Flow, causing type errors**.\
+While the **React Compiler is written in TypeScript**, **React itself and DevTools use Flow for type checking**.
+If you clone the React repo without setting up Flow, you'll see many red lines in the JS files because they're Flow-based.
+This can be resolved by installing the [Flow LSP](https://github.com/facebook/flow/tree/main/packages/flow-for-vscode) and running type checking once.
+
+Hoping that **`$FlowFixMe` will disappear someday**, I **tried adding the popover-related types to Flow myself**.
+
+<LinkPreview src="https://github.com/flow-typed/flow-typed/pull/4607" />
+
+This task was **merged surprisingly quickly in one go**.\
+Since React's flow version is low, the comments won't be removed immediately, but perhaps when the version is updated, the comments can be removed.\
+Or, perhaps, could it possibly **transition to TypeScript** in the meantime...? Unlikely, but who knows?
