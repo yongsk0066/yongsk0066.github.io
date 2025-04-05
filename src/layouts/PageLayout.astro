@@ -2,6 +2,7 @@
 import Head from "@components/Head.astro";
 import Header from "@components/Header.astro";
 import Footer from "@components/Footer.astro";
+import ClarityIdentify from "@components/ClarityIdentify.astro";
 import { SITE_TITLE } from "@consts";
 
 type Props = {
@@ -21,6 +22,7 @@ const { title, description, heroImage } = Astro.props;
       description={description}
       image={heroImage}
     />
+    <ClarityIdentify pageId={Astro.url.pathname} />
   </head>
   <body>
     <Header />
