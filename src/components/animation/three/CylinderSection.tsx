@@ -208,6 +208,20 @@ const CylinderSectionScene = ({
     []
   );
 
+  const [rightAngleF2S2P, setRightAngleF2S2P] = useState<THREE.Vector3[]>([]);
+  const [rightAnglePS2P2, setRightAnglePS2P2] = useState<THREE.Vector3[]>([]);
+  const [rightAngleF1S1P, setRightAngleF1S1P] = useState<THREE.Vector3[]>([]);
+  const [rightAnglePS1P1, setRightAnglePS1P1] = useState<THREE.Vector3[]>([]);
+  const [equalAngleMarkerF2S2P, setEqualAngleMarkerF2S2P] = useState<
+    THREE.Vector3[]
+  >([]);
+  const [equalAngleMarkerPS2P2, setEqualAngleMarkerPS2P2] = useState<
+    THREE.Vector3[]
+  >([]);
+  const [equalLengthMarkersP, setEqualLengthMarkersP] = useState<
+    THREE.Vector3[][]
+  >([]);
+
   // Convert angle to radians
   const angleRad = THREE.MathUtils.degToRad(sectionAngle);
 
@@ -502,6 +516,242 @@ const CylinderSectionScene = ({
     // Update the lines connecting S1 to P and S2 to P
     setLineS1PPoints([dandelinSpheres.upper.center.clone(), pointP.clone()]);
     setLineS2PPoints([dandelinSpheres.lower.center.clone(), pointP.clone()]);
+
+    // Create right angle markers and equal angle markers
+    // Create right angle marker for angle F2-S2-P (사각형 마커)
+    const createRightAngleF2S2P = () => {
+      const size = 0.1; // 사각형 크기
+      // F2 위치
+      const f2Pos = dandelinSpheres.lower.tangentPoint.clone();
+
+      // F2에서 S2 방향 벡터
+      const dirS2 = new THREE.Vector3()
+        .subVectors(dandelinSpheres.lower.center.clone(), f2Pos)
+        .normalize();
+
+      // F2에서 P 방향 벡터
+      const dirP = new THREE.Vector3()
+        .subVectors(pointP.clone(), f2Pos)
+        .normalize();
+
+      // 사각형의 네 꼭짓점 생성
+      return [
+        f2Pos.clone().add(dirS2.clone().multiplyScalar(size)), // S2 방향으로 이동
+        f2Pos
+          .clone()
+          .add(dirS2.clone().multiplyScalar(size))
+          .add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        f2Pos.clone().add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        f2Pos.clone(), // 원점 (F2)
+        f2Pos.clone().add(dirS2.clone().multiplyScalar(size)), // 다시 시작점으로 (사각형 완성)
+      ];
+    };
+
+    // Create right angle marker for angle P-S2-P2 (사각형 마커)
+    const createRightAnglePS2P2 = () => {
+      const size = 0.1; // 사각형 크기
+      // P2 위치
+      const p2Pos = p2Position.clone();
+
+      // P2에서 S2 방향 벡터
+      const dirS2 = new THREE.Vector3()
+        .subVectors(dandelinSpheres.lower.center.clone(), p2Pos)
+        .normalize();
+
+      // P2에서 P 방향 벡터
+      const dirP = new THREE.Vector3()
+        .subVectors(pointP.clone(), p2Pos)
+        .normalize();
+
+      // 사각형의 네 꼭짓점 생성
+      return [
+        p2Pos.clone(), // 시작점 (P2)
+        p2Pos.clone().add(dirS2.clone().multiplyScalar(size)), // S2 방향으로 이동
+        p2Pos
+          .clone()
+          .add(dirS2.clone().multiplyScalar(size))
+          .add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        p2Pos.clone().add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        p2Pos.clone(), // 다시 시작점으로 (사각형 완성)
+      ];
+    };
+
+    // Create right angle marker for angle F1-S1-P (사각형 마커)
+    const createRightAngleF1S1P = () => {
+      const size = 0.1; // 사각형 크기
+      // F1 위치
+      const f1Pos = dandelinSpheres.upper.tangentPoint.clone();
+
+      // F1에서 S1 방향 벡터
+      const dirS1 = new THREE.Vector3()
+        .subVectors(dandelinSpheres.upper.center.clone(), f1Pos)
+        .normalize();
+
+      // F1에서 P 방향 벡터
+      const dirP = new THREE.Vector3()
+        .subVectors(pointP.clone(), f1Pos)
+        .normalize();
+
+      // 사각형의 네 꼭짓점 생성
+      return [
+        f1Pos.clone().add(dirS1.clone().multiplyScalar(size)), // S1 방향으로 이동
+        f1Pos
+          .clone()
+          .add(dirS1.clone().multiplyScalar(size))
+          .add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        f1Pos.clone().add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        f1Pos.clone(), // 원점 (F1)
+        f1Pos.clone().add(dirS1.clone().multiplyScalar(size)), // 다시 시작점으로 (사각형 완성)
+      ];
+    };
+
+    // Create right angle marker for angle P-S1-P1 (사각형 마커)
+    const createRightAnglePS1P1 = () => {
+      const size = 0.1; // 사각형 크기
+      // P1 위치
+      const p1Pos = p1Position.clone();
+
+      // P1에서 S1 방향 벡터
+      const dirS1 = new THREE.Vector3()
+        .subVectors(dandelinSpheres.upper.center.clone(), p1Pos)
+        .normalize();
+
+      // P1에서 P 방향 벡터
+      const dirP = new THREE.Vector3()
+        .subVectors(pointP.clone(), p1Pos)
+        .normalize();
+
+      // 사각형의 네 꼭짓점 생성
+      return [
+        p1Pos.clone(), // 시작점 (P1)
+        p1Pos.clone().add(dirS1.clone().multiplyScalar(size)), // S1 방향으로 이동
+        p1Pos
+          .clone()
+          .add(dirS1.clone().multiplyScalar(size))
+          .add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        p1Pos.clone().add(dirP.clone().multiplyScalar(size)), // P 방향으로 이동
+        p1Pos.clone(), // 다시 시작점으로 (사각형 완성)
+      ];
+    };
+
+    // Create equal angle markers (arcs)
+    const createEqualAngleMarker = (
+      vertex: THREE.Vector3,
+      dir1: THREE.Vector3,
+      dir2: THREE.Vector3
+    ) => {
+      const radius = 0.2;
+      const segments = 16;
+      const angle = Math.acos(dir1.dot(dir2));
+      const normal = new THREE.Vector3().crossVectors(dir1, dir2).normalize();
+
+      const points: THREE.Vector3[] = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const angleT = t * angle;
+
+        // Rotate dir1 towards dir2 by angleT
+        const rotated = dir1.clone().applyAxisAngle(normal, angleT);
+        points.push(vertex.clone().add(rotated.multiplyScalar(radius)));
+      }
+
+      return points;
+    };
+
+    // Set right angle markers - 항상 설정
+    setRightAngleF2S2P(createRightAngleF2S2P());
+    setRightAnglePS2P2(createRightAnglePS2P2());
+    setRightAngleF1S1P(createRightAngleF1S1P());
+    setRightAnglePS1P1(createRightAnglePS1P1());
+
+    // 동일 각도 표시를 위한 방향 벡터 계산
+    const centerS2 = dandelinSpheres.lower.center.clone();
+    const dirF2 = new THREE.Vector3()
+      .subVectors(dandelinSpheres.lower.tangentPoint.clone(), centerS2)
+      .normalize();
+
+    const dirP = new THREE.Vector3()
+      .subVectors(pointP.clone(), centerS2)
+      .normalize();
+
+    const dirP2 = new THREE.Vector3()
+      .subVectors(p2Position.clone(), centerS2)
+      .normalize();
+
+    // 90도일 때만 표시할 것들은 여기서 처리
+    if (ellipsePointAngle === 90) {
+      // Set equal angle markers
+      setEqualAngleMarkerF2S2P(createEqualAngleMarker(centerS2, dirF2, dirP));
+      setEqualAngleMarkerPS2P2(createEqualAngleMarker(centerS2, dirP, dirP2));
+
+      // 선분 중앙에 동일 길이 표시 생성
+      const createEqualLengthMarkers = () => {
+        const markers: THREE.Vector3[][] = [];
+        const markLength = 0.15; // 표시 길이 (약간 더 길게)
+
+        // 선분들: PP1, PF1, PF2, PP2
+        const lines = [
+          [pointP.clone(), p1Position.clone()], // PP1
+          [pointP.clone(), dandelinSpheres.upper.tangentPoint.clone()], // PF1
+          [pointP.clone(), dandelinSpheres.lower.tangentPoint.clone()], // PF2
+          [pointP.clone(), p2Position.clone()], // PP2
+        ];
+
+        // -X 축 방향 (카메라가 바라보는 방향)
+        const cameraDirection = new THREE.Vector3(-1, 0, 0);
+
+        // 각 선분에 대해 중앙에 동일 길이 표시 생성
+        lines.forEach((line) => {
+          // 선분의 중점 계산
+          const midPoint = new THREE.Vector3()
+            .addVectors(line[0], line[1])
+            .multiplyScalar(0.5);
+
+          // 선분 방향 벡터
+          const lineDirection = new THREE.Vector3()
+            .subVectors(line[1], line[0])
+            .normalize();
+
+          // 선분과 카메라에 모두 수직인 방향 (마크가 이 방향으로 그려짐)
+          // 이 벡터는 선분에 수직이면서 카메라에서 잘 보이는 방향
+          const markDirection = new THREE.Vector3()
+            .crossVectors(lineDirection, cameraDirection)
+            .normalize();
+
+          // 마크가 선분을 가로지르도록 설정 (중앙이 선분의 중점과 일치)
+          // 첫 번째 마크 - 선분의 중점에서 markDirection과 반대 방향으로 시작
+          const mark1Start = midPoint
+            .clone()
+            .sub(markDirection.clone().multiplyScalar(markLength / 2));
+          const mark1End = midPoint
+            .clone()
+            .add(markDirection.clone().multiplyScalar(markLength / 2));
+          markers.push([mark1Start, mark1End]);
+
+          // 두 번째 마크 - 첫 번째와 약간 떨어져서 평행하게 배치
+          const offset = 0.03; // 두 마크 사이의 간격
+          const offsetPoint = midPoint
+            .clone()
+            .add(lineDirection.clone().multiplyScalar(offset));
+          const mark2Start = offsetPoint
+            .clone()
+            .sub(markDirection.clone().multiplyScalar(markLength / 2));
+          const mark2End = offsetPoint
+            .clone()
+            .add(markDirection.clone().multiplyScalar(markLength / 2));
+          markers.push([mark2Start, mark2End]);
+        });
+
+        return markers;
+      };
+
+      setEqualLengthMarkersP(createEqualLengthMarkers());
+    } else {
+      // Clear equal angle markers if not at 90 degrees
+      setEqualAngleMarkerF2S2P([]);
+      setEqualAngleMarkerPS2P2([]);
+      setEqualLengthMarkersP([]);
+    }
   }, [sectionAngle, angleRad, center, ellipsePointAngle]);
 
   // Camera control functions
@@ -779,6 +1029,43 @@ const CylinderSectionScene = ({
       {ellipsePointAngle === 90 && lineS2PPoints.length > 1 && (
         <Line points={lineS2PPoints} color="#00AA00" lineWidth={2} />
       )}
+
+      {/* Right angle markers - 항상 표시 */}
+      {rightAngleF2S2P.length > 1 && (
+        <Line points={rightAngleF2S2P} color="#FF0000" lineWidth={1.5} />
+      )}
+
+      {rightAnglePS2P2.length > 1 && (
+        <Line points={rightAnglePS2P2} color="#FF0000" lineWidth={1.5} />
+      )}
+
+      {rightAngleF1S1P.length > 1 && (
+        <Line points={rightAngleF1S1P} color="#FF0000" lineWidth={1.5} />
+      )}
+
+      {rightAnglePS1P1.length > 1 && (
+        <Line points={rightAnglePS1P1} color="#FF0000" lineWidth={1.5} />
+      )}
+
+      {/* Equal angle markers - only shown when P is at 90 degrees */}
+      {ellipsePointAngle === 90 && equalAngleMarkerF2S2P.length > 1 && (
+        <Line points={equalAngleMarkerF2S2P} color="#FF6600" lineWidth={1.5} />
+      )}
+
+      {ellipsePointAngle === 90 && equalAngleMarkerPS2P2.length > 1 && (
+        <Line points={equalAngleMarkerPS2P2} color="#FF6600" lineWidth={1.5} />
+      )}
+
+      {/* Equal length markers - only shown when P is at 90 degrees */}
+      {ellipsePointAngle === 90 &&
+        equalLengthMarkersP.map((line, index) => (
+          <Line
+            key={`equal-length-${index}`}
+            points={line}
+            color="#000000"
+            lineWidth={2}
+          />
+        ))}
     </>
   );
 };
