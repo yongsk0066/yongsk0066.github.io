@@ -1,5 +1,5 @@
 import { Line, OrbitControls, Text, Billboard } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
@@ -23,17 +23,17 @@ const MathPoint = ({
   labelOffset = [0.15, 0.15, 0],
 }: MathPointProps) => {
   return (
-    <group position={position}>
+    <group position={position} renderOrder={10}>
       <Billboard>
         {/* Circular dot with white fill and black outline - always faces camera */}
-        <mesh>
+        <mesh renderOrder={10}>
           <circleGeometry args={[0.04, 32]} />
-          <meshBasicMaterial color="#ffffff" />
+          <meshBasicMaterial color="#ffffff" depthTest={false} />
         </mesh>
         {/* Black ring for outline */}
-        <mesh>
+        <mesh renderOrder={11}>
           <ringGeometry args={[0.037, 0.043, 32]} />
-          <meshBasicMaterial color="#000000" />
+          <meshBasicMaterial color="#000000" depthTest={false} />
         </mesh>
       </Billboard>
       {label && (
@@ -44,7 +44,14 @@ const MathPoint = ({
           lockY={false}
           lockZ={false}
         >
-          <Text color="#000000" fontSize={0.15} anchorX="left" anchorY="middle">
+          <Text
+            color="#000000"
+            fontSize={0.15}
+            anchorX="left"
+            anchorY="middle"
+            renderOrder={12}
+            material={new THREE.MeshBasicMaterial({ depthTest: false })}
+          >
             {label}
           </Text>
         </Billboard>
@@ -170,6 +177,30 @@ const CylinderSectionScene = ({
     new THREE.Vector3(0, 1, 0),
   ]);
   const [linePF2Points, setLinePF2Points] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, -1, 0),
+  ]);
+  const [lineS1F1Points, setLineS1F1Points] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+  ]);
+  const [lineS2F2Points, setLineS2F2Points] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, -1, 0),
+  ]);
+  const [lineP1S1Points, setLineP1S1Points] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+  ]);
+  const [lineP2S2Points, setLineP2S2Points] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, -1, 0),
+  ]);
+  const [lineS1PPoints, setLineS1PPoints] = useState<THREE.Vector3[]>([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 1, 0),
+  ]);
+  const [lineS2PPoints, setLineS2PPoints] = useState<THREE.Vector3[]>([
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, -1, 0),
   ]);
@@ -447,7 +478,52 @@ const CylinderSectionScene = ({
       pointP.clone(),
       dandelinSpheres.lower.tangentPoint.clone(),
     ]);
+
+    // Update the lines connecting sphere centers (S1, S2) to focal points (F1, F2)
+    setLineS1F1Points([
+      dandelinSpheres.upper.center.clone(),
+      dandelinSpheres.upper.tangentPoint.clone(),
+    ]);
+    setLineS2F2Points([
+      dandelinSpheres.lower.center.clone(),
+      dandelinSpheres.lower.tangentPoint.clone(),
+    ]);
+
+    // Update the lines connecting P1 to S1 and P2 to S2
+    setLineP1S1Points([
+      p1Position.clone(),
+      dandelinSpheres.upper.center.clone(),
+    ]);
+    setLineP2S2Points([
+      p2Position.clone(),
+      dandelinSpheres.lower.center.clone(),
+    ]);
+
+    // Update the lines connecting S1 to P and S2 to P
+    setLineS1PPoints([dandelinSpheres.upper.center.clone(), pointP.clone()]);
+    setLineS2PPoints([dandelinSpheres.lower.center.clone(), pointP.clone()]);
   }, [sectionAngle, angleRad, center, ellipsePointAngle]);
+
+  // Camera control functions
+  const { camera } = useThree();
+
+  // View from -X axis direction (side view)
+  const viewFromXAxis = () => {
+    if (!controlsRef.current) return;
+
+    // Position camera along -X axis
+    camera.position.set(-5, center, 0);
+
+    // Update the controls target to the center of the cylinder
+    controlsRef.current.target.set(0, center, 0);
+    controlsRef.current.update();
+  };
+
+  // Expose method to parent via window
+  useEffect(() => {
+    // Make the function available to parent component
+    (window as any).__viewFromXAxis = viewFromXAxis;
+  }, [center]);
 
   return (
     <>
@@ -537,6 +613,9 @@ const CylinderSectionScene = ({
         ref={upperSphereRef}
         position={dandelinSpheres.upper.center.toArray()}
       >
+        {/* Sphere center point S1 */}
+        <MathPoint label="S1" />
+
         {/* Create custom wireframe sphere with denser lines */}
         {Array.from({ length: 24 }).map((_, i) => (
           <Line
@@ -570,6 +649,9 @@ const CylinderSectionScene = ({
         ref={lowerSphereRef}
         position={dandelinSpheres.lower.center.toArray()}
       >
+        {/* Sphere center point S2 */}
+        <MathPoint label="S2" />
+
         {/* Create custom wireframe sphere with denser lines */}
         {Array.from({ length: 24 }).map((_, i) => (
           <Line
@@ -670,6 +752,33 @@ const CylinderSectionScene = ({
       {linePF2Points.length > 1 && (
         <Line points={linePF2Points} color="#cc0000" lineWidth={3} />
       )}
+
+      {/* Lines connecting sphere centers to focal points */}
+      {lineS1F1Points.length > 1 && (
+        <Line points={lineS1F1Points} color="#FFA500" lineWidth={1.5} />
+      )}
+
+      {lineS2F2Points.length > 1 && (
+        <Line points={lineS2F2Points} color="#FFA500" lineWidth={1.5} />
+      )}
+
+      {/* Lines connecting P1 to S1 and P2 to S2 */}
+      {lineP1S1Points.length > 1 && (
+        <Line points={lineP1S1Points} color="#00AA00" lineWidth={1.5} />
+      )}
+
+      {lineP2S2Points.length > 1 && (
+        <Line points={lineP2S2Points} color="#00AA00" lineWidth={1.5} />
+      )}
+
+      {/* Lines connecting S1 to P and S2 to P (only visible when P is at 90 degrees) */}
+      {ellipsePointAngle === 90 && lineS1PPoints.length > 1 && (
+        <Line points={lineS1PPoints} color="#00AA00" lineWidth={2} />
+      )}
+
+      {ellipsePointAngle === 90 && lineS2PPoints.length > 1 && (
+        <Line points={lineS2PPoints} color="#00AA00" lineWidth={2} />
+      )}
     </>
   );
 };
@@ -677,6 +786,18 @@ const CylinderSectionScene = ({
 export default function CylinderSection() {
   const [sectionAngle, setSectionAngle] = useState(DEFAULT_ANGLE);
   const [ellipsePointAngle, setEllipsePointAngle] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Function to handle camera view button
+  const handleViewFromXAxis = () => {
+    // Set P point position to 90 degrees
+    setEllipsePointAngle(90);
+
+    // Call the function exposed on window
+    if (typeof (window as any).__viewFromXAxis === "function") {
+      (window as any).__viewFromXAxis();
+    }
+  };
 
   return (
     <div
@@ -710,7 +831,25 @@ export default function CylinderSection() {
         />
       </div>
 
+      <div style={{ marginBottom: "1rem" }}>
+        <button
+          onClick={handleViewFromXAxis}
+          style={{
+            padding: "0.5rem 1rem",
+            backgroundColor: "#2196F3",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+        >
+          측면에서 보기
+        </button>
+      </div>
+
       <Canvas
+        ref={canvasRef}
         orthographic
         camera={{
           position: [3, 2, 3], // Adjusted for vertical orientation
