@@ -1093,46 +1093,63 @@ export default function CylinderSection() {
         aspectRatio: "4/3",
       }}
     >
-      <div style={{ marginBottom: "1rem" }}>
-        <label htmlFor="angle-slider">단면 각도: {sectionAngle}°</label>
-        <input
-          id="angle-slider"
-          type="range"
-          min="0"
-          max="80"
-          value={sectionAngle}
-          onChange={(e) => setSectionAngle(parseInt(e.target.value))}
-          style={{ width: "100%", maxWidth: "300px", marginLeft: "1rem" }}
-        />
-      </div>
-      <div style={{ marginBottom: "1rem" }}>
-        <label htmlFor="point-slider">점 P 위치: {ellipsePointAngle}°</label>
-        <input
-          id="point-slider"
-          type="range"
-          min="0"
-          max="360"
-          value={ellipsePointAngle}
-          onChange={(e) => setEllipsePointAngle(parseInt(e.target.value))}
-          style={{ width: "100%", maxWidth: "300px", marginLeft: "1rem" }}
-        />
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 mb-4 rounded-lg bg-slate-50 dark:bg-slate-800">
+        <div className="md:col-span-3 space-y-4">
+          <div className="control-group">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="angle-slider"
+                className="font-medium text-slate-700 dark:text-slate-300"
+              >
+                단면 각도
+              </label>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {sectionAngle}°
+              </span>
+            </div>
+            <input
+              id="angle-slider"
+              type="range"
+              min="0"
+              max="80"
+              value={sectionAngle}
+              onChange={(e) => setSectionAngle(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 mt-2 accent-blue-500"
+            />
+          </div>
 
-      <div style={{ marginBottom: "1rem" }}>
-        <button
-          onClick={handleViewFromXAxis}
-          style={{
-            padding: "0.5rem 1rem",
-            backgroundColor: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          측면에서 보기
-        </button>
+          <div className="control-group">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="point-slider"
+                className="font-medium text-slate-700 dark:text-slate-300"
+              >
+                점 P 위치
+              </label>
+              <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                {ellipsePointAngle}°
+              </span>
+            </div>
+            <input
+              id="point-slider"
+              type="range"
+              min="0"
+              max="360"
+              value={ellipsePointAngle}
+              onChange={(e) => setEllipsePointAngle(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 mt-2 accent-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center">
+          <button
+            onClick={handleViewFromXAxis}
+            className="w-full h-12 px-4 bg-blue-500 text-white rounded-lg font-medium transition-colors hover:bg-blue-600 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
+          >
+            측면에서 보기
+          </button>
+        </div>
       </div>
 
       <Canvas
@@ -1140,7 +1157,7 @@ export default function CylinderSection() {
         orthographic
         camera={{
           position: [3, 2, 3], // Adjusted for vertical orientation
-          zoom: 60,
+          zoom: 110,
           near: 0.1,
           far: 1000,
         }}
