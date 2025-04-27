@@ -28,6 +28,14 @@ import Link from "@components/Link.astro";
     display: grid;
     place-items: center;
   }
+
+  .addition {
+    color: #3fb950;
+  }
+
+  .deletion {
+    color: #f85149;
+  }
 </style>
 <PageLayout title={"About Me"} description={"나는 누구인가?"}>
   <Container>
@@ -64,7 +72,11 @@ import Link from "@components/Link.astro";
         <ul class="flex flex-col space-y-4">
           <li class="animate">
             <div class="text-sm opacity-75">
-              {dateRange(new Date("2021-06-21"), "Current")}
+              {
+                dateRange(new Date("2021-06-21"), "Current", {
+                  showPeriod: true,
+                })
+              }
             </div>
             <div class="font-semibold text-black dark:text-white">
               <a
@@ -87,7 +99,7 @@ import Link from "@components/Link.astro";
         <ul class="flex flex-col space-y-4">
           <li class="animate">
             <div class="text-sm opacity-75">
-              {dateRange(new Date("2015-02"), new Date("2021-02"))}
+              {dateRange(new Date("2015-02"), new Date("2022-02"))}
             </div>
             <div class="font-semibold text-black dark:text-white">
               Dongguk University (동국대학교)
@@ -104,6 +116,75 @@ import Link from "@components/Link.astro";
                 target="_blank"
                 rel="noopener noreferrer">Food Science & Biotechnology</a
               >
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="animate space-y-6">
+        <div class="flex flex-wrap gap-y-2 items-center justify-between">
+          <h5 class="font-semibold text-black dark:text-white">
+            OSS Contributions
+          </h5>
+        </div>
+        <ul class="flex flex-col space-y-4">
+          <li class="animate">
+            <div class="text-sm opacity-75">April 2025</div>
+            <div class="font-semibold text-black dark:text-white">
+              <a
+                href="https://github.com/facebook/react/pull/32614"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                React DevTools <span class="text-gray-400">[link]</span>
+              </a>
+            </div>
+            <div class="text-sm opacity-75">
+              • PR #32614 (<span class="addition">+124</span>/<span
+                class="deletion">−3</span
+              > LOC, pending merge)
+              <br />
+              • Re-implemented Trace Updates overlay with the Popover API, making
+              update highlights visible even over &lt;dialog&gt;/&lt;popover&gt;.
+            </div>
+          </li>
+          <li class="animate">
+            <div class="text-sm opacity-75">April 2025</div>
+            <div class="font-semibold text-black dark:text-white">
+              <a
+                href="https://github.com/facebook/react/pull/32703"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                React DevTools <span class="text-gray-400">[link]</span>
+              </a>
+            </div>
+            <div class="text-sm opacity-75">
+              • PR #32703 (<span class="addition">+23</span>/<span
+                class="deletion">−3</span
+              > LOC, under review)
+              <br />
+              • Migrated Component Inspector overlay to the same Popover-based top-layer,
+              unifying all DevTools overlays and fixing similar visibility issues.
+            </div>
+          </li>
+          <li class="animate">
+            <div class="text-sm opacity-75">March 2025</div>
+            <div class="font-semibold text-black dark:text-white">
+              <a
+                href="https://github.com/flow-typed/flow-typed/pull/4607"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                flow-typed <span class="text-gray-400">[link]</span>
+              </a>
+            </div>
+            <div class="text-sm opacity-75">
+              • PR #4607 merged: Added full DOM typings & tests for the new
+              Popover API (+95 LOC).
+              <br />
+              • Enables Flow users to adopt &lt;popover&gt; and ToggleEvent with
+              static-type safety across all supported Flow versions.
             </div>
           </li>
         </ul>
