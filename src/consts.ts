@@ -22,4 +22,8 @@ export const SOCIALS: Socials = [
     NAME: "linkedin",
     HREF: "https://www.linkedin.com/in/yongseok-jang-129267181/",
   },
+  {
+    NAME: "email",
+    HREF: "mailto:yongsk0066@gmail.com",
+  },
 ];
