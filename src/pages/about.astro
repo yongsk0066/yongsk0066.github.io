@@ -4,6 +4,7 @@ import Link from "@components/Link.astro";
 import { SOCIALS } from "@consts";
 import PageLayout from "@layouts/PageLayout.astro";
 import { dateRange } from "@lib/utils";
+import { YouTube } from "@components/lit/youtube-element";
 ---
 
 <style>
@@ -198,19 +199,11 @@ import { dateRange } from "@lib/utils";
           <div class="text-sm opacity-75 mb-4">
             My YouTube channel featuring personal videos and projects
           </div>
-          <div
-            class="relative w-full aspect-video rounded-lg overflow-hidden shadow-lg"
-          >
-            <iframe
-              width="560"
-              height="315"
-              src="https://www.youtube.com/embed/MGG7qDSgOBQ?si=kDL0wbi_JDskDQM4"
-              title="YouTube video player"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerpolicy="strict-origin-when-cross-origin"
-              allowfullscreen></iframe>
-          </div>
+
+          <youtube-element
+            src="https://youtu.be/MGG7qDSgOBQ?si=AGo8MXwQkM4aG9n-"
+          ></youtube-element>
+
           <div class="mt-2 text-sm text-gray-500">
             My latest videos from <a
               href="https://www.youtube.com/@%EB%8F%84%EB%A3%A1-h8i"
