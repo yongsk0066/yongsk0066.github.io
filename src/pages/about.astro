@@ -4,7 +4,6 @@ import Link from "@components/Link.astro";
 import { SOCIALS } from "@consts";
 import PageLayout from "@layouts/PageLayout.astro";
 import { dateRange } from "@lib/utils";
-import { YouTube } from "@components/lit/youtube-element";
 ---
 
 <style>
@@ -111,7 +110,7 @@ import { YouTube } from "@components/lit/youtube-element";
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Computer Science & Enginerring</a
+                Computer Science & Engineering</a
               >, <a
                 href="https://food.dongguk.edu/main"
                 target="_blank"
@@ -199,11 +198,21 @@ import { YouTube } from "@components/lit/youtube-element";
           <div class="text-sm opacity-75 mb-4">
             My YouTube channel featuring personal videos and projects
           </div>
-
-          <youtube-element
-            src="https://youtu.be/MGG7qDSgOBQ?si=AGo8MXwQkM4aG9n-"
-          ></youtube-element>
-
+          <figure class="w-full flex flex-col my-4">
+            <div
+              class="w-full block aspect-video border-0 bg-black rounded-lg shadow-[0px_0px_12px_6px_rgba(0,0,0,0.36)] overflow-hidden m-0"
+            >
+              <iframe
+                class="w-full aspect-video border-0"
+                src="https://www.youtube.com/embed/MGG7qDSgOBQ?si=XO1p0YSEpcuvPat_"
+                title="YouTube video player"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                loading="lazy"
+                allowfullscreen></iframe>
+            </div>
+          </figure>
           <div class="mt-2 text-sm text-gray-500">
             My latest videos from <a
               href="https://www.youtube.com/@%EB%8F%84%EB%A3%A1-h8i"
