@@ -245,6 +245,7 @@ article {
 
   img {
     @apply rounded-lg shadow-xl hover:shadow-3xl  hover:-translate-y-2 hover:scale-105 transition-all duration-300 ease-in-out my-4 !important;
+    color-scheme: only light;
   }
 
   code {
