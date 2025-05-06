@@ -1,0 +1,76 @@
+---
+interface Props {
+  author: string;
+  isRight?: boolean;
+  className?: string;
+}
+
+const { author, isRight = false, className = "" } = Astro.props;
+---
+
+<div
+  class={`chat-message ${isRight ? "chat-message-right" : "chat-message-left"} ${className}`}
+>
+  <div class="chat-bubble">
+    <div class="chat-author">{author}</div>
+    <div class="chat-content">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<style>
+  .chat-message {
+    display: flex;
+    margin-bottom: 1rem;
+    max-width: 90%;
+  }
+
+  .chat-message-left {
+    align-self: flex-start;
+    margin-right: auto;
+  }
+
+  .chat-message-right {
+    align-self: flex-end;
+    margin-left: auto;
+  }
+
+  .chat-bubble {
+    border-radius: 1rem;
+    padding: 0.75rem 1rem;
+    background-color: #f3f4f6;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    overflow-wrap: break-word;
+  }
+
+  .chat-message-right .chat-bubble {
+    background-color: #dbeafe;
+    border-bottom-right-radius: 0.25rem;
+  }
+
+  .chat-message-left .chat-bubble {
+    background-color: #f3f4f6;
+    border-bottom-left-radius: 0.25rem;
+  }
+
+  .chat-author {
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    color: #4b5563;
+  }
+
+  .chat-message-right .chat-author {
+    color: #2563eb;
+  }
+
+  .chat-content {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .chat-content :global(p) {
+    margin: 0;
+  }
+</style>

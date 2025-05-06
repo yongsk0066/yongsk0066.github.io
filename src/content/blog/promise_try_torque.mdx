@@ -1,0 +1,1492 @@
+---
+title: "Promise.try(), 그리고 Torque를 곁들인"
+description: "Promise.try 의 기원과 제안과정, 그리고 구현에 대해서 같이 살펴보자."
+author: "Yongseok"
+categories: ["JavaScript"]
+date: "2025-05-06T09:36:26.907Z"
+heroImage: "/post/images/promise_try_torque/thumb.png"
+---
+
+import LinkPreview from "../../components/LinkPreview.astro";
+import ChatContainer from "../../components/ChatContainer.astro";
+import ChatBubble from "../../components/ChatBubble.astro";
+import ChatInfo from "../../components/ChatInfo.astro";
+import { YouTube } from "../../components/lit/youtube-element";
+import AudioPlayer from "../../components/AudioPlayer.astro";
+
+<AudioPlayer
+  src="/post/audio/promise_try_torque/promise_try_torque.wav"
+  title="Promise.try(), 그리고 Torque를 곁들인"
+/>
+<LinkPreview src="https://web.dev/blog/promise-try-baseline?hl=ko" />
+
+Promise.try 의 기원과 제안과정, 그리고 구현에 대해서 같이 살펴보자.
+
+## Promise.try()
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+Promise의 정적메서드 라인업에 새로이 추가된 메서드이다.
+간단하게 설명하자면, Promise.try(fn, …args)는 콜백 fn을 즉시(동기적으로) 실행한 뒤 결과를 프로미스로 감싸 돌려준다.
+무슨말인가 하면 이렇다. 예시를 들어보자.
+
+동기일 수도 있고 비동기일 수도 있는 함수 `f`가 있다고 하자. (async await 은 잠시 제쳐두고)
+
+```js
+function f() {
+  // 동기일수도 있고 비동기 일수도 있다.
+  if (Math.random() < 0.5) {
+    throw new Error("sync fail");
+  }
+  return Promise.reject(new Error("async fail"));
+}
+```
+
+`f`가 만약 그냥 동기 함수 였다면 에러를 이렇게 처리했을 것이다.
+
+```js
+try {
+  f();
+} catch (e) {
+  console.log(e.message);
+}
+```
+
+반대로 `f`가 Promise를 반환하는 함수였다면 이렇게 처리했을 것이다.
+
+```js
+f().catch(console.log);
+```
+
+그런데 만약 `f`가 동기일 수도 있고 비동기일 수도 있다면 어떻게 해야할까?
+뭐 그럴 상황은 많이 없겠지만 만약 있다면 이렇게 해야할 것이다.
+
+```js
+Promise.resolve().then(f).catch(console.log);
+```
+
+이렇게 사용하면 어떤 문제가 있을까? \
+`f`의 실행시점이 달라지게 된다. 이벤트루프의 동작 순서를 생각해보자.
+`Promise.resolve().then(f).catch(console.log)` 의 실행 흐름은 다음과 같다.
+
+1. `Promise.resolve()`는 **이미 fulfilled 상태인 프라미스**를 즉시 반환한다.
+2. `.then(f)`는 `f`를 onFulfilled 핸들러로 등록하고, **해당 Reaction Job**을
+   microtask 큐에 넣는다.
+3. 현재 콜스택이 모두 비워진 뒤, 이벤트 루프가 그 microtask를 처리하면서 `f`
+   를 실행한다.
+4. `f`가 동기적으로 예외를 던지면, 그 예외는 `.then`이 반환한
+   **새 프라미스의 reject** 상태로 변환되고, 이어진 `.catch`가 이를 받는다.
+
+결과적으로 `f`는 **다음 tick에서 실행**되게 된다.
+그로인해 콜스택이 끊기게 되고, 이는 디버깅을 어렵게 만들고, 예외 전파도 한 박자 늦어진다.
+
+이때 `Promise.try`가 이 모든것을 바로잡고자 등장하게 된다.
+
+```js
+Promise.try(f).catch(console.log);
+```
+
+이렇게 사용하게 되면 `Promise.try` 안에서 `f`를 즉시 실행하고 값이면 resolve, throw 이면 reject로 처리해준다. 물론 비동기이면 그대로 비동기로 처리해준다.
+동기일 때의 케이스를 비동기와 균일하게 처리해주는 용도라고 보면 된다.
+이렇게 되면 `f`의 실행시점이 밀리지도 않고, 동기인 에러를 만날 때에도 현재 콜스택에서 실행,트레이스가 끊기지 않는다.
+
+그런데 의문이 들 수 있다.
+
+<b>
+  <i>'동기일 수도 있고 비동기일 수도 있는 케이스가 뭐가 있지?'</i>
+</b>
+<br />
+<b>
+  <i>'async await로 처리하면 try catch로 처리할 수 있지 않나?'</i>
+</b>
+
+우선 Promise 의 타임라인을 짧게 훑고 가자.
+
+ES6에서 Promise 가 등장하게 된다. 그 이후 ES2017에서 async await 가 등장하게 된다.
+
+당신은 이제 저 사이, async await이 등장하기 이전 개발자라고 생각해보자.
+
+파일을 읽어서 json 파싱하는 코드를 작성해야 한다고 하자.
+이때 파일이 json 파일인지 확인하고, 맞으면 파싱하고, 아니면 에러를 던지는 코드를 작성해야 한다.
+아래와 같이 작성 해볼 수 있을 것이다.
+
+```js
+const fs = require("fs").promises;
+
+const readFile = (file) => {
+  if (!file.endsWith(".json")) {
+    throw new Error("not json");
+  }
+  return fs.readFile(file, "utf8");
+};
+```
+
+이 함수는 파일명에 따라 동기적으로 처리되거나 비동기적으로 처리된다.
+그에 따라 위에서 살펴봤던것 과같이 처리하면 아래와 같이 된다.
+
+```js
+Promise.resolve()
+  .then(() => readFile("some.json"))
+  .then(JSON.parse)
+  .catch(handleError);
+```
+
+코드의 의도를 파악하는데 불필요한 요소들이 개입하게 되게된다. `resolve`와 `then` 은 단지 Promise로 감싸주는 역할만 할뿐 일종의 트릭이다.
+
+<aside>
+  우리가 알고 싶은 것은 **readFile**이 잘되면 **parse**를 하고, 에러가 나면
+  에러를 처리하는 것뿐이다
+</aside>
+
+당시에도 이런식의 문제를 해결하기 위해 지금의 `Promise.try` 와 같은 형태의 라이브러리들을 만들어 사용했다.
+대표적으로 Bluebird 라이브러리에서는 아래와 같이 사용할 수 있었다.
+
+<LinkPreview src="http://bluebirdjs.com/docs/api/promise.try.html"/>
+```js
+Bluebird.try(readJsonFile, "some.json").catch(handleError);
+```
+구현을 살펴보면 throw된 값을 다시 프로미스로 감싸서 반환하는 형태로 구현되어 있다. (코드는 살짝 간추렸다.)
+```js
+// https://github.com/petkaantonov/bluebird/blob/master/src/method.js
+Promise.attempt = Promise["try"] = function (fn) {
+  var ret = new Promise(INTERNAL);
+  ret._captureStackTrace();
+  ret._pushContext();
+
+// 동기 호출
+var value = tryCatch(fn)();
+
+// 결과를 프로미스로 감싸서 반환
+ret.\_resolveFromSyncValue(value);
+return ret;
+};
+
+````
+이렇게 보면 `Promise.try` 는 꽤나 획기적인 편리한 메서드로 보인다. \
+그런데 위와 같은 불편함을 느껴본적이 많은가? 나는 그렇게 많이 느껴본적은 없었다.
+
+왜냐하면 우리에겐 `async await`가 있기 때문이다.
+위의 코드를 다시 `async await` 로 작성하면 아래와 같이 된다.
+
+```js
+const readJsonFile = async (file) => {
+  if (!file.endsWith('.json')) {
+    throw new Error('not json');
+  }
+  return fs.readFile(file, 'utf8');
+}
+
+const processJsonFile = async () => {
+  try {
+    const data = await readFile('some.json');
+    return JSON.parse(data);
+  } catch (e) {
+    console.log(e.message);
+  }
+}
+````
+
+이렇게 되면 동기일 때와 비동기일 때 모두 동일하게 처리할 수 있다.
+
+다른 예시로는 copy도 들어볼 수 있겠는데.
+
+```js
+const copy = (text) => {
+  return Promise.try(() => {
+    if (navigator.clipboard) return navigator.clipboard.writeText(text);
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  });
+};
+```
+
+clipboard가 지원되는경우는 Promise를 return하는 메서드인 `navigator.clipboard.writeText` 을 사용하고,
+지원되지 않는 경우는 동기 메서드인 `document.execCommand` 를 사용한다. 이럴때 써볼 수 있을 것이다.
+하지만 `async await` 를 사용하면 더 깔끔하게 처리할 수 있다.
+
+```js
+const copy = async (text) => {
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  }
+};
+```
+
+그렇다면 왜 이제야 Promise.try 가 등장했을까?
+위에도 언급했지만 Promise.try 는 Promise의 등장 이후 그리고 async await 가 등장하기 이전 그 사이에 제안되었다.
+[**[tc39]Proposal Promise-try**](https://github.com/tc39/proposal-promise-try?tab=readme-ov-file)의 첫 커밋을 살펴보면 2016년도이다.
+그리고 라이브러리 형태의 구현체는 그보다 전부터 있어왔다.
+
+<LinkPreview src="http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/" />
+
+2016년도에 제안되었는데 왜 이제야 등장했을까?
+
+## 치열한 설득
+
+Promise.try가 2016년 제안되고 2024년 최종적으로 Stage 4로 승격되고 배포 되기까지 어떤 과정들이 있었는지 살펴보자.
+
+### Stage 1 - 2016.9~11
+
+위에서 언급했던 것처럼 `Promise.try`는 2016년 **Jordan Harband**(https://github.com/ljharb)에 의해 제안되었다.\
+2016년 9월 처음 Stage1로 제안되었으나, 당시 다른 아젠다에 밀려서 논의되지 못하고 그해 11월에 본격적으로 논의 되었다.
+
+<LinkPreview src="https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md" />
+당시의 근거도 아까 살펴본 예시대로 색깔을 알지 못하는 함수들에 대해서 불필요한 syntax를
+사용하는 것을 방지하기 위해서였다.
+
+아래의 미팅내역은 당시 미팅 기록을 보기 좋게 다듬어 본것이다.
+
+<details>
+<summary>2016년 11월 29일 TC39 미팅 내역 - Promise.try 논의</summary>
+https://github.com/tc39/notes/blob/main/meetings/2016-11/nov-29.md#11iib-promisetry
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    이 기능은 .then 호출 체인을 시작할 수 있습니다. 코드를 같은 틱(tick)에서
+    실행하고 Promise를 반환한다는 점에서 Promise.resolve().then()과는 다릅니다.
+  </ChatBubble>
+  
+  <ChatInfo>잡 루프(job loop)의 시맨틱에 대한 논의</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    이 방식은 즉시 호출되는 비동기 함수(immediately invoked async function)를
+    만들거나, Promise 생성자를 사용하는 등의 번거로움을 피하게 해줍니다.
+  </ChatBubble>
+
+<ChatBubble author="DD">
+  사용자 공간(userspace) 코드에서 정말 많이 사용되는 패턴입니다. 항상 동기적으로
+  실행되고, 결정적으로 모든 예외를 잡아서 거부된 Promise(rejected Promise)로
+  바꿔줍니다.
+</ChatBubble>
+
+  <ChatBubble author="MM">
+    이게 모호한 점은 없나요? 항상 동기적으로 실행되나요, 아니면 때때로 그런가요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    항상 동기적으로 실행됩니다.
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    이렇게 처리된다는 점이 중요합니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    거의 모든 Promise 라이브러리에 이 기능이 있습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="DD">
+    동기 부여를 위한 예시: Promise를 반환하는 함수가 있다고 할 때, 이 함수는
+    예외를 던지면 안 됩니다. 함수 본문을 Promise.try()로 감싸면, 예외가 발생했을
+    때 이를 거부된 Promise로 변환하여 올바른 결과를 얻을 수 있습니다.
+  </ChatBubble>
+</ChatContainer>
+
+```js
+function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+foo("http:0"); // 예외 발생!! 이런
+
+function foo(relativeURL) {
+  return Promise.try(() => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  });
+}
+
+function foo(relativeURL) {
+  return (async () => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  })();
+}
+
+async function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+function foo(relativeURL) {
+  return async do {
+    // ?!?!?!
+    var absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    fetch(absoluteURL);
+  };
+}
+```
+
+<ChatContainer>
+  <ChatBubble author="YK">
+    비동기 함수(async functions)가 있는데, Promise.try는 반쪽짜리 해결책일 뿐이지 않나요? 비동기 함수가 더 사용하기 편하지 않을까요?
+  </ChatBubble>
+  
+  <ChatBubble author="DD">
+    제 생각에는 실제 대부분의 경우, 그냥 일반적인 비동기 함수를 쓰는 것이 좋습니다. 즉시 호출되는 비동기 함수는 필요 없을 겁니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    이 제안은, 함수 작성자가 실수로 Promise를 반환하는 함수가 절대 예외를 던지지 않도록 보장하지 못한 경우를 다루기 위한 것입니다. 함수 사용자 입장에서요.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    어떤 유스케이스에서는 Promise를 다루면서도 Promise를 반환하고 싶지 않을 수 있습니다. 이럴 때 Promise.try가 즉시 호출되는 비동기 함수보다 더 편할 수 있습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    예를 들어 Promise 배열을 반환하는 경우 등이 있겠죠.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    비동기 함수가 항상 원하는 해결책은 아닙니다. 이것이 제가 finally와 같은 메서드 작업을 하는 이유입니다.
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    이런 확장을 위한 라이브러리를 그냥 배포하면 안 되나요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    폴리필(polyfill)을 배포했지만, 개발자들은 모든 기능이 포함된 하나를 선호하는 것 같습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="MM" isRight={true}>
+    전반적으로 이 기능이 그만한 가치가 있는지 모르겠지만, Stage 1 기준은 충족한다고 봅니다.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    비동기 함수가 존재하는 상황에서, 당신(MM)을 만족시킬 만큼 유용한 Promise API가 있을까요?
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    Promise.any요.
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    Promise 파이프라이닝을 위한 Promise.post/send/get 등이요.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    하지만 비동기 함수로 구현할 수 있는 것들은 어떤가요?
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    제가 포괄적으로 말하는 것은 아니지만, 비동기 함수는 기준을 매우 높였습니다. 비동기 함수와 비교했을 때 강력한 근거가 있고 많은 가치를 더해야 할 겁니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    트랜스파일러(transpiler)와 상관없이, 새로운 기능을 도입하는 데는 장벽이 있습니다. 비동기 함수는 이 라이브러리 기능보다 도입하기 더 어려울 수 있습니다. 저희 AirBnB에서는 regenerator 의존성을 원하지 않기 때문에 비동기 함수를 사용하지 않습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="AR">
+    사람들이 Promise나 비동기 함수와 같이 이해하기 쉬운 공통 기반 위에서 점진적으로 채택할 수 있는 다양한 기능을 갖는 것이 좋습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    new Promise는 이해하기 어렵습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    제가 비동기 함수를 사용하는 프로젝트를 할 때, 항상 비동기 함수만 쓰고 싶지 않은 경우를 찾기 어렵습니다. 그리고 인지적 부담(cognitive overhead)도 훨씬 적습니다.
+  </ChatBubble>
+  
+  <ChatInfo>시간 제한 알림</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Stage 1으로 갈까요?
+  </ChatBubble>
+  
+  <ChatBubble author="WH">
+    Stage 1에 반대하지는 않지만, 유용성에 대해서는 확신이 없습니다.
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    유용성에 대한 우려 때문에 Stage 2는 아직 아닌 것 같습니다. 설득을 위해 무엇이 필요할까요?
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    찬성 논거: 이 제안은 문법(syntax)과 유사하며, 직교성(orthogonality) 측면에서 기대될 수 있으므로 인지적 부담을 늘리는 것이 아니라 오히려 줄일 수 있습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    try를 사용하는 사람들의 코드베이스, 즉 표준 Promise가 아직 준비되지 않았다고 말하는 사람들의 코드베이스를 살펴봅시다.
+  </ChatBubble>
+</ChatContainer>
+
+<ChatContainer title="결론">
+  <ChatInfo>결론/결정</ChatInfo>
+  <ChatBubble author="TC39">
+    <ul>
+      <li>Stage 1 승인.</li>
+      <li>동기 부여에 대한 더 많은 증거가 필요하므로 Stage 2는 아직 준비되지 않음.</li>
+    </ul>
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+우리가 위에서 살펴봤던 것 처럼 해당 미팅에서도 Promise.try가 필요한 케이스에 대한 의문이 강하게 제기되었다.\
+그렇게 일단 Stage 1에 머문채로 시간은 흘러 8년의 시간이 흘렀다.
+
+### Stage 2 - 2024.2
+
+2024년 2월 긴 시간 끝에 Promise.try에 대한 Stage 2 논의가 시작되었다.
+
+<details>
+<summary>2024년 2월 6일 TC39 미팅 내역 - Promise.try 2단계 논의</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-02/feb-6.md#promisetry-for-stage-2
+
+<ChatContainer>
+  <ChatInfo>Promise.try 2단계 진입 제안 - 발표자: Jordan Harband (JHD)</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    아주 오래전, 2016년에 제가 Promise.try를 제안했었습니다. 기본 아이디어는 이렇습니다. 어떤 함수가 있는데, 이게 동기식이든 비동기식이든, 프로미스를 반환하든 안 하든, 예외를 던지든 안 던지든 신경 쓰고 싶지 않지만, 이걸 프로미스로 감싸고 싶을 때 사용하는 거죠. 그래서 만약 예외를 던진다면 올바르게 처리되도록 하는 겁니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    쉽게 기억할 수 있는 방법은 여기 있습니다. Promise.resolve 다음에 .then 안에서 함수를 실행하는 거죠. 이건 잘 작동하지만, 원치 않을 때 비동기적으로 실행된다는 단점이 있습니다. 더 최신 방식은 즉시 실행 비동기 함수(IIAFE)를 사용하는 것인데, 여기서 함수를 await하면 실제로 원하는 시맨틱(의미 동작)을 얻을 수 있습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    제가 이 발표를 했을 당시, 일반적인 반응은 2단계로 가려면 유용성에 대해 더 설득력 있는 근거가 필요하다는 것이었습니다. await 구문을 사용해서 문제를 해결할 수 있다는 점을 고려했을 때 말이죠.
+
+    그 당시에는 이 제안의 유저랜드(사용자 영역) 버전들이 그냥저냥 쓰이는 정도였고, 제 생각에 일반적인 기대, 혹은 최소한의 희망은 아무도 이 기능이 필요하지 않을 것이고 문법만으로 충분할 것이라는 점이었습니다.
+
+    하지만 그 이후 2년이 지나 이 패키지가 공개되었고, 주당 4600만 다운로드를 기록하고 있습니다. 시간이 지남에 따라 이 그래프는 계속 상승하고 있고, 몇몇 NPM 데이터 오류를 제외하면 주당 4500만 다운로드로 안정적입니다. 분명히 어느 정도 사용되고 있다는 거죠.
+
+    물론 이건 하나의 패키지고, 한 명의 개발자가 만든 것입니다. 그리고 그 개발자는 다른 많은 패키지를 가지고 있으니, 어쩌면 사용량이 많은 다른 패키지 중 하나에 이걸 포함시켰기 때문일 수도 있습니다. 그럼에도 저는 여전히 이 기능이 필요하다고 느낍니다.
+
+    제가 사용하는 해결 방법은 여기 있는 new Promise 코드 조각입니다. new Promise 실행자(executor) 안에서 resolve에 함수를 전달하는 거죠. 작동은 하지만, 보기 안 좋고, 실수하기 쉬우며, 처음 접하는 사람들에게는 혼란스럽습니다.
+
+    이 패키지를 찾아보고 현재 매우 많이 사용되고 있다는 것을 확인했기에, 다시 한번 이 제안을 가져와 2단계를 요청하거나, 위원회가 2단계 자격을 갖추기 위해 무엇이 필요하다고 보는지에 대한 새로운 답변을 얻고자 합니다. 이상입니다.
+
+  </ChatBubble>
+  
+  <ChatBubble author="NCL">
+    네. 제가 올린 주제인데, 아마 명확한 질문이 필요할 것 같습니다. 이것이 왜 필요한지를 보여줄 것이라고 가정했습니다만, 이 경우에 정말 필요한가요? 그냥 value = await synchronousfunction()을 하면 안 되나요? 똑같이 작동하지 않을까요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    이 특정 코드 조각에서는 그렇습니다. 최상위 await가 존재한다면 똑같이 작동할 겁니다. 하지만 목표가 프로미스 조합기(combinator)를 사용하고 싶은 프로미스를 얻는 것이라면, 그렇게 간단하지 않습니다. 항상 프로미스 자체가 필요하고 await된 값이 필요하지 않은 사용 사례가 있을 것이며, 바로 이때 Promise.try가 유용합니다.
+  </ChatBubble>
+  
+  <ChatInfo>큐가 비었습니다.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    큐가 비었다면, 2단계를 요청하고 싶습니다. 스펙은 매우 간단합니다. [스펙 링크 보여주며] 이게 전부입니다. 최근에 최신 버전의 스펙에 맞춰 리베이스했습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    네. 저는 여전히 이게 왜 필요한지 이해가 안 됩니다. 왜 필요한지 좀 더 설명해주실 수 있나요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    네. 특히 제가 API를 작성할 때 그렇습니다. API 사용자가 저에게 콜백 함수를 전달하고, 제가 NCL에게 답변할 때 언급했듯이, 그것으로부터 본질적으로 프로미스를 생성한 다음 추가 작업을 하고 싶을 때입니다. 예를 들어 다른 것과 경쟁시키거나(race), Promise.all을 사용하거나, 추가 작업을 할 수 있겠죠. 어느 시점에서는 await 구문이 나머지 부분을 처리하게 되겠지만, 초기 설정 단계에서는 제 많은 사용 사례에서 프로미스로 작업해야 합니다. 해결 방법이 있으니 이건 새로운 기능은 아닙니다. 단지 제가 가끔 해야 하는 일을 좀 더 직관적이고 우아하게 표현하는 방법일 뿐입니다.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    구체적으로, API가 콜백 함수를 받는데, 사용자가 동기 함수를 전달할 수도 있고, 그 함수가 동기적으로 예외를 던질 수도 있는 상황을 말씀하시는 건가요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    네, 사용자가 함수를 전달하는데, 저는 그게 동기인지 비동기인지, 예외를 던지는지 아닌지 확실히 모르는, 소위 "색깔"(color)을 모르는 함수입니다. 그리고 신경 쓰고 싶지도 않고요. 그냥 프로미스를 받아서 최선을 다해 처리하고 싶습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    알겠습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JRL">
+    저희가 AMP에서 겪었던 또 다른 사례(ampproject/amphtml#15107)는 비동기 오류 처리였습니다. 오류가 프로미스로 래핑되면 모든 것을 제대로 처리했습니다. 그런데 코드 변경 때문에 Promise.resolve를 사용하고 함수를 호출하게 되었는데, 그 함수 자체가 동기적으로 오류를 던졌습니다. 저희는 동기적 catch 처리가 없고 프로미스 체인의 비동기 catch만 있었기 때문에, 이 경우를 제대로 처리하지 못했습니다. 저희 개발자들은 그 차이를 이해하지 못했고, 프로미스에 의해 잡혀서 비동기 프로미스 처리 로직에서 처리될 것이라고 생각했습니다. 그래서 저희는 Promise.resolve(fn())를 사용하는 모든 경우에 저희 버전의 promise.try를 사용하도록 강제했고, 이것이 버그를 해결해주었습니다. 그 이후로는 비동기 오류 처리에 안심하고 의존할 수 있게 되었습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="SYG">
+    사용자 공간(userspace) 코드에서 정말 많이 사용되는 패턴입니다. 항상 동기적으로
+    실행되고, 결정적으로 모든 예외를 잡아서 거부된 Promise(rejected Promise)로
+    바꿔줍니다.
+  </ChatBubble>
+  
+  <ChatBubble author="EAD">
+    그 점에 대한 한 가지 포인트는 NPM 다운로드 수입니다. 주당 4600만 다운로드가 어디로 가는지 아는 것이 흥미로울 것입니다. 비록 그것이 다른 라이브러리의 주 컨테이너에 싸여 있더라도, 그것들이 사용되는 라이브러리는 무엇이고, 무엇이... 4600만은 엄청난 숫자입니다! 무언가가 그것을 사용하고 있습니다. 그렇다면 그게 무엇일까요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    저는 오랫동안 위원회를 위해 바로 그 질문에 답하기 위해 패키지의 의존성을 설치 수 기준으로 정렬하는 방법을 원했습니다. 그렇게 하는 방법을 아는 바가 없습니다. 혹시 아시는 분 계시면 알려주세요.
+  </ChatBubble>
+  
+  <ChatBubble author="DE">
+    이것이 엄청나게 짧지 않다는 점을 고려할 때, 우리가 이것을 표준 라이브러리에 넣을지 여부에 대해 아마도 물어봐야 할 질문은, 사람들이 코드를 작성할 때, 개인적으로 코드를 읽을 때 그들의 정신 모델(mental model)에 얼마나 도움이 되는가입니다. 그래서 제가 비교 대상으로 고려할 만한 기준선은 promise withResolvers와 try-catch를 사용하는 것입니다. 아마도 이 구성은 사람들이 모범 사례를 따르도록 돕습니다. 왜냐하면 예외를 던질 수 있는 것이 있고 그 값을 얻고 싶을 때 올바른 관용구를 사용하기 때문입니다. 아니면 해독하기 더 까다로운 멋진 조합기(combinator)가 될 수도 있습니다. 그렇다면 우리는 그런 종류의 비교를 어떻게 해야 할까요?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    그것이 학습 가능성과 가독성에 관한 것이라는 점에서 올바른 생각 방식이라고 생각합니다. 관련된 문자 수에는 큰 차이가 없습니다. 제 생각에 withResolvers를 사용하는 것은 new Promise를 사용하는 것보다 여러 배 더 나쁠 것입니다. 단지 이것을 해결하기 위해서나 즉시 실행 비동기 함수를 위해서 말이죠. 그래서 저는 그것이 논의에 아무런 영향을 미치지 않는다고 생각합니다. 하지만 가독성이 중요하다는 데 동의하며, 만약 사람들이 new Promise와 실행자 인수가 함수 호출을 감싸는 것이 promise.try보다 더 읽기 쉽다고 생각한다면, 그것은 언어에 추가하는 것에 대한 매우 강력한 반론이 될 것입니다. 하지만 저는 누군가가 그런 주장을 할 것이라고는 회의적입니다.
+  </ChatBubble>
+  
+  <ChatInfo>NRO 님이 다운로드의 절반이 jest에서 온다고 말합니다.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    네, jest가 테스트 프레임워크라는 점은, 그것이 tape에도 적용될 것이라는 제 직관과 어느 정도 일치합니다.
+  </ChatBubble>
+  
+  <ChatInfo>큐가 비었습니다.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    그렇다면 여전히 2단계를 요청하고 싶습니다. 네?
+  </ChatBubble>
+  
+  <ChatBubble author="CDA">
+    promise.try에 대한 2단계 진입에 대한 명시적인 지지가 있습니까?
+  </ChatBubble>
+  
+  <ChatBubble author="SYG">
+    제가 제안했던 것은 저에게 (구체적인 예를) 보여주시면, 2단계나 2.7단계로 바로 갈 수 있다는 것이었습니다. 비록 아마도 2단계는... 구체적인 코드를 보기 전까지는 지금 당장 2단계는 불편합니다. 기본적으로 어떤 코드든 괜찮으니, 어디에 사용할지 읽어볼 수 있도록요. 그리고 그것은, 예를 들어, 지금이나 내일이나 그럴 수 있고, 그 다음에는... 인자를 아무것도 전달하지 않는 것 외에 전달하는 것에 대해 더 생각해보고 싶습니다.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    네, 그럼 기록을 위해 다시 말씀드리겠습니다. Promise.try는 지금 당장 진전되지 않습니다. 하지만 Shu 님과, 아시다시피, 더 넓은 위원회에 평가를 위한 몇 가지 더 구체적인 예를 제공할 것입니다. 그리고 Shu 님이 이것을 구체적으로 표현한 유일한 분이지만, 다른 누구라도 저에게 괜찮다고 알려주면, 회의 후반에 시간이 있다고 가정하고 돌아와서 2단계 또는 제가 사전에 안건에 올리지 않았더라도 2.7단계를 요청할 수도 있습니다. 감사합니다.
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+Stage2 로 진입하기 위해서 Promise.try 관련 라이브러리에 사용량으로 설득을 시도했지만,
+아직 여전히 Promise.try에 대한 의문은 여전히 남아있었다.\
+대부분의 사용처는 jest였다고 한다. Jordan Harband도 tape 라는 테스팅라이브러리를 다뤘던 것을 생각하면 이해가 가는 부분이다.
+테스팅하는 라이브러리 입장에서는 테스트 콜백이 동기인지, 비동기인지 모를 수 있기 때문에 이를 위해 저런 식의 방법들이 필요하지 않았을까 추측해본다.
+
+<div style={{ backgroundColor: "white", padding: "10px" }}>
+  <ChatBubble author="NCL">
+    네. 제가 올린 주제인데, 아마 명확한 질문이 필요할 것 같습니다. 이것이 왜
+    필요한지를 보여줄 것이라고 가정했습니다만, 이 경우에 정말 필요한가요? 그냥
+    value = await synchronousfunction()을 하면 안 되나요? 똑같이 작동하지
+    않을까요?
+  </ChatBubble>
+  <ChatBubble author="KG">
+    네. 저는 여전히 이게 왜 필요한지 이해가 안 됩니다. 왜 필요한지 좀 더
+    설명해주실 수 있나요?
+  </ChatBubble>
+</div>
+
+### Stage 2.7 - 2024.04
+
+Stage2에 접어든 뒤로는 일사천리로 진행되었다. \
+그러나 여전히 이전과 동일한 의문은 계속 존재하였다.
+Promise에 기존에 catch, finally가 있으니 try도 있으면 자연스럽다는 의견도 있었고,
+분위기는 있으면 유용하긴 할 것 같지만, 막상 본인은 잘 사용할 것 같지 않다라는 의견이 주된 의견이었다.
+
+async IIFE와 동등하지 않냐는 의견도 었었다. 이부분은 가끔 우리가쓰는 패턴에도 적용할 수 것 같다.\
+잦지는 않지만 가끔 아래와같이 effect 내에서 비동기를 처리하기 위해 아래와 같은 패턴이 쓰이곤 한다. (예시이다)\
+나 역시도 IIFE 패턴이 조금더 익숙하긴하지만, 그치만 인지적으로 코드를 읽는 과정에선 후자도 충분히 직관적이라는 생각이 든다.
+이 논의에서는 await 구문의 트랜스파일링 비용이 더 비싸다는 점을 근거로 들고 있다.
+
+```jsx
+// ① async IIFE 패턴
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("https://api.example.com/data");
+      const data = await res.json();
+      console.log(data);
+    } catch (err) {
+      console.error(err);
+    }
+  })();
+}, []);
+
+// ② Promise.try 패턴
+useEffect(() => {
+  Promise.try(() => fetch("https://api.example.com/data"))
+    .then((res) => res.json())
+    .then(console.log)
+    .catch(console.error);
+}, []);
+```
+
+<details>
+<summary>2024년 4월 8일 TC39 미팅 내역 - Promise.try 2.7단계 논의</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-04/april-08.md#promisetry-for-stage-27
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    네, Promise.try에 대해 말씀드리겠습니다. 이번 회의에서 2.7 단계 진입을 요청하고 싶었습니다. 리뷰어 중 한 분은 아직 확인해주지 않으셨지만, 다른 리뷰어 한 분과 모든 편집자들은 확인해주셨습니다. 해결해야 할 미결 질문이 하나 있습니다: 함수에 인자를 전달할 것인가 하는 점입니다. 구체적으로, 생성된 결과물을 제외하면 비교적 작은 이 풀 리퀘스트(PR)가 있습니다. 이 PR은 인자 전달 기능을 추가합니다. main 브랜치의 제안은 콜백을 받아서 인자 없이 호출합니다. 여러 대표 위원들의 요청으로 만들어진 이 풀 리퀘스트는 Promise.try에 제공된 추가 인자들을 콜백으로 전달합니다. 그 외 다른 변경 사항은 없습니다. 그래서 제 희망은 이 풀 리퀘스트를 포함한 상태로 2.7 단계에 대한 합의를 얻는 것입니다. 합의가 이루어지면, 이 PR을 병합하고 테스트 작업을 시작할 것입니다.
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA가 Mark에게 발언권을 넘깁니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  인자 추가는 마음에 듭니다. 하지만 그 기능이 있다면, 사람들이 catch나
+  then에서도 똑같이 기대하지 않을까요? 이건 – 다시 말해, 인지 부하 문제가
+  아닐까요? then은 차치하고, catch에도 실제로 추가할 수 있는 기능일까요?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  제 생각에 catch나 then과의 차이점은, 그것들은 기존 Promise에 추가되는
+  콜백이라는 점입니다. 이미 then/catch/finally를 사용하는 프로미스 파이프라인
+  안에 있는 상태죠.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">알겠습니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  반면 Promise.try는 프로미스 파이프라인을 생성하거나 진입할 때 사용됩니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">좋습니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  그래서 동의합니다 – 표면적으로는 비슷해 보이죠. 하지만 제 생각에는 then,
+  catch, finally API와 구문(async/await) 간의 유사성이 Promise.try 대
+  then/catch/finally보다 더 중요하다고 봅니다. 설령 개념적으로 다르지 않다고
+  해도 말이죠 (저는 다르다고 생각합니다).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  네. 받아들이겠습니다. 좋은 근거인 것 같네요.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  다른 질문이 있습니다. Promise.try는 코드를 async IIFE(즉시 실행 비동기 함수)로
+  감싸는 것과 동일한가요?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. (타이핑하며 보여줌)
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  async IIFE와의 대칭성을 고려할 때, 왜 사람들이 async IIFE를 사용하도록
+  권장하는 대신 try를 추가할 가치가 있는지 설명해주십시오.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  물론입니다. 이 내용은 1단계 논의와 약 두 차례의 토론에서 다루어졌습니다.
+  하지만 본질적으로, 첫 번째 이유는 오래된 환경을 지원해야 할 경우,
+  구문(syntax)은 트랜스파일 비용이 더 비싸다는 것입니다. 하지만 다른 점은, 그
+  질문 때문에 이 제안이 1단계에서 거의 9년 동안 멈춰 있었다는 것입니다. 이
+  기능(폴리필 등)은 440억 다운로드를 기록했습니다. 함수 형태가 단순히 async
+  IIFE를 사용하는 것보다 많은 사람들에게 선호되거나 필요하다는 경험적 증거가
+  있습니다. 제 주관적인 미적 견해로는, 즉시 실행 함수를 사용하는 것은
+  지저분하며, 모듈이 있는 환경에서는 구식 방식이 되었고 저는 그렇게 유지되기를
+  선호합니다. 이것은 주관적인 의견이며 아무도 동의할 필요는 없습니다. 이것은
+  해당 패키지와 그 기능이 제공하는 것을 제가 (표준화를 통해) 불필요하게 만들려고
+  한다는 것을 의미합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  경험적 증거가 마음에 듭니다. 반대하지 않습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  이것은 MM이 이전에 제기한 내용에 대한 답변입니다. 이것이 then이나 catch와
+  다르다는 점을 명확히 하고 싶습니다. 그것들은 콜백을 받는 메서드이지만, 이건 더
+  일반적인 함수 호출 메서드입니다. 특정 형태의 함수를 받는 것들, 예를 들어
+  함수를 호출하는 방법인 Function.prototype.call이나 Function.prototype.apply
+  같은 것들은 인자를 전달하는 것이 타당합니다. catch처럼 특정 형태를 기대하는
+  것들은 (인자 전달이) 덜 타당합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  오래된 환경 주장에 대해 이해하지 못한 부분을 명확히 하고 싶습니다. JHD가 구문
+  트랜스파일이 비쌀 수 있다고 말했습니다. 그렇다면 상황은 async/await가 없는
+  오래된 환경이 있어서 async/await를 트랜스파일해야 하는데, 그 환경에 새로
+  표준화된 Promise.try 메서드는 있다는 건가요? 이해가 안 됩니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Promise.try는 폴리필(polyfill)이 가능합니다. Async는 그렇지 않죠. 즉, 환경에
+  설치될 필요가 없습니다. 함수로 존재할 수 있습니다. Promise.try는 비동기 함수가
+  지원하는 것의 아주 작은 부분집합입니다. 그래서 만약 그것만이 문제라면, 누군가
+  이 목적으로 즉시 실행 비동기 함수를 사용할 때를 감지하여 해당 함수로 대체하는
+  정적 분석 변환을 작성할 수도 있겠죠. 실제로는 그런 것은 존재하지 않습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  알겠습니다. 구체적으로 우려하는 점은 – 좋습니다. 만약 소스 코드(트랜스파일 전
+  소스)에서 최신 JS를 작성하지만, 너무 오래되어 네이티브 async/await 지원이 없는
+  오래된 환경을 타겟으로 하는 사용자들이 있다면, 우리가 Promise.try를 표준화하면
+  await 트랜스파일보다 (이걸 사용하는 것이) 더 나을 수 있다는 건가요? 이것이
+  맞게 이해한 것입니까?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  그게 제가 의도한 바입니다. 하지만 그게 이 제안의 주된 동기라고 생각하지는
+  않습니다. 그런 종류의 작업을 하는 우리에게는 부수적인 이점일 뿐입니다. 주된
+  동기는 어떤 형태의 즉시 실행 함수보다 제가 하려는 것이 더 명확하다는 점입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA가 KG에게 발언권을 넘깁니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="KG">
+  네. 이 제안의 주된 동기에는 동의합니다. 폴리필 가능성 부분은 혼란스럽습니다.
+  그런 기능을 하는 패키지가 있을 수도 있잖아요. 만약 당신이 –
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  맞습니다. 당신 말이 옳습니다. 제가 그것을 언급한 것이 더 많은 혼란을 야기한 것
+  같습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">알겠습니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. 폴리필 가능성은 위원회로서 우리가 설계 결정을 동기 부여하거나 어떤 것의
+  포함을 정당화하는 것으로 합의한 적이 없는 동기이며, 여기서 제가 그렇게
+  주장하는 것은 아닙니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">제가 확인하고 싶었던 것은 그뿐입니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  제 말은, 여기서 주장 중 하나는 명확성이라고 생각합니다. 그리고 – 저는 이 사용
+  사례에 대해 완전히 확신이 서지는 않습니다. 하지만 만약 우리가 이것을 추진하고
+  전체 목표가 명확성이라면, try라는 이름은 정말로 프로미스와 관련하여 어떤
+  식으로든 예외(exception)와 관련이 있는 것처럼 들립니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  그렇습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">네. 그렇긴 한데...</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  이것이 더 편리하게 만들려고 하는 구체적인 사례는 함수가 동기적 예외를 던질
+  때입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  그래서 그걸 처리하는군요. 함수 자체를 호출하면서 Promise.resolve 같은 것을
+  사용할 수는 없군요.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  예외를 던지기 때문에 그럴 수 없습니다. Promise.catch 등으로 감싸야 합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  알겠습니다. 이해했습니다. 이것은 사실상 함수를 호출하고, 그것을 try-catch로
+  감싼 다음 (예외 발생 시) reject하는 것이군요.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  그렇군요. 네. 이름이 adapt 같은 것이었으면 좋았을 텐데요.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  이름에 집착하지는 않습니다. 다른 사용자들을 보면 항상 try라고 불렸습니다.
+  아니, 목록에 attempt도 있고, fcall도 있긴 합니다 (하지만 fcall은 아무도 지지할
+  것 같지 않습니다). attempt는 흥미로운 대안이지만 목록에 한 번만 등장했고, 그
+  라이브러리조차 여전히 try를 가지고 있습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">네. 알겠습니다. 좋습니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  그렇다면, 인자를 전달하는 해당 풀 리퀘스트를 병합하는 조건으로 2.7 단계에 대한
+  합의를 요청하고 싶습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA가 MM으로부터 지지를 확인했습니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Promise.try의 2.7 단계 진입을 명시적으로 지지하는 다른 목소리가 있습니까? DE?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  토론 중에 몇몇 분들이 동기에 대해 다소 막연하게 의문을 제기하는 것을
+  들었습니다. 저도 이 제안에 대해 비슷하게 느낍니다. 나빠 보이지는 않지만, 제가
+  개인적으로 사용할 것 같지는 않습니다. 위원회 내에서 이 제안의 동기가 얼마나 잘
+  받아들여지고 있는지 이해하기 위해 온도 체크(의견 조사) 같은 것을 해야 할지
+  궁금합니다. 보통 온도 체크를 그런 식으로 사용하지 않는다는 것을 알지만,
+  회의적인 시각과 명시적인 지지 비율에 대해 약간 우려됩니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  제 말은, 그것이 적절하다고 생각한다면 당연히 할 수 있습니다. 하지만 그건
+  2단계로 갈 때 물어봐야 할 질문이라고 생각합니다. 2단계 승인은 위원회가 동기에
+  동의한다는 것을 의미합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  물론입니다. 하지만 2.7 단계 제안 시에는 이런 일이 꽤 흔합니다. 제가 2단계까지
+  진행시킨 제안들이 2단계 이후에 더 이상 동기 부여가 필요 없었다면 훨씬 일이
+  적었을 겁니다. 네. 이것이 우리가 위원회에서 반복적인 합의를 요구하는 보수적인
+  기본 원칙을 가지고 있는 이유입니다. 확실히 하기 위해서죠.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. 제 말은, 위원회 시간을 잘 사용하는 것이라고 생각한다면 분명히 그 과정을
+  거칠 수 있습니다. 하지만 – 부정적인 점이 없고 긍정적인 점이 있으며, 사용자
+  영역(user-land)에서 그것이 필요하다는 상당한 증거가 있다면, 제게는 꽤 명확해
+  보입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  그래서 저는 – 온도 체크를 허용할지 여부는 당신에게 맡기겠습니다. 여기서
+  부적절하다고 생각하시면 하지 맙시다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA가 대기열에 있는 MM에게 발언권을 넘깁니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  네. 온도 체크를 하는 것에 동의합니다. 온도 체크를 하기 전에, 이 제안에
+  찬성하는 인지 부하 관련 주장을 하나 추가하고 싶습니다. 프로미스에는 catch와
+  finally가 있습니다. 그래서 그것을 보는 사람들은 자연스럽게 Promise.try를 찾을
+  것이고, 저는 그것이 없는 것보다 catch 및 finally와 잘 연계되어 작동하는
+  방식으로 존재하는 것이 덜 놀랍다고 생각합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다. 그 점에 동의합니다. 제안자로서, 제안된 온도 체크를 허용하지 않는
+  것은 이기적인 행동이 될 수 있으며, 저는 이기적으로 행동하려는 것이 아닙니다.
+  만약 사람들이 이것이 위원회 시간을 잘 사용하는 것이라고 생각한다면, 당연히 할
+  수 있습니다. 저는 그것이 위원회 시간을 잘 사용하는 것이라는 어떤 징후도 보지
+  못하고 있습니다. 하지만 그 점에 대해서는 회의장 전체의 의견에 따르겠습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">온도 체크를 합시다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  좋습니다. 합시다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>온도 체크를 위한 논의가 진행됩니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  매개변수가 정확히 무엇인지, 각 선택지가 무엇을 의미하는지 정의합시다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  아마도 온도 체크 질문은 '이 제안이 당신에게 유용해 보입니까?'가 될 수
+  있겠네요. '매우 긍정적'부터 '확신 없음/혼란스러움'까지의 스펙트럼이 이런
+  종류의 질문에 딱 맞는 것 같습니다. 어떻게 생각하세요, JHD? 질문은 이런
+  식으로요.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. 만약 더 부정적인 감정을 가진 분이 있다면, 대기열에 참여해서 강조해주세요.
+  그렇지 않다면, 이모지의 기본 라벨로 충분합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">"이 제안이 당신에게 유용해 보입니까?"</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  명확히 할 수 있을까요? '이 제안이 당신에게 유용해 보입니까?'인가요, 아니면
+  '당신이 보기에 이 제안이 유용해 보입니까?'인가요? 왜냐하면 제가 개인적으로
+  절대 사용하지 않을 것들이 많지만, 유용해 보이는 것들은 확실히 있기 때문입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  좋습니다. '당신이 보기에 유용하다'가 더 포괄적인 의미겠네요. 네.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  다시 말해, 누군가에게 유용한가 하는 거죠.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>온도 체크 투표가 진행됩니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="NRO">
+  제 입장은 '나쁘지 않다'이지만, 일반적으로 유용하다는 점에는 확신이 없습니다.
+  저와 같은 입장을 가진 다른 사람들은 '무관심(indifferent)'을 선택했는데, 이것이
+  의미하는 바와 어떻게 다른가요?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  예를 들어, 당신은 주장에 설득되지 않았다는 거죠.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="NRO">
+  저는 인기도 때문에 설득되지 않았습니다. 왜냐하면 패키지의 이점을 잘 모르겠고,
+  다른 분들이 언급한 입장과 비슷해 보이기 때문입니다. 예를 들어, 이건 나쁘지
+  않지만 유용하다고 보지 않는다는 거죠. DE가 같은 입장을 표명했기 때문에 저는
+  '무관심(indifferent)'을 선택했습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. 제 말은, 충분한 사람들에게 유용하다고 생각하는지에 더 가깝습니다. 분명히
+  '나에게는 유용하다'고 말하는 사람들이 있고 당신은 그것을 무효화할 수 없습니다.
+  누군가에게는 분명히 유용하죠. 하지만 네. 제 말은, 잘 모르겠습니다. 둘 다
+  괜찮다고 생각합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>온도 체크 결과: 긍정 6표, 부정 10표</ChatInfo>
+
+{" "}
+
+<ChatBubble author="DE">
+  '무관심(Indifferent)'은 완전히 부정적인 것은 아닙니다. 제 생각에는 이에 대한
+  증거를 조금 더 가지고 돌아오는 것이 최선일 것 같습니다. 물론 투표 자체가 어떤
+  결론을 내리는 것은 아닙니다. 하지만 제가 제안자에게 권장하고 싶은 것은
+  그것입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  네. 제 말은, 제 주장은 완성되었다고 생각합니다. 어떤 추가적인 증거를 제공할 수
+  있을지 모르겠습니다. 그리고 제 말은, 2단계에 도달했을 때 그 발표를 했다고
+  생각했습니다. 그래서 그것이 어떤 가치를 더할지 명확하지 않습니다. 따라서
+  누군가 제가 그렇게 하도록 2.7 단계에 대한 합의를 보류하고 싶다면 괜찮습니다.
+  하지만 저는 정말로 – 무엇을 다시 가져와야 하는지에 대한 구체적인 행동 요구가
+  필요할 것입니다. 왜냐하면 이미 다 제시된 것 같기 때문입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  CDA가 시간이 거의 다 되었음을 알리고 MM에게 발언권을 넘깁니다.
+</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  네. 저는 기권(abstain)이 아니라 무관심(indifferent)입니다. 부정적인 의견이
+  아닙니다. 부정적인 의견은 따로 있습니다. 이 결과를 바탕으로 지금 바로 합의를
+  요청해야 합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  그럼 네, 2.7 단계에 대한 합의를 다시 요청하겠습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>여러 참석자들이 지지 의사를 표명합니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">지지합니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="WH">지지합니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="BSH">지지합니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  TKP로부터 +1입니다. 좋습니다. 반대하는 분 계신가요? 명시적으로 반대하지는
+  않지만 기록을 위해 다른 의견을 밝히고 싶은 분 계신가요?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  저는 Mark가 '무관심(indifferent)'을 기권(abstain)으로 해석한 것에 대해 약간
+  반대 의견을 표하고 싶습니다. 기권하고 싶으면 기권할 수 있습니다. 저는 Nicolo가
+  말한 의미로 '무관심'에 투표했지만, 합의에 반대하는 것은 아닙니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  (투표 화면이) 더 이상 우리 앞에 없지만, 기권(abstain) 선택지가 있었는지
+  기억나지 않습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">그냥 투표하지 않으면 됩니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  기권(abstain)을 의미한 것이 아니었습니다. Nicolo가 방금 설명한 것과 같은
+  이유로 투표했습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  명확히 하자면, 저에게 그것은 약한 부정이며, 누군가가 합의를 막으려는 의지는
+  없지만 지지 투표는 하지 않을 것이라는 의미입니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">맞습니다. 네. 그 해석이 맞는 것 같습니다.</ChatBubble>
+
+{" "}
+
+<ChatInfo>합의가 이루어집니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  좋습니다. Promise.try 2.7단계 진입 축하합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  <strong>발표자 요약:</strong> 동기에 대한 약간의 주저함이 있었음. 다수의
+  사람들이 유용성에 대해 확신하지 못했지만, 아무도 반대하지 않았고 여러 멤버들은
+  유용성을 확신함.
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>결론:</strong> Promise.try는 2.7 단계에 진입함.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 3 - 2024.06
+
+여기서 부터는 이제 많은 것들이 합의 되었고, 구현이 되기 시작했기에 큰 이견 없이 승격되었다.
+test262에 테스트가 병합되었고, 브라우저들이 구현을 시작했다. (ECMA-262에 대한 테스트란 의미로 test262라고 부른다.)
+https://github.com/tc39/test262/tree/main/test/built-ins/Promise/try
+
+<details>
+<summary>2024년 6월 11일 TC39 미팅 내역 - Promise.try 3단계 논의</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-06/june-11.md#promisetry-for-stage-3
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    좋습니다. 안녕하세요, 여러분. 지난 몇 번의 회의에서 기억하시겠지만, Promise.try는 test262 테스트가 병합되었고 이미 여러 엔진에 구현되어 있습니다. 비록 플래그(flag) 뒤에 숨겨져 있지만요. 오늘은 Stage 4를 추진하려는 것은 아닙니다. 당연히 먼저 Stage 3를 달성하고 특히 브라우저들이 구현할 시간을 좀 더 주어야 하기 때문입니다. 그래서 모든 준비가 되었으니 쉽게 Stage 3로 갈 수 있기를 바랍니다. 네. 승격을 요청하기 전에 질문 대기열에 질문이 있나요?
+  </ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">대기열에 질문 없습니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  알겠습니다. 그럼 Stage 3 승격을 요청합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>여러 위원들이 지지 의사를 표명합니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Dan Minor가 Stage 3를 지지합니다. 저도 Stage 3를 지지합니다. RGN도
+  찬성(+1)합니다. Duncan McGregor도 찬성(+1)합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MLS">저도 Stage 3를 지지합니다.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  좋습니다. Michael Saboff, Tom Kopp도 찬성(+1)이군요. 명확하게 합의가 이루어진
+  것 같습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  좋습니다. 감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  참석하지 않은 SYG의 의견: V8은 Stage 3 진입에 대해 우려 사항이 없습니다.
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>요약 및 결론:</strong> Promise.try는 test262 테스트가 병합되었으며, Stage 3 진입에 대한 합의를 얻었습니다.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 4 - 2024.10
+
+2024년 10월 드디어 최종 승격이 되었다.
+
+<details>
+<summary>2024년 10월 9일 TC39 미팅 내역 - Promise.try 4단계 논의</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-10/october-09.md#promisetry-for-stage-4
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    네, Promise.try에 대해 다시 한번 말씀드리겠습니다. 이 기능은 콜백 함수와 선택적인 가변 인자 목록을 받습니다. 함수를 호출하고, 만약 함수에서 오류가 발생하면 거부된(rejected) 프로미스를 반환합니다. 함수가 값을 반환하면, 해당 값을 프로미스로 감싸서 반환(promise-resolve)합니다. 이 제안은 스펙 PR이 승인되었고, Cloudflare Workers, bun, node, Chrome에 구현되었습니다. Firefox에서는 버전 132부터 플래그 설정 하에 사용 가능하며, 133 및 134 버전에서는 플래그 없이 정식 지원될 예정입니다. LibJS, Boa, Kiesel에도 구현되었고, WebKit에서는 플래그 설정 하에 지원되다가 최근 플래그가 제거되었습니다. Stage 4로 승격되기를 희망합니다.
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>더 이상 질문은 없습니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  이 제안을 지지하시는 분 계신가요?
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>다수의 위원들이 지지를 표명합니다.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  NRO, OMT, YSV 님을 포함해 많은 분들이 지지 의사를 표해주셨습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  LGH 님은 "세 군데나 구현에 참여해서 편향된 의견일 수 있지만, 찬성합니다"라고
+  하셨고, RKG 님은 "와우!", MF 님은 "요구 사항을 충족합니다"라고 하셨습니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  감사합니다.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  KM 님도 찬성하셨습니다. 저도 지지합니다. 혹시 더 "만세"나 "야호" 같은 반응은
+  없나요? WH 님도 찬성하셨습니다. KM 님, Tom 님도 찬성하셨습니다. 네, 거의 다 된
+  것 같네요. 기준을 넘었습니다.
+</ChatBubble>
+
+  <ChatInfo>
+    <strong>결론:</strong> Stage 4 승격을 축하합니다.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+## 어떻게 구현 되었을까?
+
+미팅노트를 쭉 따라오면서 제안이 발의되고 최종 승인되기 까지 과정을 살펴보았다.\
+그렇다면 실제 구현은 어떻게 이뤄져있을까?
+먼저 스펙을 살펴보자.
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b>
+
+1. Let C be the this value.
+2. If C is not an Object, throw a TypeError exception.
+3. Let promiseCapability be ? NewPromiseCapability(C).
+4. Let status be Completion(Call(callbackfn, undefined, args)).
+5. If status is an abrupt completion, then\
+   a. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
+6. Else,\
+   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] »).
+7. Return promiseCapability.[[Promise]].
+
+</aside>
+번역하면 아래와 같다.
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b><br/>
+try 메서드는 callbackfn 인수를 받아 다음 절차를 수행한다:
+
+1. C를 this 값으로 둔다.
+2. C가 객체(Object)가 아니면 TypeError 예외를 던진다.
+3. promiseCapability를 ? NewPromiseCapability(C)로 설정한다.
+4. status를 Completion(Call(callbackfn, undefined, args))로 설정한다.
+5. status가 abrupt completion(비정상 완료)라면\
+   a. ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »)를 수행한다.
+6. 그렇지 않다면\
+   a. ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] »)를 수행한다.
+7. promiseCapability.[[Promise]]를 반환한다.
+
+</aside>
+
+스팩의 의사코드 읽는 법은 아래의 두 문서를 참고해보자
+
+<LinkPreview src="https://tc39.es/ecma262/multipage/notational-conventions.html#sec-algorithm-conventions" />
+<LinkPreview src="https://timothygu.me/es-howto/" />
+
+간단하게 설명해보자면 callback을 받아서 실행하고 그 결과에 따라 Promise로 만들어서 반환한다.
+
+자 그럼 바로 v8상의 구현으로 넘어가보자. 일단은 주석에 집중해보자.
+
+https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq\
+https://github.com/v8/v8/blob/main/src/builtins/promise-reaction-job.tq
+
+```js
+// Copyright 2024 the V8 project authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+namespace promise {
+
+// https://tc39.es/proposal-promise-try/#sec-promise.try
+@incrementUseCounter('v8::Isolate::kPromiseTry')
+transitioning javascript builtin PromiseTry(
+    js-implicit context: Context, receiver: JSAny)(...arguments): JSAny {
+  // 1. Let C be the this value.
+  // 2. If C is not an Object, throw a TypeError exception.
+  const receiver = Cast<JSReceiver>(receiver)
+      otherwise ThrowTypeError(MessageTemplate::kCalledOnNonObject, 'Promise.try');
+
+  // 3. Let promiseCapability be ? NewPromiseCapability(C).
+  const capability = NewPromiseCapability(receiver, False);
+
+  // 4. Let status be Completion(Call(callbackfn, undefined, args)).
+  const callbackfn = arguments[0];
+  let result: JSAny;
+  try {
+    if (arguments.length <= 1) {
+      result = Call(context, callbackfn, Undefined);
+    } else {
+      const rest = NewRestArgumentsFromArguments(arguments, 1);
+      result = Call(
+          context, GetReflectApply(), Undefined, callbackfn, Undefined, rest);
+    }
+  } catch (e, _message) {
+    // 5. If status is an abrupt completion, then
+    //   a. Perform ? Call(promiseCapability.[[Reject]], undefined, «
+    //      status.[[Value]] »).
+    Call(context, UnsafeCast<Callable>(capability.reject), Undefined, e);
+
+    // 7. Return promiseCapability.[[Promise]].
+    return capability.promise;
+  }
+
+  // 6. Else,
+  //   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, «
+  //      status.[[Value]] »).
+  Call(context, UnsafeCast<Callable>(capability.resolve), Undefined, result);
+
+  // 7. Return promiseCapability.[[Promise]].
+  return capability.promise;
+}
+
+}  // namespace promise
+```
+
+v8 상의 코드를 잘 보면 위에서 살펴본 스펙의 의사코드가 그대로 주석으로 코드상에 기록되어있다.\
+얼추 코드를 살펴보면 주석의 의사코드와 거의 동일하게 구현되어있는걸 볼 수 있다.
+이 코드는 typescript처럼 닮았는데 확장자를 보면 tq라는 확장자를 쓰고 있다. 이때 이 tq는 torque의 줄임말이다. \
+막상 구현을 찾아봤을때 c++을 마주할 줄 알았는데 torque라는 언어는 도대체 무엇인가?
+
+## Torque
+
+Torque는 v8 에서만 사용되는 DSL(Domain Specific Language)이다.\
+Torque의 메뉴얼을 참고해보면 위의 의문에 대한 답이 나온다. (https://v8.dev/docs/torque)
+
+> V8 Torque is a language that allows developers contributing to the V8 project to express changes in the VM by focusing on the intent of their changes to the VM, rather than preoccupying themselves with unrelated implementation details. The language was designed to be simple enough to make it easy to directly translate the ECMAScript specification into an implementation in V8, but powerful enough to express the low-level V8 optimization tricks in a robust way, like creating fast-paths based on tests for specific object-shapes.
+
+> V8 Torque는 V8 프로젝트에 기여하는 개발자가 구현 세부 사항에 얽매이지 않고 “무엇을 바꾸고 싶은지” 그 의도에 집중해 VM 로직을 작성하도록 돕는 언어입니다. ECMAScript 사양을 V8 코드로 손쉽게 옮길 만큼 단순하면서도, 특정 객체 형태를 판별해 빠른 실행 경로를 만드는 등 V8의 저수준 최적화 기법도 튼튼하게 표현할 수 있을 정도로 강력하게 설계되었습니다.
+
+Torque의 목적 자체가 기존 구현에 있어서 조금더 human readable하게 만드는 것을 목표로 하고 있다.
+그에 대한 방식으로 최대한 스펙의 의사코드의 의도를 그대로 들어낼 수 있도록 만들어졌다.
+
+### 탄생 배경
+
+초창기 V8은 내장 함수를 대부분 셀프-호스팅 JavaScript(V8 전용 방언)로 작성되었다.
+이 방식이 괜찮긴했는데, Array의 메서드들 같이 호출이 잦고 사양이 복잡한 함수들은 워밍업 과정을 거쳐야 빨라지곤 했다.
+그래서 이런 핵심 내장을 아키텍처별 어셈블리로 직접 짜서 **"첫 호출부터 최고 성능"**내려고 열심히 작성되었었다.
+그런데 문제는 어셈블리로 작성하다보니 각 플랫폼마다 수만 줄씩 코드를 복제해야 했고, 유지보수가 점점 힘들어지게 되었다.
+
+2015년 TurboFan 최적화 컴파일러가 도입되면서 상황이 달라지게 된다.
+TurboFan 백엔드가 사용하는 공통 저수준 IR을 사람이 직접 다룰 수 있게 한 C++ DSL **CodeStubAssembler(CSA, 2016)**가 등장하게 된다.
+덕분에 한 번 작성한 코드가 모든 플랫폼에 최적화된 어셈블리로 변환되었고, 많은 수제 어셈블리 코드들을 걷어낼 수 있었다.
+
+하지만 CSA조차 사람이 일일이 써야 해 여전히 어렵긴했고, 그로인한 리스크도 존재했다.
+그래서 2019년, ECMAScript 의사코드를 거의 그대로 베껴 쓰면 나머지 보일러플레이트와 안전 검사를 컴파일러가 자동 생성하도록 하는 상위 DSL Torque가 등장하게 되었던 것이다.
+Torque 코드는 중간 단계인 CSA C++ 코드로 변환되고, TurboFan이 다시 머신 코드로 바꿔주게 된다.
+
+정리하면 JS 셀프-호스팅 → 어셈블리 fast-path → CSA(CodeStubAssembler) → Torque 순으로 겹겹이 생겨난 셈이다.
+
+구체적인 내용은 아래의 Tobias Tebbi의 발표를 살펴보면 잘 나와있다.
+
+<YouTube src="https://youtu.be/YcroNGHHqtU?si=y6AsIxZ6tJq_kUt1" />
+
+<LinkPreview src="https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf" />
+
+그렇다면 torque로 구현된 코드는 어떻게 변환될까?\
+v8내 소스를 보면 torque의 컴파일러도 존재한다.
+https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc
+
+### 이름의 유래
+
+V8과 관련된 툴들의 이름은 대부분 엔진과 관련된 용어들로 지어진다.
+대표적으로 Ignition, Sparkplug, TurboFan 등이 있다. 토크도 회전력을 의미하기에 엔진의 힘을 의미하긴 하지만,
+다른 작명에 비해 엄청 와닿지는 않는 거 같다. 직접적으로 엔진과 관련되었다기 보단, 토크를 가해서 CSA로 비틀어준다는 그런 은유가 아닐까?
+
+## 흠
+
+Promise.try의 쓸모를 찾아보다가 이것 저것 많은 것들을 살퍼보았다.
+제안과정을 살펴볼때 여러번의 의문제기를 맞는 것을 보며, 괜시리 내가 더 숨이 막혀왔다.
+어떤식으로 여러 메서드들이 우리에게 도착하게 되는지 궁금한 이에게 도움이 되었길 바란다.
+
+## 참고 문헌
+
+1. [Promise.try - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/try)
+2. [Promise.try() support now enabled in Chrome (web.dev)](https://web.dev/blog/promise-try-baseline)
+3. [TC39 Proposal - Promise.try specification](https://tc39.es/proposal-promise-try/#sec-promise.try)
+4. [Original TC39 Promise.try Proposal README](https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md)
+5. [Bluebird - Promise.try documentation](http://bluebirdjs.com/docs/api/promise.try.html)
+6. [What is Promise.try, and why does it matter? (Joepie91's blog)](http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/)
+7. [GitHub - TC39 Promise.try issue discussion](https://github.com/tc39/proposal-promise-try/issues/15)
+8. [V8 Torque documentation](https://v8.dev/docs/torque)
+9. [V8 Torque Builtins documentation](https://v8.dev/docs/torque-builtins)
+10. [V8 CodeStubAssembler blog post](https://v8.dev/blog/csa)
+11. [Chromium Source - Promise.try implementation in Torque](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq)
+12. [V8 Torque Compiler source code](https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc)
+13. [Jfokus 2020 - V8 Torque: A Typed Language to Implement JavaScript (slides)](https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf)
+14. [Tobias Tebbi - V8 Torque: A Typed Language to Implement JavaScript (YouTube)](https://youtu.be/YcroNGHHqtU)

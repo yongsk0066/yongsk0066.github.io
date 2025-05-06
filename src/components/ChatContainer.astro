@@ -1,0 +1,39 @@
+---
+interface Props {
+  title?: string;
+  className?: string;
+}
+
+const { title, className = "" } = Astro.props;
+---
+
+<div class={`chat-container ${className}`}>
+  {title && <div class="chat-title">{title}</div>}
+  <div class="chat-messages">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .chat-container {
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+    margin: 1.5rem 0;
+    overflow: hidden;
+  }
+
+  .chat-title {
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.9375rem;
+  }
+
+  .chat-messages {
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+</style>
