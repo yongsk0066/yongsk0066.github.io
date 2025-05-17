@@ -64,7 +64,9 @@ export const renderFromFile = (inputFile, destination) => {
  * @return {string}
  */
 export const getDestinationDir = (vFile) => {
-  return path.join(path.resolve(), '/public/assets/images')
+  // Use project root as base. path.join with an absolute path would discard
+  // previous segments, so avoid leading slashes.
+  return path.join(path.resolve(), 'public', 'assets', 'images');
   // return vFile.data.destinationDir ?? vFile.dirname;
 }
 
