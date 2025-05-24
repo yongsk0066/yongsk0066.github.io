@@ -23,6 +23,38 @@ const { title, description, heroImage } = Astro.props;
       image={heroImage}
     />
     <ClarityIdentify pageId={Astro.url.pathname} />
+
+    <!-- 웹사이트 구조화된 데이터 -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "장용석 블로그",
+        "alternateName": "Yongseok's Blog",
+        "url": "https://yongseok.me",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://yongseok.me/search?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <!-- 조직 구조화된 데이터 -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Yongseok Jang",
+        "url": "https://yongseok.me",
+        "logo": "https://yongseok.me/favicon-light.svg",
+        "sameAs": [
+          "https://x.com/yongsk0066",
+          "https://github.com/yongsk0066",
+          "https://www.linkedin.com/in/yongseok-jang-129267181/"
+        ]
+      }
+    </script>
   </head>
   <body>
     <Header />
