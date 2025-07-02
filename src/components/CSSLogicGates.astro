@@ -1,0 +1,306 @@
+---
+export interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class={`css-logic-gates-container ${className || ""}`}>
+  <logic-gates-element>
+    <slot />
+  </logic-gates-element>
+</div>
+
+<script>
+  class LogicGatesElement extends HTMLElement {
+    constructor() {
+      super();
+    }
+
+    connectedCallback() {
+      // 이미 shadow root가 있으면 return
+      if (this.shadowRoot) return;
+
+      const shadow = this.attachShadow({ mode: "open" });
+
+      // CSS 스타일
+      const style = document.createElement("style");
+      style.textContent = `
+        /* @experimental CSS if() function - Chrome 137+ */
+
+        
+        
+        :host {
+          --unit: 24px;
+          --border-width: 2px;
+        }
+        
+        .gate {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .gate:not(:first-child) {
+          margin-top: 32px;
+        }
+
+
+        /* 이진 값 표시용 공통 클래스 */
+        .bit {
+          width: var(--unit);
+          height: var(--unit);
+          border: var(--border-width) solid black;
+          display: inline-flex;
+          box-sizing: border-box;
+          background: if(style(--value: 1): black; else: white);
+        }
+        
+        /* 입력 블록들 */
+        .a {
+          --value: var(--a, 0);
+        }
+        .b {
+          --value: var(--b, 0);
+        }
+        
+        /* AND Gate */
+        .and .out {
+          --value: if(style(--a: 0): 0; style(--b: 0): 0; else: 1);
+        }
+        
+        /* OR Gate */
+        .or .out {
+          --value: if(style(--a: 1): 1; style(--b: 1): 1; else: 0);
+        }
+        
+        /* NOT Gate */
+        .not .out {
+          --value: if(style(--a: 1): 0; else: 1);
+        }
+        
+        /* XOR Gate */
+        .xor .out {
+          --value: if(
+            style(--a: 0): if(style(--b: 1): 1; else: 0);
+            style(--a: 1): if(style(--b: 0): 1; else: 0);
+            else: 0
+          );
+        }
+
+        .and:not(.symbol),
+        .or:not(.symbol),
+        .not:not(.symbol),
+        .xor:not(.symbol) {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        
+        .out:has(.bit) {
+          border: none;
+          display: inline-flex;
+          width: auto;
+          background-color: transparent;
+        }
+        
+        .out:has(.bit) > .and, .or, .not, .xor {
+          --a: var(--value);
+        }
+        
+        /* Symbol styles */
+        :host {
+          --binary-columns: repeat(7, var(--unit));
+          --binary-rows: repeat(3, var(--unit));
+          --binary-areas: 'a    leg  sym  sym  sym  .    .' '.    leg  sym  sym  sym  leg2 out'
+            'b    leg  sym  sym  sym  .    .';
+        
+          --unary-columns: repeat(5, var(--unit));
+          --unary-rows: var(--unit);
+          --unary-areas: 'a leg sym leg2 out';
+        }
+        
+        .symbol {
+          display: grid;
+          grid-template-columns: var(--binary-columns);
+          grid-template-rows: var(--binary-rows);
+          grid-template-areas: var(--binary-areas);
+          align-items: center;
+          justify-items: center;
+          position: relative;
+        }
+        
+        .symbol.unary {
+          grid-template-columns: var(--unary-columns);
+          grid-template-rows: var(--unary-rows);
+          grid-template-areas: var(--unary-areas);
+        }
+        
+        .symbol .a {
+          grid-area: a;
+          position: relative;
+        }
+        
+        .symbol .b {
+          grid-area: b;
+          position: relative;
+        }
+        
+        .symbol .out {
+          grid-area: out;
+          position: relative;
+        }
+        
+        /* 연결선 */
+        .symbol .a::after,
+        .symbol .b::after,
+        .symbol.unary .a::after {
+          content: '';
+          position: absolute;
+          right: calc(var(--unit) * -1 - var(--border-width));
+          top: 50%;
+          transform: translateY(-50%);
+          width: var(--unit);
+          height: 2px;
+          background: black;
+        }
+        
+        .symbol .out::before {
+          content: '';
+          position: absolute;
+          left: calc(var(--unit) * -1 - var(--border-width));
+          top: 50%;
+          transform: translateY(-50%);
+          width: var(--unit);
+          height: 2px;
+          background: black;
+        }
+        
+        /* AND 게이트 심볼 */
+        .and.symbol::before {
+          content: '';
+          width: calc(var(--unit) * 2);
+          height: calc(var(--unit) * 3);
+          background: white;
+          border: var(--border-width) solid black;
+          border-radius: 0 calc(var(--unit) * 1.5) calc(var(--unit) * 1.5) 0;
+          border-left: none;
+          grid-column: 4 / 6;
+          grid-row: 1 / 4;
+          box-sizing: border-box;
+        }
+        
+        .and.symbol::after {
+          content: '';
+          width: var(--unit);
+          height: calc(var(--unit) * 3);
+          background: white;
+          border: var(--border-width) solid black;
+          border-right: none;
+          grid-column: 3 / 4;
+          grid-row: 1 / 4;
+          box-sizing: border-box;
+        }
+        
+        /* OR 게이트 심볼 */
+        .or.symbol::before {
+          content: '';
+          width: calc(var(--unit) * 3.5);
+          height: calc(var(--unit) * 3);
+          background: white;
+          border: var(--border-width) solid black;
+          border-radius: 0 100% 100% 0 / 0 50% 50% 0;
+          border-left: none;
+          grid-column: 2 / 6;
+          grid-row: 1 / 4;
+          box-sizing: border-box;
+          margin-left: calc(var(--unit) * 0.5);
+        }
+        
+        .or.symbol::after {
+          content: '';
+          width: calc(var(--unit) * 1);
+          height: calc(var(--unit) * 3);
+          background: white;
+          border: var(--border-width) solid black;
+          border-left: none;
+          border-radius: 0 100% 100% 0 / 0 50% 50% 0;
+          grid-column: 2 / 4;
+          grid-row: 1 / 4;
+          box-sizing: border-box;
+        }
+        
+        /* NOT 게이트 심볼 */
+        .not.symbol::before {
+          content: '';
+          width: 0;
+          height: 0;
+          border-style: solid;
+          border-width: calc(var(--unit) * 0.5) 0 calc(var(--unit) * 0.5) var(--unit);
+          border-color: transparent transparent transparent black;
+          grid-column: 3 / 4;
+          grid-row: 1;
+          justify-self: center;
+        }
+        
+        .not.symbol::after {
+          content: '';
+          width: calc(var(--unit) * 0.3);
+          height: calc(var(--unit) * 0.3);
+          background: white;
+          border: var(--border-width) solid black;
+          border-radius: 50%;
+          grid-column: 4 / 5;
+          grid-row: 1;
+          justify-self: start;
+          margin-left: -2px;
+        }
+        
+        /* XOR 게이트 심볼 */
+        .xor.symbol::before {
+          content: 'XOR';
+          width: calc(var(--unit) * 3);
+          height: calc(var(--unit) * 2 + var(--border-width));
+          background: white;
+          border: var(--border-width) solid black;
+          grid-column: 3 / 6;
+          grid-row: 1 / 4;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: monospace;
+          font-size: calc(var(--unit) * 0.6);
+          font-weight: bold;
+          box-sizing: border-box;
+        }
+      `;
+
+      shadow.appendChild(style);
+
+      // 자식 요소들을 Shadow DOM으로 복사
+      const container = document.createElement("div");
+      container.innerHTML = this.innerHTML;
+
+      // innerHTML에서 → 가 p 태그로 변환되는 것을 방지
+      container.querySelectorAll("p").forEach((p) => {
+        if (p.textContent === "→") {
+          const textNode = document.createTextNode("→");
+          if (p.parentNode) {
+            p.parentNode.replaceChild(textNode, p);
+          }
+        }
+      });
+
+      shadow.appendChild(container);
+
+      // 원본 light DOM 내용 숨기기
+      this.style.display = "contents";
+    }
+  }
+
+  // Custom element 정의
+  if (!customElements.get("logic-gates-element")) {
+    customElements.define("logic-gates-element", LogicGatesElement);
+  }
+</script>

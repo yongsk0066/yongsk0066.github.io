@@ -1,0 +1,183 @@
+---
+export interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class={`css-if-support ${className || ""}`}>
+  <div id="support-check"></div>
+</div>
+
+<style>
+  .css-if-support {
+    padding: 0.875rem 1.25rem;
+    margin: 2rem 0;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.15s ease;
+    border-left: 10px solid;
+    background: white;
+  }
+
+  .supported {
+    border-left-color: #10b981;
+  }
+
+  .supported {
+    color: #059669;
+  }
+
+  .not-supported {
+    border-left-color: #ef4444;
+  }
+
+  .not-supported {
+    color: #dc2626;
+  }
+
+  .checking {
+    border-left-color: #6b7280;
+  }
+
+  .checking {
+    color: #4b5563;
+  }
+
+  .status-content {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .status-message {
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .browser-info {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 640px) {
+    .css-if-support {
+      padding: 0.75rem 1rem;
+      font-size: 0.8125rem;
+      margin: 1.5rem 0;
+    }
+
+    .status-content {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+
+    .browser-info {
+      font-size: 0.75rem;
+    }
+  }
+</style>
+
+<script>
+  function checkCSSIfSupport() {
+    const container = document.getElementById("support-check");
+    if (!container) return;
+
+    // 부모 요소 찾기
+    const parent = container.parentElement;
+    if (!parent) return;
+
+    // 초기 상태
+    parent.className = "css-if-support checking";
+    container.innerHTML = `
+      <span class="status-icon">⏳</span>
+      <div class="status-content">
+        <div class="status-message">CSS if() 지원 여부 확인 중...</div>
+      </div>
+    `;
+
+    // 테스트 요소 생성
+    const testElement = document.createElement("div");
+    testElement.style.cssText = "--test: 1;";
+    testElement.style.setProperty(
+      "color",
+      "if(style(--test: 1): green; else: red)"
+    );
+    document.body.appendChild(testElement);
+
+    // 지원 여부 확인
+    const computedStyle = getComputedStyle(testElement);
+    const color = computedStyle.color;
+
+    // 브라우저 정보 가져오기
+    const userAgent = navigator.userAgent;
+    let browserInfo = "";
+    let chromeVersion = null;
+
+    // Chrome 버전 확인
+    const chromeMatch = userAgent.match(/Chrome\/(\d+)/);
+    if (chromeMatch) {
+      chromeVersion = parseInt(chromeMatch[1]);
+      browserInfo = `Chrome ${chromeVersion}`;
+    } else if (userAgent.includes("Edg/")) {
+      const edgeMatch = userAgent.match(/Edg\/(\d+)/);
+      if (edgeMatch) {
+        browserInfo = `Edge ${edgeMatch[1]}`;
+      }
+    } else if (userAgent.includes("Firefox/")) {
+      const firefoxMatch = userAgent.match(/Firefox\/(\d+)/);
+      if (firefoxMatch) {
+        browserInfo = `Firefox ${firefoxMatch[1]}`;
+      }
+    } else if (userAgent.includes("Safari/") && !userAgent.includes("Chrome")) {
+      browserInfo = "Safari";
+    }
+
+    // 테스트 요소 제거
+    document.body.removeChild(testElement);
+
+    // CSS if()가 지원되는지 확인
+    // if()가 작동하면 color가 green(rgb(0, 128, 0))이 됨
+    const isSupported = color === "rgb(0, 128, 0)" || color === "green";
+
+    if (isSupported) {
+      parent.className = "css-if-support supported";
+      container.innerHTML = `
+        <div class="status-content">
+          <div class="status-message">CSS if() 함수가 지원됩니다!</div>
+          <div class="browser-info">현재 브라우저: ${browserInfo}</div>
+        </div>
+      `;
+    } else {
+      parent.className = "css-if-support not-supported";
+      let message = "CSS if() 함수가 지원되지 않습니다";
+
+      if (chromeVersion && chromeVersion < 137) {
+        message = `Chrome 137+ 버전이 필요합니다 (현재: ${chromeVersion})`;
+      } else if (browserInfo) {
+        message = `Chrome 137+ 버전이 필요합니다`;
+      }
+
+      container.innerHTML = `
+        <div class="status-content">
+          <div class="status-message">${message}</div>
+          <div class="browser-info">현재 브라우저: ${browserInfo || "알 수 없음"}</div>
+        </div>
+      `;
+    }
+  }
+
+  // DOM이 로드되면 실행
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", checkCSSIfSupport);
+  } else {
+    checkCSSIfSupport();
+  }
+</script>
