@@ -1,0 +1,1363 @@
+---
+title: "Promise.try() with a Side of Torque"
+description: "Let's explore the origins, proposal process, and implementation of Promise.try(). When I first heard that Promise.try() had been standardized, I examined it but couldn't immediately grasp its purpose. It must have been created for some specific reason... Even if it wasn't a groundbreaking feature, there had to be a story behind such a small addition. Even if it's not a remarkable tale. Today, let's become archaeologists and explore its origins, proposal process, and implementation together."
+author: "Yongseok"
+categories: ["JavaScript"]
+date: "2025-05-06T09:36:26.907Z"
+heroImage: "/post/images/promise_try_torque/thumb.png"
+---
+
+import LinkPreview from "../../../components/LinkPreview.astro";
+import ChatContainer from "../../../components/ChatContainer.astro";
+import ChatBubble from "../../../components/ChatBubble.astro";
+import ChatInfo from "../../../components/ChatInfo.astro";
+import YouTube from "../../../components/YouTube.astro";
+import AudioPlayer from "../../../components/AudioPlayer.astro";
+
+<AudioPlayer
+  src="/post/audio/promise_try_torque/promise_try_torque.wav"
+  title="Promise.try() with a Side of Torque"
+/>
+<LinkPreview src="https://web.dev/blog/promise-try-baseline?hl=ko" />
+
+When I first heard that Promise.try() had been standardized, I examined it but couldn't immediately grasp its purpose. It must have been created for some specific reason... Even if it wasn't a groundbreaking feature, there had to be a story behind such a small addition. Even if it's not a remarkable tale.
+
+Today, let's become archaeologists and explore its origins, proposal process, and implementation together.
+
+## Promise.try()
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+This is a new static method added to Promise's lineup.
+Simply put, Promise.try(fn, …args) immediately (synchronously) executes the callback fn and returns the result wrapped in a promise.
+What does this mean? Let's look at an example.
+
+Suppose we have a function `f` that might be synchronous or asynchronous (let's set aside async/await for now).
+
+```js
+function f() {
+  // Could be synchronous or asynchronous
+  if (Math.random() < 0.5) {
+    throw new Error("sync fail");
+  }
+  return Promise.reject(new Error("async fail"));
+}
+```
+
+If `f` were just a synchronous function, we would handle errors like this:
+
+```js
+try {
+  f();
+} catch (e) {
+  console.log(e.message);
+}
+```
+
+Conversely, if `f` returned a Promise, we would handle it like this:
+
+```js
+f().catch(console.log);
+```
+
+But what if `f` could be either synchronous or asynchronous?
+While there aren't many such situations, if there were, we would need to do this:
+
+```js
+Promise.resolve().then(f).catch(console.log);
+```
+
+What's the problem with this approach? \
+It changes when `f` executes. Let's consider the event loop's execution order.
+The execution flow of `Promise.resolve().then(f).catch(console.log)` is as follows:
+
+1. `Promise.resolve()` immediately returns a **promise that's already fulfilled**.
+2. `.then(f)` registers `f` as an onFulfilled handler and puts the **corresponding Reaction Job** into the microtask queue.
+3. After the current call stack is completely cleared, the event loop processes that microtask and executes `f`.
+4. If `f` throws an exception synchronously, that exception is converted to a **reject state of the new promise** returned by `.then`, which the subsequent `.catch` receives.
+
+Consequently, `f` executes **in the next tick**.
+This breaks the call stack, making debugging difficult and delaying exception propagation by one beat.
+
+This is where `Promise.try` comes to the rescue.
+
+```js
+Promise.try(f).catch(console.log);
+```
+
+When used this way, `Promise.try` immediately executes `f` inside itself, resolving with the value if successful or rejecting if it throws. Of course, if it's asynchronous, it handles it asynchronously as expected.
+Think of it as a way to handle synchronous cases uniformly with asynchronous ones.
+This way, `f`'s execution timing isn't delayed, and when encountering synchronous errors, execution and tracing remain in the current call stack without breaking.
+
+But you might wonder:
+
+<b>
+  <i>'What cases could be synchronous or asynchronous?'</i>
+</b>
+<br />
+<b>
+  <i>'Can't async/await handle this with try/catch?'</i>
+</b>
+
+First, let's briefly review Promise's timeline.
+
+Promises were introduced in ES6, followed by async/await in ES2017.
+
+Now imagine you're a developer in that era, before async/await existed.
+
+Suppose you need to write code that reads a file and parses it as JSON.
+You need to check if the file is a JSON file, parse it if it is, and throw an error if it's not.
+You might write something like this:
+
+```js
+const fs = require("fs").promises;
+
+const readFile = (file) => {
+  if (!file.endsWith(".json")) {
+    throw new Error("not json");
+  }
+  return fs.readFile(file, "utf8");
+};
+```
+
+This function is handled synchronously or asynchronously depending on the filename.
+Following the approach we examined above, it would look like this:
+
+```js
+Promise.resolve()
+  .then(() => readFile("some.json"))
+  .then(JSON.parse)
+  .catch(handleError);
+```
+
+Unnecessary elements intervene in understanding the code's intent. `resolve` and `then` only serve to wrap things in a Promise—they're essentially tricks.
+
+<aside>
+  All we want to know is that if **readFile** succeeds, we want to **parse**, and if there's an error, we want to handle the error.
+</aside>
+
+Even back then, libraries were created to solve these kinds of problems, similar to today's `Promise.try`.
+The Bluebird library notably allowed usage like this:
+
+<LinkPreview src="http://bluebirdjs.com/docs/api/promise.try.html"/>
+```js
+Bluebird.try(readJsonFile, "some.json").catch(handleError);
+```
+Looking at the implementation, it's built to wrap thrown values back into promises. (The code is slightly simplified.)
+```js
+// https://github.com/petkaantonov/bluebird/blob/master/src/method.js
+Promise.attempt = Promise["try"] = function (fn) {
+  var ret = new Promise(INTERNAL);
+  ret._captureStackTrace();
+  ret._pushContext();
+
+// Synchronous call
+var value = tryCatch(fn)();
+
+// Wrap the result in a promise and return
+ret._resolveFromSyncValue(value);
+return ret;
+};
+
+```
+Looking at this, `Promise.try` seems like a remarkably convenient method. \
+But have you often felt this inconvenience? I haven't experienced it that much.
+
+Because we have `async/await`.
+Rewriting the above code with `async/await` looks like this:
+
+```js
+const readJsonFile = async (file) => {
+  if (!file.endsWith('.json')) {
+    throw new Error('not json');
+  }
+  return fs.readFile(file, 'utf8');
+}
+
+const processJsonFile = async () => {
+  try {
+    const data = await readFile('some.json');
+    return JSON.parse(data);
+  } catch (e) {
+    console.log(e.message);
+  }
+}
+```
+
+This way, both synchronous and asynchronous cases can be handled identically.
+
+Another example might be copy:
+
+```js
+const copy = (text) => {
+  return Promise.try(() => {
+    if (navigator.clipboard) return navigator.clipboard.writeText(text);
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  });
+};
+```
+
+When clipboard is supported, it uses the Promise-returning method `navigator.clipboard.writeText`, and when not supported, it uses the synchronous method `document.execCommand`. This could be a use case.
+But with `async/await`, it can be handled more cleanly:
+
+```js
+const copy = async (text) => {
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  }
+};
+```
+
+So why did Promise.try appear only now?
+As mentioned above, Promise.try was proposed between Promise's introduction and before async/await appeared.
+Looking at the first commit of [**[tc39]Proposal Promise-try**](https://github.com/tc39/proposal-promise-try?tab=readme-ov-file), it dates back to 2016.
+And library-form implementations existed even earlier.
+
+<LinkPreview src="http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/" />
+
+If it was proposed in 2016, why did it only appear now?
+
+## Fierce Persuasion
+
+Let's look at the process from Promise.try's 2016 proposal to its final Stage 4 promotion and deployment in 2024.
+
+### Stage 1 - 2016.9~11
+
+As mentioned above, `Promise.try` was proposed in 2016 by **Jordan Harband**(https://github.com/ljharb).\
+Initially proposed for Stage 1 in September 2016, it wasn't discussed due to other agenda items taking priority, and was seriously discussed in November of that year.
+
+<LinkPreview src="https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md" />
+The rationale at the time was the same as the examples we examined—to prevent unnecessary syntax usage for functions of unknown "color."
+
+The following meeting notes are cleaned up from the original meeting records.
+
+<details>
+<summary>November 29, 2016 TC39 Meeting Notes - Promise.try Discussion</summary>
+https://github.com/tc39/notes/blob/main/meetings/2016-11/nov-29.md#11iib-promisetry
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    This feature allows you to start a .then call chain. It differs from Promise.resolve().then() in that it executes code in the same tick and returns a Promise.
+  </ChatBubble>
+  
+  <ChatInfo>Discussion about job loop semantics</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    This approach avoids the hassle of creating immediately invoked async functions or using the Promise constructor.
+  </ChatBubble>
+
+<ChatBubble author="DD">
+  This is a pattern heavily used in userspace code. It always executes synchronously and crucially catches all exceptions, turning them into rejected Promises.
+</ChatBubble>
+
+  <ChatBubble author="MM">
+    Is there any ambiguity here? Does it always execute synchronously or sometimes?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    It always executes synchronously.
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    That's important that it's handled this way.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Almost every Promise library has this feature.
+  </ChatBubble>
+  
+  <ChatBubble author="DD">
+    For motivation example: when you have a function that returns a Promise, it shouldn't throw exceptions. If you wrap the function body with Promise.try(), when an exception occurs, it converts it to a rejected Promise, giving you the correct result.
+  </ChatBubble>
+</ChatContainer>
+
+```js
+function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+foo("http:0"); // Exception thrown!! Oops
+
+function foo(relativeURL) {
+  return Promise.try(() => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  });
+}
+
+function foo(relativeURL) {
+  return (async () => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  })();
+}
+
+async function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+function foo(relativeURL) {
+  return async do {
+    // ?!?!?!
+    var absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    fetch(absoluteURL);
+  };
+}
+```
+
+<ChatContainer>
+  <ChatBubble author="YK">
+    With async functions available, isn't Promise.try just a half-measure? Wouldn't async functions be more convenient to use?
+  </ChatBubble>
+  
+  <ChatBubble author="DD">
+    I think in most real cases, you'd just use regular async functions. You probably don't need immediately invoked async functions.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    This proposal is for cases where function authors accidentally fail to ensure that Promise-returning functions never throw exceptions. From the function user's perspective.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    In some use cases, you might want to work with Promises without returning a Promise. In such cases, Promise.try might be more convenient than immediately invoked async functions.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    For example, cases where you return an array of Promises.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Async functions aren't always the desired solution. That's why I work on methods like finally.
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    Can't you just ship a library for such extensions?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    I've shipped polyfills, but developers seem to prefer having everything included in one.
+  </ChatBubble>
+  
+  <ChatBubble author="MM" isRight={true}>
+    Overall, I'm not sure if this feature is worth it, but I think it meets Stage 1 criteria.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    In a world where async functions exist, is there any Promise API useful enough to satisfy you (MM)?
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    Promise.any.
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    Promise.post/send/get for Promise pipelining.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    But what about things that can be implemented with async functions?
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    I'm not speaking comprehensively, but async functions set the bar very high. Compared to async functions, there should be strong rationale and significant added value.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Regardless of transpilers, there are barriers to introducing new features. Async functions might be harder to adopt than this library feature. At AirBnB, we don't use async functions because we don't want regenerator dependencies.
+  </ChatBubble>
+  
+  <ChatBubble author="AR">
+    It's good to have various features that people can gradually adopt on a common foundation they understand easily, like Promises or async functions.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    new Promise is hard to understand.
+  </ChatBubble>
+  
+  <ChatBubble author="YK">
+    When I work on projects using async functions, I find it hard to find cases where I don't always want to use async functions. And the cognitive overhead is much less.
+  </ChatBubble>
+  
+  <ChatInfo>Time limit notification</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Should we go to Stage 1?
+  </ChatBubble>
+  
+  <ChatBubble author="WH">
+    I don't oppose Stage 1, but I'm not convinced about its usefulness.
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    Because of concerns about usefulness, it seems Stage 2 isn't ready yet. What would be needed for persuasion?
+  </ChatBubble>
+  
+  <ChatBubble author="MM">
+    Pro argument: This proposal is similar to syntax and can be expected from an orthogonality perspective, so it might reduce cognitive burden rather than increase it.
+  </ChatBubble>
+  
+  <ChatBubble author="BT">
+    Let's look at codebases of people using try—those saying standard Promise isn't ready yet.
+  </ChatBubble>
+</ChatContainer>
+
+<ChatContainer title="Conclusion">
+  <ChatInfo>Conclusion/Decision</ChatInfo>
+  <ChatBubble author="TC39">
+    <ul>
+      <li>Stage 1 approved.</li>
+      <li>Not ready for Stage 2 as more evidence for motivation is needed.</li>
+    </ul>
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+As we saw above, strong doubts about the necessity of Promise.try were raised in that meeting.\
+So it remained at Stage 1, and 8 years passed.
+
+### Stage 2 - 2024.2
+
+In February 2024, after a long time, discussion for Promise.try Stage 2 began.
+
+<details>
+<summary>February 6, 2024 TC39 Meeting Notes - Promise.try Stage 2 Discussion</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-02/feb-6.md#promisetry-for-stage-2
+
+<ChatContainer>
+  <ChatInfo>Promise.try Stage 2 proposal - Presenter: Jordan Harband (JHD)</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    Long, long ago, in 2016, I proposed Promise.try. The basic idea is this: when you have a function, whether it's synchronous or asynchronous, whether it returns a promise or not, whether it throws exceptions or not—you don't want to care, but you want to wrap it in a promise so that if it throws exceptions, they're handled properly.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    An easy way to remember is here: Promise.resolve followed by executing the function inside .then. This works well, but has the downside of executing asynchronously when you don't want it to. A more modern approach is using immediately invoked async functions (IIAFE), where awaiting the function actually gives you the semantics you want.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    When I gave this presentation, the general response was that to reach Stage 2, more compelling evidence for usefulness was needed, considering that await syntax could solve the problem.
+
+    At that time, userland versions of this proposal were just moderately used, and I think the general expectation, or at least hope, was that no one would need this feature and syntax alone would suffice.
+
+    But since then, 2 years later, this package was published and is recording 46 million downloads per week. Over time, this graph keeps rising, and except for some NPM data errors, it's stable at 45 million downloads per week. Clearly, it's being used to some extent.
+
+    Of course, this is one package made by one developer. And that developer has many other packages, so maybe it's included in one of the other high-usage packages. Still, I feel this feature is needed.
+
+    My workaround is this new Promise code snippet here. Passing a function to resolve inside a new Promise executor. It works, but it's ugly, error-prone, and confusing for newcomers.
+
+    Having found this package and confirmed it's currently being used very heavily, I'm bringing this proposal again to request Stage 2, or get new answers about what the committee thinks is needed to qualify for Stage 2. That's all.
+
+  </ChatBubble>
+  
+  <ChatBubble author="NCL">
+    Yes. This is my topic, so I probably need a clear question. I assumed this would show why it's needed, but is it really needed in this case? Can't you just do value = await synchronousfunction()? Wouldn't that work the same?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    In this specific code snippet, yes. If top-level await exists, it would work the same. But if the goal is to get a promise you want to use with promise combinators, it's not that simple. There will always be use cases where you need the promise itself and not the awaited value, and that's where Promise.try is useful.
+  </ChatBubble>
+  
+  <ChatInfo>Queue is empty.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    If the queue is empty, I'd like to request Stage 2. The spec is very simple. [showing spec link] This is all there is. I recently rebased to match the latest spec version.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    Yes. I still don't understand why this is needed. Could you explain more about why it's necessary?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Yes. Especially when I'm writing APIs. When API users pass me a callback function, and as I mentioned when responding to NCL, I want to essentially create a promise from it and then do additional work. For example, race it with something else, use Promise.all, or do additional work. At some point, await syntax will handle the rest, but in the initial setup phase, I need to work with promises in many of my use cases. There are workarounds, so this isn't a new capability. It's just a more intuitive and elegant way to express something I sometimes have to do.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    Specifically, are you talking about situations where your API receives a callback function, users might pass a synchronous function, and that function might throw exceptions synchronously?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Yes, users pass a function, and I don't know for sure if it's synchronous or asynchronous, whether it throws exceptions or not—so-called "colorless" functions. And I don't want to care. I just want to receive a promise and do my best to handle it.
+  </ChatBubble>
+  
+  <ChatBubble author="KG">
+    I understand.
+  </ChatBubble>
+  
+  <ChatBubble author="JRL">
+    Another case we encountered at AMP (ampproject/amphtml#15107) was asynchronous error handling. When errors were wrapped in promises, we handled everything properly. But due to code changes, we ended up using Promise.resolve and calling functions, where those functions themselves threw errors synchronously. We didn't have synchronous catch handling, only asynchronous catch in promise chains, so we couldn't handle these cases properly. Our developers didn't understand the difference and thought it would be caught by promises and handled in asynchronous promise processing logic. So we forced all cases using Promise.resolve(fn()) to use our version of promise.try, which fixed the bugs. Since then, we can confidently rely on asynchronous error handling.
+  </ChatBubble>
+  
+  <ChatBubble author="SYG">
+    This is a pattern heavily used in userspace code. It always executes synchronously and crucially catches all exceptions, turning them into rejected Promises.
+  </ChatBubble>
+  
+  <ChatBubble author="EAD">
+    One point about that is the NPM download numbers. It would be interesting to know where 46 million downloads per week go. Even if they're wrapped in other libraries' main containers, what libraries are they used in, and what... 46 million is a huge number! Something is using it. So what is it?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    I've long wanted a way to sort package dependencies by install count to answer exactly that question for the committee. I don't know how to do that. If anyone knows, please let me know.
+  </ChatBubble>
+  
+  <ChatBubble author="DE">
+    Considering this isn't extremely short, the question we should probably ask about whether we put this in the standard library is how much it helps people's mental models when they write code, when I personally read code. So the baseline I'd consider for comparison is promise withResolvers and using try-catch. Maybe this construct helps people follow best practices because when you have something that can throw exceptions and you want to get that value, you use the right idiom. Or it could be a fancy combinator that's more difficult to decode. So how should we make that kind of comparison?
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    I think that's the right way of thinking about it in terms of learnability and readability. There's no huge difference in the number of characters involved. I think using withResolvers would be several times worse than using new Promise, just for solving this or for immediately invoked async functions. So I think it doesn't affect the discussion. But I agree that readability is important, and if people think new Promise and executor arguments wrapping function calls are more readable than promise.try, that would be a very strong counter-argument to adding it to the language. But I'm skeptical that someone would make that argument.
+  </ChatBubble>
+  
+  <ChatInfo>NRO says half the downloads come from jest.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Yes, the fact that jest is a testing framework somewhat matches my intuition that this would apply to tape as well.
+  </ChatBubble>
+  
+  <ChatInfo>Queue is empty.</ChatInfo>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    So I'd still like to request Stage 2. Yes?
+  </ChatBubble>
+  
+  <ChatBubble author="CDA">
+    Is there explicit support for promise.try Stage 2 advancement?
+  </ChatBubble>
+  
+  <ChatBubble author="SYG">
+    What I suggested was that if you show me (specific examples), we could go straight to Stage 2 or Stage 2.7. Though probably Stage 2 is... I'm uncomfortable with Stage 2 right now until I see specific code. Basically any code is fine, so I can read where it would be used. And that could be, say, now or tomorrow, and then... I want to think more about passing arguments other than passing nothing.
+  </ChatBubble>
+  
+  <ChatBubble author="JHD" isRight={true}>
+    Yes, so for the record, Promise.try doesn't advance right now. But I'll provide Shu and, you know, the broader committee with some more specific examples for evaluation. And while Shu is the only one who expressed this specifically, if anyone else lets me know they're okay with it, I might come back later in the meeting and request Stage 2 or Stage 2.7, assuming there's time, even if I didn't put it on the agenda beforehand. Thank you.
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+To advance to Stage 2, they attempted persuasion using Promise.try related library usage, but doubts about Promise.try still remained.\
+Most usage was from jest, they said. Considering Jordan Harband also worked with a testing library called tape, this makes sense.
+From a testing library's perspective, test callbacks could be synchronous or asynchronous, so such methods might have been necessary.
+
+<div style={{ backgroundColor: "white", padding: "10px" }}>
+  <ChatBubble author="NCL">
+    Yes. This is my topic, so I probably need a clear question. I assumed this would show why it's needed, but is it really needed in this case? Can't you just do value = await synchronousfunction()? Wouldn't that work the same?
+  </ChatBubble>
+  <ChatBubble author="KG">
+    Yes. I still don't understand why this is needed. Could you explain more about why it's necessary?
+  </ChatBubble>
+</div>
+
+### Stage 2.7 - 2024.04
+
+After entering Stage 2, things progressed rapidly. \
+However, the same questions from before continued to exist.
+There were opinions that since Promise already has catch and finally, having try would be natural, and the general sentiment was that it would probably be useful but personally they wouldn't use it much.
+
+There were also opinions that it wasn't equivalent to async IIFE. This part seems applicable to patterns we sometimes use.\
+While not frequent, the pattern below is sometimes used to handle async operations within effects (this is an example).\
+I'm also more familiar with the IIFE pattern, but cognitively, I think the latter is also quite intuitive when reading code.
+This discussion cited the higher transpilation cost of await syntax as justification.
+
+```jsx
+// ① async IIFE pattern
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("https://api.example.com/data");
+      const data = await res.json();
+      console.log(data);
+    } catch (err) {
+      console.error(err);
+    }
+  })();
+}, []);
+
+// ② Promise.try pattern
+useEffect(() => {
+  Promise.try(() => fetch("https://api.example.com/data"))
+    .then((res) => res.json())
+    .then(console.log)
+    .catch(console.error);
+}, []);
+```
+
+<details>
+<summary>April 8, 2024 TC39 Meeting Notes - Promise.try Stage 2.7 Discussion</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-04/april-08.md#promisetry-for-stage-27
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    Yes, I'll talk about Promise.try. I wanted to request Stage 2.7 advancement at this meeting. One of the reviewers hasn't checked yet, but another reviewer and all editors have confirmed. There's one outstanding question to resolve: whether to pass arguments to the function. Specifically, there's this relatively small pull request, excluding generated artifacts. This PR adds argument passing functionality. The proposal on the main branch takes a callback and calls it without arguments. This pull request, created at the request of several delegates, passes additional arguments provided to Promise.try to the callback. No other changes. So my hope is to get consensus for Stage 2.7 with this pull request included. If consensus is reached, I'll merge this PR and start working on tests.
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA passes the floor to Mark.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  I like the argument addition. But if that feature exists, wouldn't people expect the same in catch or then? Isn't this—in other words, a cognitive load issue? Apart from then, is this actually a feature that could be added to catch?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  I think the difference from catch or then is that they're callbacks added to existing Promises. They're already within a promise pipeline using then/catch/finally.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">I see.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Whereas Promise.try is used when creating or entering a promise pipeline.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">Good.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  So I agree—superficially they look similar. But I think the similarity between then, catch, finally APIs and syntax (async/await) is more important than Promise.try vs then/catch/finally. Even if conceptually they're not different (though I think they are).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  Yes. I'll accept that. That seems like good reasoning.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  I have another question. Is Promise.try equivalent to wrapping code in an async IIFE (immediately invoked async function)?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. (showing by typing)
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  Given the symmetry with async IIFE, please explain why it's worth adding try instead of encouraging people to use async IIFE.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Certainly. This was covered in Stage 1 discussion and about two rounds of debate. But essentially, the first reason is that if you need to support older environments, syntax has higher transpilation costs. But another point is that this question kept this proposal stuck at Stage 1 for almost 9 years. This feature (polyfills etc.) has recorded 44 billion downloads. There's empirical evidence that the function form is preferred or needed by many people over simply using async IIFE. In my subjective aesthetic view, using immediately invoked functions is messy, and in environments with modules, it's become an outdated approach and I prefer it stays that way. This is subjective opinion and no one needs to agree. This means I'm trying to make that package and the functionality it provides unnecessary (through standardization).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  I like the empirical evidence. I don't oppose it.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  This responds to what MM raised earlier. I want to clarify that this is different from then or catch. Those are methods that take callbacks, but this is a more general function calling method. Things that take specific types of functions, like methods for calling functions such as Function.prototype.call or Function.prototype.apply, make sense to pass arguments. Things like catch that expect specific forms make less sense (for argument passing).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  I want to clarify something I didn't understand about the legacy environment argument. JHD said syntax transpilation can be expensive. So is the situation that there are legacy environments without async/await that need async/await transpiled, but those environments have the newly standardized Promise.try method? I don't understand.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Promise.try can be polyfilled. Async cannot. That is, it doesn't need to be installed in the environment. It can exist as a function. Promise.try is a very small subset of what async functions support. So if that were the only issue, someone could write a static analysis transformation that detects when immediately invoked async functions are used for this purpose and replaces them with that function. That doesn't actually exist.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  I see. Specifically, my concern is—okay. If there are users writing modern JS in source code (pre-transpilation source) but targeting legacy environments too old to have native async/await support, when we standardize Promise.try, could using this be better than await transpilation? Is this what I understand correctly?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  That's what I intended. But I don't think that's the main motivation for this proposal. It's just a side benefit for those of us doing that kind of work. The main motivation is that what I'm trying to do is clearer than any form of immediately invoked function.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA passes the floor to KG.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="KG">
+  Yes. I agree with the main motivation of this proposal. The polyfillability part is confusing. There could be packages that do that. If you—
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  You're right. My mentioning it caused more confusion.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">I see.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. Polyfillability is a motivation that we as a committee have never agreed to use to motivate design decisions or justify inclusion of something, and I'm not arguing that here.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">That's all I wanted to confirm.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  I mean, I think one of the arguments here is clarity. And—I'm not completely convinced about this use case. But if we're pursuing this and the overall goal is clarity, the name try really sounds like it's related to exceptions in some way regarding promises.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  That's right.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">Yes. But it is...</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  The specific case this is trying to make more convenient is when functions throw synchronous exceptions.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  So it handles that. You can't use something like Promise.resolve while calling the function itself.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  You can't because it throws exceptions. You'd need to wrap it with Promise.catch etc.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  I see. I understand. This is essentially calling a function, wrapping it with try-catch, then rejecting (if exceptions occur).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  I see. Yes. I wish the name was something like adapt.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  I'm not attached to the name. Looking at other users, it's always been called try. Well, there's also attempt on the list, and fcall too (but I don't think anyone would support fcall). attempt is an interesting alternative but only appeared once on the list, and even that library still has try.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">Yes. I understand. Good.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  So, I'd like to request consensus for Stage 2.7, conditional on merging that pull request for argument passing.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA confirmed support from MM.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Are there other voices explicitly supporting Promise.try's Stage 2.7 advancement? DE?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  During the discussion, I heard several people somewhat vaguely questioning the motivation. I feel similarly about this proposal. It doesn't look bad, but I personally don't think I'd use it. I wonder if we should do a temperature check or something to understand how well this proposal's motivation is being received within the committee. I know we don't usually use temperature checks that way, but I'm a bit concerned about the ratio of skeptical views to explicit support.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  I mean, you can certainly do that if you think it's appropriate. But I think that's a question to ask when going to Stage 2. Stage 2 approval means the committee agrees with the motivation.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  Of course. But this is quite common when proposing Stage 2.7. If my proposals that reached Stage 2 didn't need further motivation after Stage 2, I would have had much less work. Yes. That's why we have this conservative basic principle of requiring iterative consensus in the committee. To make sure.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. I mean, you can certainly go through that process if you think it's good use of committee time. But—if there are no negatives and there are positives, and there's considerable evidence that it's needed in user-land, it seems pretty clear to me.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  So I—whether to allow a temperature check is up to you. If you think it's inappropriate here, let's not do it.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDA passes the floor to MM in the queue.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  Yes. I agree with doing a temperature check. Before doing the temperature check, I want to add one cognitive load argument in favor of this proposal. Promises have catch and finally. So people looking at that would naturally look for Promise.try, and I think it existing in a way that works well with catch and finally is less surprising than it not existing.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you. I agree with that. As the proposer, not allowing the suggested temperature check could be selfish behavior, and I don't want to act selfishly. If people think this is good use of committee time, you can certainly do it. I don't see any indication that it is good use of committee time. But I'll defer to the entire room's opinion on that.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">Let's do a temperature check.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Good. Let's do it.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Discussion for temperature check proceeds.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Let's define what the parameters are exactly, what each choice means.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  Maybe the temperature check question could be 'Does this proposal look useful to you?' From 'very positive' to 'uncertain/confused'—that spectrum seems right for this kind of question. What do you think, JHD? A question like this.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. If anyone has more negative feelings, please join the queue and emphasize. Otherwise, the default emoji labels are sufficient.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">"Does this proposal look useful to you?"</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  Can we clarify? Is it 'Does this proposal look useful to you?' or 'Does this proposal look useful to you?'? Because there are many things I would personally never use but that definitely look useful.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  Good. 'Does it look useful to you' would be more comprehensive. Yes.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  In other words, useful to someone.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Temperature check voting proceeds.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="NRO">
+  My position is 'not bad' but I'm not convinced about general usefulness. Others with similar positions to mine chose 'indifferent'—what's the difference in meaning?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  For example, you weren't convinced by the argument.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="NRO">
+  I wasn't convinced by the popularity because I don't see the benefits of the package well, and it seems similar to the position others mentioned. For example, this isn't bad but I don't see it as useful. Since DE expressed the same position, I chose 'indifferent'.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. I mean, it's closer to whether you think it's useful to enough people. Obviously there are people saying 'it's useful to me' and you can't invalidate that. It's definitely useful to someone. But yes, I mean, I don't know. I think both are fine.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Temperature check results: 6 positive, 10 negative votes</ChatInfo>
+
+{" "}
+
+<ChatBubble author="DE">
+  'Indifferent' isn't completely negative. I think it would be best to come back with a bit more evidence for this. Of course, the vote itself doesn't draw any conclusions. But that's what I'd recommend to the proposer.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Yes. I mean, I think my argument is complete. I don't know what additional evidence I could provide. And I mean, I thought I made that presentation when I reached Stage 2. So it's not clear what value that would add. So if someone wants to withhold consensus for Stage 2.7 to make me do that, that's fine. But I really need—specific action items about what to bring back. Because it seems like everything has already been presented.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  CDA notifies that time is almost up and passes the floor to MM.
+</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  Yes. I'm indifferent, not abstain. It's not a negative opinion. There's a separate negative opinion. Based on this result, consensus should be requested right now.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Then yes, I'll request consensus for Stage 2.7 again.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Several attendees express support.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">I support.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="WH">I support.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="BSH">I support.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  +1 from TKP. Good. Anyone opposing? Anyone who doesn't explicitly oppose but wants to express other opinions for the record?
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  I want to slightly oppose Mark's interpretation of 'indifferent' as abstain. If you want to abstain, you can abstain. I voted 'indifferent' in the sense Nicolo meant, but I don't oppose consensus.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  (The voting screen) is no longer in front of us, but I don't remember if there was an abstain option.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">You just don't vote.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  I didn't mean abstain. I voted for the same reason Nicolo just explained.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  To clarify, for me that's weak negative, meaning someone doesn't have the will to block consensus but wouldn't vote in support.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">Right. Yes. That interpretation seems correct.</ChatBubble>
+
+{" "}
+
+<ChatInfo>Consensus is reached.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Good. Congratulations on Promise.try Stage 2.7 advancement.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  <strong>Presenter summary:</strong> There was some hesitation about motivation. Many people weren't convinced about usefulness, but no one opposed and several members were convinced of usefulness.
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>Conclusion:</strong> Promise.try advances to Stage 2.7.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 3 - 2024.06
+
+From here, many things were agreed upon and implementation began, so it was promoted without much disagreement.
+Tests were merged into test262, and browsers began implementing. (test262 is what we call tests for ECMA-262.)
+https://github.com/tc39/test262/tree/main/test/built-ins/Promise/try
+
+<details>
+<summary>June 11, 2024 TC39 Meeting Notes - Promise.try Stage 3 Discussion</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-06/june-11.md#promisetry-for-stage-3
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    Good. Hello, everyone. As you'll remember from the last few meetings, Promise.try has test262 tests merged and is already implemented in several engines. Though hidden behind flags. Today I'm not trying to push for Stage 4. Obviously we need to achieve Stage 3 first and especially give browsers more time to implement. So I hope we can easily go to Stage 3 since everything is ready. Yes. Are there any questions in the question queue before I request advancement?
+  </ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">No questions in the queue.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Alright. Then I request Stage 3 advancement.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Several committee members express support.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Dan Minor supports Stage 3. I also support Stage 3. RGN also agrees (+1). Duncan McGregor also agrees (+1).
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MLS">I also support Stage 3.</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Good. Michael Saboff, Tom Kopp also agree (+1). There seems to be clear consensus.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Good. Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  SYG's opinion (not present): V8 has no concerns about Stage 3 advancement.
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>Summary and Conclusion:</strong> Promise.try has test262 tests merged and achieved consensus for Stage 3 advancement.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 4 - 2024.10
+
+In October 2024, it finally achieved final promotion.
+
+<details>
+<summary>October 9, 2024 TC39 Meeting Notes - Promise.try Stage 4 Discussion</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-10/october-09.md#promisetry-for-stage-4
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    Yes, I'll talk about Promise.try once more. This feature takes a callback function and an optional variadic argument list. It calls the function, and if the function throws an error, it returns a rejected promise. If the function returns a value, it promise-resolves that value. This proposal has an approved spec PR and is implemented in Cloudflare Workers, bun, node, and Chrome. In Firefox, it's available under flags starting from version 132, and will be officially supported without flags in versions 133 and 134. It's also implemented in LibJS, Boa, and Kiesel, and in WebKit it was supported under flags but recently had the flag removed. I hope for promotion to Stage 4.
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>No further questions.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Are there any supporters of this proposal?
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>Multiple committee members express support.</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Many people including NRO, OMT, YSV have expressed support.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  LGH said "I participated in implementation in three places so my opinion might be biased, but I support," RKG said "Wow!" MF said "Meets the requirements."
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Thank you.
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  KM also agreed. I support too. Are there any more "hooray" or "yay" reactions? WH also agreed. KM, Tom also agreed. Yes, seems almost done. We've crossed the threshold.
+</ChatBubble>
+
+  <ChatInfo>
+    <strong>Conclusion:</strong> Congratulations on Stage 4 promotion.
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+## How Was It Implemented?
+
+Following the meeting notes, we've seen the process from proposal to final approval.\
+So how is the actual implementation structured?
+Let's first look at the spec.
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b>
+
+1. Let C be the this value.
+2. If C is not an Object, throw a TypeError exception.
+3. Let promiseCapability be ? NewPromiseCapability(C).
+4. Let status be Completion(Call(callbackfn, undefined, args)).
+5. If status is an abrupt completion, then\
+   a. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
+6. Else,\
+   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] »).
+7. Return promiseCapability.[[Promise]].
+
+</aside>
+Translated, it looks like this:
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b><br/>
+The try method takes a callbackfn argument and performs the following procedure:
+
+1. Let C be the this value.
+2. If C is not an Object, throw a TypeError exception.
+3. Let promiseCapability be ? NewPromiseCapability(C).
+4. Let status be Completion(Call(callbackfn, undefined, args)).
+5. If status is an abrupt completion, then\
+   a. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
+6. Else,\
+   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] »).
+7. Return promiseCapability.[[Promise]].
+
+</aside>
+
+For understanding spec pseudocode reading, refer to these two documents:
+
+<LinkPreview src="https://tc39.es/ecma262/multipage/notational-conventions.html#sec-algorithm-conventions" />
+<LinkPreview src="https://timothygu.me/es-howto/" />
+
+Simply put, it takes a callback, executes it, and returns it wrapped as a Promise based on the result.
+
+Now let's jump to the V8 implementation. Let's focus on the comments first.
+
+https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq\
+https://github.com/v8/v8/blob/main/src/builtins/promise-reaction-job.tq
+
+```js
+// Copyright 2024 the V8 project authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+namespace promise {
+
+// https://tc39.es/proposal-promise-try/#sec-promise.try
+@incrementUseCounter('v8::Isolate::kPromiseTry')
+transitioning javascript builtin PromiseTry(
+    js-implicit context: Context, receiver: JSAny)(...arguments): JSAny {
+  // 1. Let C be the this value.
+  // 2. If C is not an Object, throw a TypeError exception.
+  const receiver = Cast<JSReceiver>(receiver)
+      otherwise ThrowTypeError(MessageTemplate::kCalledOnNonObject, 'Promise.try');
+
+  // 3. Let promiseCapability be ? NewPromiseCapability(C).
+  const capability = NewPromiseCapability(receiver, False);
+
+  // 4. Let status be Completion(Call(callbackfn, undefined, args)).
+  const callbackfn = arguments[0];
+  let result: JSAny;
+  try {
+    if (arguments.length <= 1) {
+      result = Call(context, callbackfn, Undefined);
+    } else {
+      const rest = NewRestArgumentsFromArguments(arguments, 1);
+      result = Call(
+          context, GetReflectApply(), Undefined, callbackfn, Undefined, rest);
+    }
+  } catch (e, _message) {
+    // 5. If status is an abrupt completion, then
+    //   a. Perform ? Call(promiseCapability.[[Reject]], undefined, «
+    //      status.[[Value]] »).
+    Call(context, UnsafeCast<Callable>(capability.reject), Undefined, e);
+
+    // 7. Return promiseCapability.[[Promise]].
+    return capability.promise;
+  }
+
+  // 6. Else,
+  //   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, «
+  //      status.[[Value]] »).
+  Call(context, UnsafeCast<Callable>(capability.resolve), Undefined, result);
+
+  // 7. Return promiseCapability.[[Promise]].
+  return capability.promise;
+}
+
+}  // namespace promise
+```
+
+Looking at the V8 code, you can see that the spec's pseudocode we examined above is recorded as comments directly in the code.\
+Looking roughly at the code, you can see it's implemented almost identically to the pseudocode in the comments.
+This code looks similar to TypeScript, but the extension is .tq. This tq is short for torque. \
+When I looked for the implementation, I expected to encounter C++, but what is this language called torque?
+
+## Torque
+
+Torque is a DSL (Domain Specific Language) used only in V8.\
+Referring to Torque's manual provides the answer to the above question. (https://v8.dev/docs/torque)
+
+> V8 Torque is a language that allows developers contributing to the V8 project to express changes in the VM by focusing on the intent of their changes to the VM, rather than preoccupying themselves with unrelated implementation details. The language was designed to be simple enough to make it easy to directly translate the ECMAScript specification into an implementation in V8, but powerful enough to express the low-level V8 optimization tricks in a robust way, like creating fast-paths based on tests for specific object-shapes.
+
+> V8 Torque is a language that helps developers contributing to the V8 project write VM logic by focusing on "what they want to change" rather than getting caught up in implementation details. It's designed to be simple enough to easily translate ECMAScript specifications into V8 code, yet powerful enough to robustly express V8's low-level optimization techniques, such as creating fast execution paths by detecting specific object shapes.
+
+Torque's purpose itself is to make existing implementations more human readable.
+It was created to express the intent of spec pseudocode as directly as possible.
+
+### Background
+
+Early V8 had most built-in functions written in self-hosting JavaScript (a V8-specific dialect).
+This approach was decent, but frequently called functions with complex specifications, like Array methods, had to go through a warm-up process to become fast.
+So these core built-ins were directly written in architecture-specific assembly to achieve **"maximum performance from the first call."**
+But the problem was that writing in assembly required duplicating tens of thousands of lines of code for each platform, making maintenance increasingly difficult.
+
+In 2015, the situation changed with the introduction of the TurboFan optimization compiler.
+**CodeStubAssembler (CSA, 2016)**, a C++ DSL that allowed humans to directly work with the common low-level IR used by the TurboFan backend, emerged.
+Thanks to this, code written once was converted to optimized assembly for all platforms, and many handwritten assembly codes could be removed.
+
+But even CSA was difficult because humans had to write it all manually, and there were risks involved.
+So in 2019, the higher-level DSL Torque appeared, allowing you to almost copy ECMAScript pseudocode while having the compiler automatically generate the rest of the boilerplate and safety checks.
+Torque code is converted to intermediate-stage CSA C++ code, and TurboFan converts it back to machine code.
+
+In summary, they evolved in layers: JS self-hosting → assembly fast-path → CSA (CodeStubAssembler) → Torque.
+
+For specific details, see Tobias Tebbi's presentation below:
+
+<YouTube src="https://youtu.be/YcroNGHHqtU?si=y6AsIxZ6tJq_kUt1" />
+
+<LinkPreview src="https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf" />
+
+So how is code implemented in torque converted?\
+Looking at the V8 source, there's also a compiler for torque.
+https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc
+
+### Name Origin
+
+The names of V8-related tools are mostly named after engine-related terms.
+Examples include Ignition, Sparkplug, TurboFan, etc. Torque also means rotational force, so it relates to engine power, but it doesn't feel as intuitive as other names. Rather than being directly engine-related, it might be a metaphor for applying torque to twist into CSA?
+
+## Hmm
+
+While looking for uses of Promise.try, I explored many different things.
+Watching it face multiple challenges during the proposal process made me feel breathless too.
+I hope this helped those curious about how various methods reach us.
+
+## References
+
+1. [Promise.try - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/try)
+2. [Promise.try() support now enabled in Chrome (web.dev)](https://web.dev/blog/promise-try-baseline)
+3. [TC39 Proposal - Promise.try specification](https://tc39.es/proposal-promise-try/#sec-promise.try)
+4. [Original TC39 Promise.try Proposal README](https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md)
+5. [Bluebird - Promise.try documentation](http://bluebirdjs.com/docs/api/promise.try.html)
+6. [What is Promise.try, and why does it matter? (Joepie91's blog)](http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/)
+7. [GitHub - TC39 Promise.try issue discussion](https://github.com/tc39/proposal-promise-try/issues/15)
+8. [V8 Torque documentation](https://v8.dev/docs/torque)
+9. [V8 Torque Builtins documentation](https://v8.dev/docs/torque-builtins)
+10. [V8 CodeStubAssembler blog post](https://v8.dev/blog/csa)
+11. [Chromium Source - Promise.try implementation in Torque](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq)
+12. [V8 Torque Compiler source code](https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc)
+13. [Jfokus 2020 - V8 Torque: A Typed Language to Implement JavaScript (slides)](https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf)
+14. [Tobias Tebbi - V8 Torque: A Typed Language to Implement JavaScript (YouTube)](https://youtu.be/YcroNGHHqtU)
