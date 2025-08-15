@@ -1,0 +1,11 @@
+---
+import AsciiElementReact from './AsciiElement.tsx';
+
+export interface Props {
+  transforms?: ('spiral' | 'wave' | 'zoom' | 'shake' | 'rotate' | 'hurricane' | 'celestialOrbit' | 'fractalMotion')[];
+}
+
+const { transforms = [] } = Astro.props;
+---
+
+<AsciiElementReact client:load transforms={transforms} />

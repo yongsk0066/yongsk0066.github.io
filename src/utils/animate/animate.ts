@@ -18,7 +18,7 @@ export function stopGoEased(x: number, downtime: number, period: number): number
     return cycle + linStep;
 }
 
-export function pixelAlignFrustum(camera: THREE.Camera, aspectRatio: number, pixelsPerScreenWidth: number, pixelsPerScreenHeight: number) {
+export function pixelAlignFrustum(camera: THREE.OrthographicCamera, aspectRatio: number, pixelsPerScreenWidth: number, pixelsPerScreenHeight: number) {
 			// 0. Get Pixel Grid Units
 			const worldScreenWidth = ( ( camera.right - camera.left ) / camera.zoom );
 			const worldScreenHeight = ( ( camera.top - camera.bottom ) / camera.zoom );
