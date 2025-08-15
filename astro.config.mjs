@@ -6,7 +6,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeMathjax from "rehype-mathjax";
 import mermaid from "./plugin/remark-mermaid";
 import sitemap from '@astrojs/sitemap';
-import tailwind from "@astrojs/tailwind";
+import tailwindcss from '@tailwindcss/vite';
 
 import react from "@astrojs/react";
 import customTheme from './shiki/github-dark-default.json'
@@ -36,7 +36,7 @@ export default defineConfig({
     }),
     // rehypeMathjax
     ]
-  }), tailwind(), sitemap(), react()],
+  }), sitemap(), react()],
   markdown:{
     shikiConfig: {
       theme: customTheme,
@@ -46,5 +46,8 @@ export default defineConfig({
     domains: ["static.yongseok.me"]
   },
   site: 'https://yongseok.me',
-  base: '/'
+  base: '/',
+  vite: {
+    plugins: [tailwindcss()],
+  },
 });

@@ -40,9 +40,9 @@ try {
 ---
 
 <a
-  class="link-preview group/item
-  bg-white dark:bg-zinc-800 text-black/50 dark:text-white/75
-  border border-black/15 dark:border-white/20
+  class="link-preview group/item not-prose
+  bg-white text-black/50
+  border border-black/15
   rounded-md overflow-hidden max-h-40 mb-4
   hover:-translate-y-2 transition-transform duration-200 ease-in-out
     hover:shadow-lg"
@@ -52,17 +52,17 @@ try {
 >
   <div class="p-4 h-auto box-border">
     <h3
-      class="m-0 line-clamp-2 whitespace-normal break-all text-base text-semibold"
+      class="!m-0 !text-base !font-semibold !text-black line-clamp-2 whitespace-normal break-all"
     >
       {title}
     </h3>
     <p
-      class="text-black/50 dark:text-white/75
-    text-sm line-clamp-2 whitespace-normal break-all"
+      class="!m-0 !mt-2 !text-black/50
+    !text-sm line-clamp-2 whitespace-normal break-all"
     >
       {description}
     </p>
-    <span class="text-xs line-clamp-1">{src}</span>
+    <span class="!text-xs !text-black/40 line-clamp-1">{src}</span>
   </div>
   {
     image && (

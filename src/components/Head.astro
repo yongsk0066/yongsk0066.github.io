@@ -384,26 +384,17 @@ const { title, description, image = "/nano.png" } = Astro.props;
 
     document.head.appendChild(css);
 
-    if (dark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    // Always force light mode - remove dark class
+    document.documentElement.classList.remove("dark");
 
     window.getComputedStyle(css).opacity;
     document.head.removeChild(css);
   }
 
   function preloadTheme() {
-    const userTheme = localStorage.theme;
-
-    if (userTheme === "light" || userTheme === "dark") {
-      toggleTheme(userTheme === "dark");
-    } else {
-      // default
-      toggleTheme(false);
-      // toggleTheme(window.matchMedia("(prefers-color-scheme: dark)").matches);
-    }
+    // Always force light mode
+    localStorage.setItem("theme", "light");
+    toggleTheme(false);
   }
 
   document.addEventListener("DOMContentLoaded", () => init());

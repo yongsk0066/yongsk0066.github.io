@@ -1,0 +1,74 @@
+---
+export interface Props {
+  src?: string;
+  caption?: string;
+}
+
+const { src, caption } = Astro.props;
+
+function extractVideoId(url?: string) {
+  if (!url) return "";
+  const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+  const match = url.match(regExp);
+  return match ? match[1] : "";
+}
+
+function extractStartTime(url?: string) {
+  if (!url) return "0";
+  const urlObj = new URL(url);
+  return urlObj.searchParams.get("t") || "0";
+}
+
+const videoId = extractVideoId(src);
+const startTime = extractStartTime(src);
+const iframeSrc = `https://www.youtube.com/embed/${videoId}?start=${startTime}`;
+---
+
+<figure class="youtube-figure">
+  <div class="iframe__wrapper">
+    <iframe
+      src={iframeSrc}
+      title="YouTube Video Player"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"
+    ></iframe>
+  </div>
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+  .youtube-figure {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    margin: 16px 0;
+  }
+
+  .iframe__wrapper {
+    width: 100%;
+    display: block;
+    aspect-ratio: 16 / 9;
+    border: none;
+    background: black;
+    border-radius: 0.5rem;
+    box-shadow: rgb(0 0 0 / 36%) 0px 0px 12px 6px;
+    overflow: hidden;
+    margin: 0;
+  }
+
+  figcaption {
+    display: block;
+    text-align: center;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+
+  iframe {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: none;
+  }
+</style>

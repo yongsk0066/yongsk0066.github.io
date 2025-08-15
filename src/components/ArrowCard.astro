@@ -10,11 +10,11 @@ const { entry } = Astro.props;
 
 <a
   href={`/${entry.collection}/${entry.slug}`}
-  class="relative group flex flex-nowrap py-3 pr-10 rounded-lg hover:text-black dark:hover:text-white transition-colors duration-300 ease-in-out antialiased"
+  class="relative group flex flex-nowrap py-3 pr-10 rounded-lg hover:text-black transition-colors duration-300 ease-in-out antialiased"
 >
   <div class="flex flex-col flex-1 truncate">
     <div
-      class="font-bold text-zinc-600 dark:text-zinc-300 group-hover:text-black dark:group-hover:text-white transition-colors duration-300 ease-in-out
+      class="font-bold text-zinc-600 group-hover:text-black transition-colors duration-300 ease-in-out
         whitespace-normal break-all line-clamp-2"
     >
       {entry.data.title}

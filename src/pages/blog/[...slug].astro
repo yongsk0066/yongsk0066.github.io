@@ -94,7 +94,7 @@ const t = useTranslations(currentLocale as any);
           hasTranslation && (
             <a
               href={`/blog/${translationSlug}`}
-              class="inline-flex items-center px-3 py-1 rounded-md border border-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              class="inline-flex items-center px-3 py-1 rounded-md border border-zinc-300 text-sm font-medium hover:bg-zinc-100 transition-colors"
               title={
                 currentLocale === DEFAULT_LOCALE
                   ? "View in English"
@@ -107,7 +107,7 @@ const t = useTranslations(currentLocale as any);
         }
       </div>
 
-      <div class="animate text-3xl font-bold text-black dark:text-white">
+      <div class="animate text-3xl font-bold text-black">
         {post.data.title}
       </div>
       {
@@ -132,7 +132,7 @@ const t = useTranslations(currentLocale as any);
         )
       }
     </div>
-    <article class="animate hyphens-auto break-words">
+    <article class="animate hyphens-auto break-words prose max-w-full prose-img:mx-auto prose-img:my-auto prose-headings:font-semibold prose-headings:text-black max-sm:text-sm max-sm:leading-7" style="font-family: 'Pretendard', 'Oswald', 'Atkinson', sans-serif;">
       <Content />
     </article>
     {

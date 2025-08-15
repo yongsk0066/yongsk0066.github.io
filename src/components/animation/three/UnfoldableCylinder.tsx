@@ -868,16 +868,16 @@ export default function UnfoldableCylinder() {
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-4 rounded-lg bg-slate-50 dark:bg-slate-800">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 mb-4 rounded-lg bg-slate-50">
         <div className="control-group">
           <div className="flex items-center justify-between">
             <label
               htmlFor="angle-slider"
-              className="font-medium text-slate-700 dark:text-slate-300"
+              className="font-medium text-slate-700"
             >
               α (단면 각도)
             </label>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800">
               {sectionAngle}°
             </span>
           </div>
@@ -888,7 +888,7 @@ export default function UnfoldableCylinder() {
             max="80"
             value={sectionAngle}
             onChange={handleAngleChange}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 mt-2 accent-blue-500"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2 accent-blue-500"
           />
         </div>
 
@@ -896,11 +896,11 @@ export default function UnfoldableCylinder() {
           <div className="flex items-center justify-between">
             <label
               htmlFor="ellipse-point-slider"
-              className="font-medium text-slate-700 dark:text-slate-300"
+              className="font-medium text-slate-700"
             >
               θ (타원 위의 점 P 각도)
             </label>
-            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-blue-100 text-blue-800">
               {ellipsePointAngle}°
             </span>
           </div>
@@ -911,7 +911,7 @@ export default function UnfoldableCylinder() {
             max="360"
             value={ellipsePointAngle}
             onChange={handleEllipsePointAngleChange}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 mt-2 accent-blue-500"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2 accent-blue-500"
             step="5"
           />
         </div>
@@ -919,7 +919,7 @@ export default function UnfoldableCylinder() {
 
       <div className="flex flex-col gap-5">
         {/* 위: 3D 원기둥 뷰 */}
-        <div className="w-full aspect-[4/3] relative border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+        <div className="w-full aspect-[4/3] relative border border-slate-300 rounded-lg overflow-hidden">
           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm font-medium z-10">
             3D 원기둥
           </div>
@@ -945,7 +945,7 @@ export default function UnfoldableCylinder() {
         </div>
 
         {/* 아래: 전개도 뷰 */}
-        <div className="w-full aspect-[16/9] relative border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+        <div className="w-full aspect-[16/9] relative border border-slate-300 rounded-lg overflow-hidden">
           <div className="absolute top-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm font-medium z-10">
             전개도
           </div>

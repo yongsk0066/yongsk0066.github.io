@@ -8,9 +8,9 @@ const { src, title } = Astro.props;
 ---
 
 <div
-  class="audio-player w-full max-w-full bg-white dark:bg-zinc-800 rounded-lg shadow-md p-4 my-4"
+  class="audio-player w-full max-w-full bg-white rounded-lg shadow-md p-4 my-4"
 >
-  {title && <div class="text-lg font-medium mb-2 dark:text-white">{title}</div>}
+  {title && <div class="text-lg font-medium mb-2">{title}</div>}
   <div class="player-container">
     <div class="flex items-center mb-2">
       <button
@@ -43,7 +43,7 @@ const { src, title } = Astro.props;
       <div class="flex-grow">
         <div class="relative">
           <div
-            class="progress-container w-full h-2 bg-gray-200 dark:bg-zinc-600 rounded-full overflow-hidden"
+            class="progress-container w-full h-2 bg-gray-200 rounded-full overflow-hidden"
           >
             <div id="progressBar" class="progress-bar h-full bg-indigo-500 w-0">
             </div>
@@ -58,7 +58,7 @@ const { src, title } = Astro.props;
           />
         </div>
         <div
-          class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1"
+          class="flex justify-between text-xs text-gray-500 mt-1"
         >
           <span id="currentTime">0:00</span>
           <span id="totalTime">0:00</span>
@@ -66,7 +66,7 @@ const { src, title } = Astro.props;
       </div>
     </div>
     <div class="flex items-center">
-      <button id="muteBtn" class="text-gray-600 dark:text-gray-400 mr-2">
+      <button id="muteBtn" class="text-gray-600 mr-2">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           class="volume-icon h-5 w-5"
@@ -92,7 +92,7 @@ const { src, title } = Astro.props;
       </button>
       <div class="relative flex-grow max-w-[120px]">
         <div
-          class="volume-container w-full h-1.5 bg-gray-200 dark:bg-zinc-600 rounded-full overflow-hidden"
+          class="volume-container w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"
         >
           <div id="volumeBar" class="volume-bar h-full bg-indigo-500 w-full">
           </div>
