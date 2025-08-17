@@ -311,10 +311,20 @@ footer {
 /* Reduce motion support */
 @media (prefers-reduced-motion: reduce) {
   #post-content > *,
-  #post-meta {
+  #post-meta,
+  #toc-links-list > * {
     opacity: 1;
     transform: translateY(0);
     animation: none;
+  }
+}
+
+/* TOC Animation - reuse existing fadeInUp */
+@media (min-width: 1024px) {
+  #toc-container {
+    opacity: 0;
+    animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+    animation-delay: 0.1s;
   }
 }
 
