@@ -47,23 +47,13 @@ const filteredHeadings = headings.filter(heading =>
       >
         <!-- Progress Line (Desktop Only) -->
         <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-8">
-          <!-- Base Line -->
+          <!-- Curved Depth Lines -->
           <svg 
+            id="toc-lines-svg"
             class="absolute inset-0 w-full h-full" 
-            preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <defs>
-              <pattern id="toc-line-pattern" x="0" y="0" width="100%" height="40" patternUnits="userSpaceOnUse">
-                <path 
-                  d="M 8 0 L 8 40" 
-                  stroke="rgb(228 228 231)" 
-                  stroke-width="1.5" 
-                  fill="none"
-                />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#toc-line-pattern)" />
+            <!-- Lines will be dynamically generated based on TOC items -->
           </svg>
           
           <!-- Dynamic Progress Indicator -->
@@ -87,30 +77,6 @@ const filteredHeadings = headings.filter(heading =>
                 'ml-8 lg:ml-8': heading.depth === 4,
               }}
             >
-              <!-- Depth indicator lines for desktop -->
-              {heading.depth > 2 && (
-                <div class="hidden lg:block absolute -left-8 top-0 bottom-0 w-8">
-                  <svg class="w-full h-full" preserveAspectRatio="none">
-                    {heading.depth === 3 && (
-                      <path 
-                        d="M 8 12 L 16 12" 
-                        stroke="rgb(228 228 231)" 
-                        stroke-width="1.5" 
-                        fill="none"
-                      />
-                    )}
-                    {heading.depth === 4 && (
-                      <path 
-                        d="M 8 12 L 24 12" 
-                        stroke="rgb(228 228 231)" 
-                        stroke-width="1.5" 
-                        fill="none"
-                      />
-                    )}
-                  </svg>
-                </div>
-              )}
-              
               <a
                 href={`#${heading.slug}`}
                 class:list={[
@@ -187,21 +153,21 @@ const filteredHeadings = headings.filter(heading =>
     animation: indicatorPulse 2s ease-in-out infinite;
   }
   
-  /* Line and indicator animations on load */
+  /* Line animations on load */
   @media (min-width: 1024px) {
-    @keyframes drawLine {
+    @keyframes drawPath {
       from {
-        stroke-dasharray: 40;
-        stroke-dashoffset: 40;
+        stroke-dasharray: 200;
+        stroke-dashoffset: 200;
       }
       to {
-        stroke-dasharray: 40;
+        stroke-dasharray: 200;
         stroke-dashoffset: 0;
       }
     }
     
-    #toc-line-pattern path {
-      animation: drawLine 0.5s ease-out forwards;
+    .toc-line-path {
+      animation: drawPath 0.8s ease-out forwards;
     }
   }
   
@@ -250,11 +216,65 @@ const filteredHeadings = headings.filter(heading =>
 let headingObserver: IntersectionObserver | null = null
 let contentEndObserver: IntersectionObserver | null = null
 
+function drawTOCLines() {
+  const svg = document.getElementById('toc-lines-svg') as SVGElement
+  if (!svg) return
+  
+  const tocItems = document.querySelectorAll('.toc-item')
+  if (tocItems.length === 0) return
+  
+  svg.innerHTML = ''
+  
+  const xPositions = {
+    2: 8,
+    3: 16,
+    4: 24
+  }
+  
+  let prevDepth = 2
+  let prevY = 0
+  
+  tocItems.forEach((item, index) => {
+    const depth = parseInt((item as HTMLElement).dataset.depth || '2')
+    const rect = item.getBoundingClientRect()
+    const containerRect = svg.getBoundingClientRect()
+    const y = rect.top - containerRect.top + rect.height / 2
+    
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    
+    const currentX = xPositions[depth as keyof typeof xPositions] || 8
+    const prevX = xPositions[prevDepth as keyof typeof xPositions] || 8
+    
+    if (index === 0) {
+      path.setAttribute('d', `M ${currentX} 0 L ${currentX} ${y}`)
+    } else {
+      if (depth !== prevDepth) {
+        const midY = prevY + 8
+        path.setAttribute('d', `M ${prevX} ${prevY} L ${prevX} ${midY} L ${currentX} ${y}`)
+      } else {
+        path.setAttribute('d', `M ${currentX} ${prevY} L ${currentX} ${y}`)
+      }
+    }
+    
+    path.setAttribute('stroke', 'rgb(228 228 231)')
+    path.setAttribute('stroke-width', '1')
+    path.setAttribute('fill', 'none')
+    path.setAttribute('class', 'toc-line-path')
+    
+    svg.appendChild(path)
+    
+    prevDepth = depth
+    prevY = y
+  })
+}
+
 function setupTOCHighlight() {
   const isDesktop = window.innerWidth >= 1024
   if (!isDesktop) {
     return
   }
+  
+  drawTOCLines()
   
   const tocContent = document.getElementById('toc-accordion-content')
   if (!tocContent) {
@@ -268,11 +288,8 @@ function setupTOCHighlight() {
   
   const tocLinks = Array.from(tocLinksCollection, item => item as HTMLAnchorElement)
   
-  // Determine the top level heading class
   const hasH2Headings = tocLinks.some(linkItem => linkItem.classList.contains('toc-links-h2'))
   const topLevelClass = hasH2Headings ? 'toc-links-h2' : 'toc-links-h3'
-  
-  // Build the heading map
   const headingMap = new Map<string, HTMLAnchorElement>()
   tocLinks.forEach((link) => {
     const id = link.getAttribute('href')?.substring(1)
@@ -283,7 +300,6 @@ function setupTOCHighlight() {
   
   let activeLink: HTMLAnchorElement | null = null
   
-  // Find and highlight the nearest parent heading
   function highlightParentLink(childLink: HTMLAnchorElement) {
     const currentIndex = tocLinks.indexOf(childLink)
     for (let i = currentIndex - 1; i >= 0; i--) {
@@ -300,54 +316,47 @@ function setupTOCHighlight() {
       return
     }
     
-    // Clear all highlights
     tocLinks.forEach((linkItem) => {
       linkItem.classList.remove('toc-link-active')
     })
     
-    // Highlight current link
     link.classList.add('toc-link-active')
     
-    // If not a top level heading, find and highlight the parent heading
     if (!link.classList.contains(topLevelClass)) {
       highlightParentLink(link)
     }
     
     activeLink = link
     
-    // Update progress indicator position
     const linkElement = link.closest('.toc-item') as HTMLElement
     if (linkElement) {
       const indicator = document.getElementById('toc-progress-indicator')
       if (indicator) {
         const linkRect = linkElement.getBoundingClientRect()
-        const containerRect = linkElement.closest('#toc-accordion-content')?.getBoundingClientRect()
-        if (containerRect) {
-          const relativeTop = linkRect.top - containerRect.top + linkRect.height / 2 - 3
+        const svgRect = document.getElementById('toc-lines-svg')?.getBoundingClientRect()
+        if (svgRect) {
+          const relativeTop = linkRect.top - svgRect.top + linkRect.height / 2 - 3
           indicator.style.top = `${relativeTop}px`
           indicator.style.opacity = '1'
           
-          // Adjust indicator position based on depth
           const depth = parseInt(linkElement.dataset.depth || '2')
           if (depth === 2) {
-            indicator.style.left = '5px'
+            indicator.style.left = '5px'  // 8px line position - 3px for centering
           } else if (depth === 3) {
-            indicator.style.left = '13px'
+            indicator.style.left = '13px' // 16px line position - 3px for centering
           } else if (depth === 4) {
-            indicator.style.left = '21px'
+            indicator.style.left = '21px' // 24px line position - 3px for centering
           }
         }
       }
     }
     
-    // Scroll to center position
     link.scrollIntoView({
       behavior: 'smooth',
       block: 'nearest',
     })
   }
   
-  // Create observer to monitor headings
   headingObserver = new IntersectionObserver(
     (entries: IntersectionObserverEntry[]) => {
       const headingId = entries.find(entry => entry.isIntersecting)?.target?.id
@@ -364,26 +373,21 @@ function setupTOCHighlight() {
     },
   )
   
-  // Observe h2, h3, h4 heading elements
   Array.from(document.querySelectorAll('h2, h3, h4'))
     .filter(heading => heading.id && heading.id !== 'footnotes')
     .forEach(heading => headingObserver?.observe(heading))
   
-  // Find the end of content element (can be adjusted based on your layout)
   const contentEndElement = document.querySelector('article')?.lastElementChild
   if (!contentEndElement) {
     return
   }
   
-  // Create observer to monitor the content end element
   contentEndObserver = new IntersectionObserver(
     (entries: IntersectionObserverEntry[]) => {
-      // Clear highlights when scrolled past content
       if (!entries[0].isIntersecting && entries[0].boundingClientRect.top < 0) {
         tocLinks.forEach(linkItem => linkItem.classList.remove('toc-link-active'))
         activeLink = null
         
-        // Hide indicator
         const indicator = document.getElementById('toc-progress-indicator')
         if (indicator) {
           indicator.style.opacity = '0'
@@ -396,16 +400,13 @@ function setupTOCHighlight() {
     },
   )
   
-  // Observe the content end element
   contentEndObserver?.observe(contentEndElement)
   
-  // Highlight the first TOC item by default
   if (tocLinks.length > 0) {
     highlightLink(tocLinks[0])
   }
 }
 
-// Cleanup TOC observers if exists
 function cleanupTOCObservers() {
   headingObserver?.disconnect()
   contentEndObserver?.disconnect()
@@ -413,13 +414,11 @@ function cleanupTOCObservers() {
   contentEndObserver = null
 }
 
-// Setup on page load
 document.addEventListener('DOMContentLoaded', setupTOCHighlight)
 window.addEventListener('resize', () => {
   cleanupTOCObservers()
   setupTOCHighlight()
 })
 
-// Cleanup on page unload
 window.addEventListener('beforeunload', cleanupTOCObservers)
 </script>
