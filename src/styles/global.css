@@ -257,13 +257,65 @@ footer {
   @apply bg-orange-500;
 }
 
-.animate {
-  @apply opacity-0 translate-y-3;
-  @apply transition-all duration-300 ease-out;
+/* Content Progressive Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(3rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.animate.show {
-  @apply opacity-100 translate-y-0;
+/* Post content animation */
+#post-content > * {
+  opacity: 0;
+  animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+#post-content > *:nth-child(1) { animation-delay: 0.15s; }
+#post-content > *:nth-child(2) { animation-delay: 0.2s; }
+#post-content > *:nth-child(3) { animation-delay: 0.25s; }
+#post-content > *:nth-child(4) { animation-delay: 0.3s; }
+#post-content > *:nth-child(5) { animation-delay: 0.35s; }
+#post-content > *:nth-child(6) { animation-delay: 0.4s; }
+#post-content > *:nth-child(7) { animation-delay: 0.45s; }
+#post-content > *:nth-child(8) { animation-delay: 0.5s; }
+#post-content > *:nth-child(9) { animation-delay: 0.55s; }
+#post-content > *:nth-child(10) { animation-delay: 0.6s; }
+#post-content > *:nth-child(11) { animation-delay: 0.65s; }
+#post-content > *:nth-child(12) { animation-delay: 0.7s; }
+#post-content > *:nth-child(13) { animation-delay: 0.75s; }
+#post-content > *:nth-child(14) { animation-delay: 0.8s; }
+#post-content > *:nth-child(15) { animation-delay: 0.85s; }
+#post-content > *:nth-child(n+16) { animation-delay: 0.9s; }
+
+/* Disable animations on mobile for performance */
+@media (max-width: 767px) {
+  #post-content > *:nth-child(n+8) {
+    opacity: 1;
+    transform: translateY(0);
+    animation: none;
+  }
+}
+
+/* Post metadata animation */
+#post-meta {
+  opacity: 0;
+  animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+  animation-delay: 0.1s;
+}
+
+/* Reduce motion support */
+@media (prefers-reduced-motion: reduce) {
+  #post-content > *,
+  #post-meta {
+    opacity: 1;
+    transform: translateY(0);
+    animation: none;
+  }
 }
 
 html #back-to-top {

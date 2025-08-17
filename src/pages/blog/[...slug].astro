@@ -71,15 +71,15 @@ const t = useTranslations(currentLocale as any);
   </div>
   <!--- Ends component --->
   <Container>
-    <div class="animate">
+    <div>
       <BackToPrev href={t("path.blog")}>
         {t("page.back")}
       </BackToPrev>
     </div>
     <!-- series -->
-    <div class="animate flex items-center gap-1.5"></div>
-    <div class="space-y-1 my-10">
-      <div class="animate flex items-center gap-1.5 justify-between">
+    <div class="flex items-center gap-1.5"></div>
+    <div class="space-y-1 my-10" id="post-meta">
+      <div class="flex items-center gap-1.5 justify-between">
         <div class="flex items-center gap-1.5">
           <div class="font-base text-sm">
             <FormattedDate date={post.data.date} />
@@ -107,12 +107,12 @@ const t = useTranslations(currentLocale as any);
         }
       </div>
 
-      <div class="animate text-3xl font-bold text-black">
+      <div class="text-3xl font-bold text-black">
         {post.data.title}
       </div>
       {
         seriesPosts.length > 1 && (
-          <div class="animate text-zinc-500">
+          <div class="text-zinc-500">
             <div class="text-base mt-8 text-zinc-600 text-bold">
               [ {post.data.series} ] {t("word.series")}
             </div>
@@ -132,7 +132,7 @@ const t = useTranslations(currentLocale as any);
         )
       }
     </div>
-    <article class="animate hyphens-auto break-words prose max-w-full prose-img:mx-auto prose-img:my-auto prose-headings:font-semibold prose-headings:text-black max-sm:text-sm max-sm:leading-7" style="font-family: 'Pretendard', 'Oswald', 'Atkinson', sans-serif;">
+    <article id="post-content" class="hyphens-auto break-words prose max-w-full prose-img:mx-auto prose-img:my-auto prose-headings:font-semibold prose-headings:text-black max-sm:text-sm max-sm:leading-7" style="font-family: 'Pretendard', 'Oswald', 'Atkinson', sans-serif;">
       <Content />
     </article>
     {

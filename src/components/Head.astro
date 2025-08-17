@@ -282,7 +282,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
   function init() {
     preloadTheme();
     onScroll();
-    animate();
 
     const backToTop = document.getElementById("back-to-top");
     backToTop?.addEventListener("click", (event) => scrollToTop(event));
@@ -338,16 +337,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
       });
 
     document.addEventListener("scroll", onScroll);
-  }
-
-  function animate() {
-    const animateElements = document.querySelectorAll(".animate");
-
-    animateElements.forEach((element, index) => {
-      setTimeout(() => {
-        element.classList.add("show");
-      }, index * 150);
-    });
   }
 
   function onScroll() {
