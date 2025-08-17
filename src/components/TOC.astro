@@ -16,7 +16,7 @@ const filteredHeadings = headings.filter(heading =>
   <div
     id="toc-container"
     class="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/50 p-1 
-           lg:fixed lg:left-[calc(50%+28rem)] lg:top-44 lg:w-52 
+           lg:fixed lg:left-[calc(50%+28rem)] lg:top-44 lg:w-68 
            lg:border-none lg:bg-transparent lg:p-0"
   >
     <!-- Hidden Checkbox for mobile toggle -->
@@ -80,12 +80,13 @@ const filteredHeadings = headings.filter(heading =>
               <a
                 href={`#${heading.slug}`}
                 class:list={[
-                  'toc-link block text-sm font-normal text-zinc-600 no-underline transition-all duration-150 ease-out hover:text-zinc-900 hover:font-medium relative',
+                  'toc-link block text-sm font-normal text-zinc-600 no-underline transition-all duration-150 ease-out hover:text-zinc-900 hover:font-medium relative truncate',
                   { 'toc-links-h2': heading.depth === 2 },
                   { 'toc-links-h3': heading.depth === 3 },
                   { 'toc-links-h4': heading.depth === 4 },
                   'lg:text-xs lg:text-zinc-400',
                 ]}
+                title={heading.text}
               >
                 {heading.text}
               </a>
@@ -414,7 +415,34 @@ function cleanupTOCObservers() {
   contentEndObserver = null
 }
 
-document.addEventListener('DOMContentLoaded', setupTOCHighlight)
+// Smooth scroll for TOC links
+function setupSmoothScroll() {
+  const tocLinks = document.querySelectorAll('#toc-links-list a')
+  
+  tocLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault()
+      const targetId = link.getAttribute('href')?.substring(1)
+      if (targetId) {
+        const targetElement = document.getElementById(targetId)
+        if (targetElement) {
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          })
+          // Update URL without scrolling
+          history.pushState(null, '', `#${targetId}`)
+        }
+      }
+    })
+  })
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupTOCHighlight()
+  setupSmoothScroll()
+})
+
 window.addEventListener('resize', () => {
   cleanupTOCObservers()
   setupTOCHighlight()
