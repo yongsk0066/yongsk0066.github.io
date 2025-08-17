@@ -42,23 +42,79 @@ const filteredHeadings = headings.filter(heading =>
     <div id="toc-accordion-wrapper" class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out lg:grid-rows-[1fr]">
       <nav
         id="toc-accordion-content"
-        class="overflow-hidden px-4 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:px-0"
+        class="overflow-hidden px-4 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:px-0 relative"
         aria-label="Table of Contents"
       >
-        <!-- TOC List -->
-        <ul id="toc-links-list" class="mb-2.5 mt-1 list-none space-y-1 pl-0 lg:mb-1 lg:space-y-1.5">
-          {filteredHeadings.map(heading => (
+        <!-- Progress Line (Desktop Only) -->
+        <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-8">
+          <!-- Base Line -->
+          <svg 
+            class="absolute inset-0 w-full h-full" 
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <defs>
+              <pattern id="toc-line-pattern" x="0" y="0" width="100%" height="40" patternUnits="userSpaceOnUse">
+                <path 
+                  d="M 8 0 L 8 40" 
+                  stroke="rgb(228 228 231)" 
+                  stroke-width="1.5" 
+                  fill="none"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#toc-line-pattern)" />
+          </svg>
+          
+          <!-- Dynamic Progress Indicator -->
+          <div 
+            id="toc-progress-indicator" 
+            class="absolute left-1 w-1.5 h-1.5 bg-zinc-900 rounded-full transition-all duration-300 ease-out"
+            style="top: 0; opacity: 0;"
+          ></div>
+        </div>
+        
+        <!-- TOC List with indent lines -->
+        <ul id="toc-links-list" class="mb-2.5 mt-1 list-none space-y-1 pl-0 lg:pl-8 lg:mb-1 lg:space-y-1.5 relative">
+          {filteredHeadings.map((heading, index) => (
             <li
+              data-depth={heading.depth}
+              data-index={index}
               class:list={{
-                'ml-0': heading.depth === 2,
-                'ml-4': heading.depth === 3,
-                'ml-8': heading.depth === 4,
+                'toc-item relative': true,
+                'ml-0 lg:ml-0': heading.depth === 2,
+                'ml-4 lg:ml-4': heading.depth === 3,
+                'ml-8 lg:ml-8': heading.depth === 4,
               }}
             >
+              <!-- Depth indicator lines for desktop -->
+              {heading.depth > 2 && (
+                <div class="hidden lg:block absolute -left-8 top-0 bottom-0 w-8">
+                  <svg class="w-full h-full" preserveAspectRatio="none">
+                    {heading.depth === 3 && (
+                      <path 
+                        d="M 8 12 L 16 12" 
+                        stroke="rgb(228 228 231)" 
+                        stroke-width="1.5" 
+                        fill="none"
+                      />
+                    )}
+                    {heading.depth === 4 && (
+                      <path 
+                        d="M 8 12 L 24 12" 
+                        stroke="rgb(228 228 231)" 
+                        stroke-width="1.5" 
+                        fill="none"
+                      />
+                    )}
+                  </svg>
+                </div>
+              )}
+              
               <a
                 href={`#${heading.slug}`}
                 class:list={[
-                  'toc-link block text-sm font-normal text-zinc-600 no-underline transition-all duration-150 ease-out hover:text-zinc-900 hover:font-medium',
+                  'toc-link block text-sm font-normal text-zinc-600 no-underline transition-all duration-150 ease-out hover:text-zinc-900 hover:font-medium relative',
                   { 'toc-links-h2': heading.depth === 2 },
                   { 'toc-links-h3': heading.depth === 3 },
                   { 'toc-links-h4': heading.depth === 4 },
@@ -112,6 +168,40 @@ const filteredHeadings = headings.filter(heading =>
     
     #toc-container:hover .toc-link-active {
       color: rgb(0 0 0);
+    }
+  }
+  
+  /* Progress indicator pulse animation */
+  @keyframes indicatorPulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 0.8;
+    }
+  }
+  
+  #toc-progress-indicator {
+    animation: indicatorPulse 2s ease-in-out infinite;
+  }
+  
+  /* Line and indicator animations on load */
+  @media (min-width: 1024px) {
+    @keyframes drawLine {
+      from {
+        stroke-dasharray: 40;
+        stroke-dashoffset: 40;
+      }
+      to {
+        stroke-dasharray: 40;
+        stroke-dashoffset: 0;
+      }
+    }
+    
+    #toc-line-pattern path {
+      animation: drawLine 0.5s ease-out forwards;
     }
   }
   
@@ -225,6 +315,31 @@ function setupTOCHighlight() {
     
     activeLink = link
     
+    // Update progress indicator position
+    const linkElement = link.closest('.toc-item') as HTMLElement
+    if (linkElement) {
+      const indicator = document.getElementById('toc-progress-indicator')
+      if (indicator) {
+        const linkRect = linkElement.getBoundingClientRect()
+        const containerRect = linkElement.closest('#toc-accordion-content')?.getBoundingClientRect()
+        if (containerRect) {
+          const relativeTop = linkRect.top - containerRect.top + linkRect.height / 2 - 3
+          indicator.style.top = `${relativeTop}px`
+          indicator.style.opacity = '1'
+          
+          // Adjust indicator position based on depth
+          const depth = parseInt(linkElement.dataset.depth || '2')
+          if (depth === 2) {
+            indicator.style.left = '5px'
+          } else if (depth === 3) {
+            indicator.style.left = '13px'
+          } else if (depth === 4) {
+            indicator.style.left = '21px'
+          }
+        }
+      }
+    }
+    
     // Scroll to center position
     link.scrollIntoView({
       behavior: 'smooth',
@@ -267,6 +382,12 @@ function setupTOCHighlight() {
       if (!entries[0].isIntersecting && entries[0].boundingClientRect.top < 0) {
         tocLinks.forEach(linkItem => linkItem.classList.remove('toc-link-active'))
         activeLink = null
+        
+        // Hide indicator
+        const indicator = document.getElementById('toc-progress-indicator')
+        if (indicator) {
+          indicator.style.opacity = '0'
+        }
       }
     },
     {
