@@ -253,7 +253,7 @@ export default function AsciiElement({ transforms = [] }: AsciiElementProps) {
           <li className="option">-----</li>
         </ul>
       )}
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .ascii-container {
           display: flex;
           justify-content: center;
@@ -310,7 +310,7 @@ export default function AsciiElement({ transforms = [] }: AsciiElementProps) {
             font-size: 18px;
           }
         }
-      `}</style>
+      `}} />
     </div>
   );
 }

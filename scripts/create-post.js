@@ -9,37 +9,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
-// 한글을 슬러그로 변환하는 함수
-function toSlug(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s가-힣-]/g, '')
-    .replace(/\s+/g, '_')
-    .trim();
-}
-
-// 현재 날짜를 포맷팅하는 함수
-function formatDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatDateDisplay() {
-  const now = new Date();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[now.getMonth()];
-  const day = now.getDate();
-  const year = now.getFullYear();
-  return `${month} ${day} ${year}`;
-}
-
 async function createPost() {
   try {
     // 사용자 입력 받기
     const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'filename',
+        message: '파일명을 입력하세요 (이미지 폴더명으로도 사용됩니다):',
+        validate: (input) => {
+          if (!input.trim()) {
+            return '파일명을 입력해주세요.';
+          }
+          if (!/^[a-zA-Z0-9가-힣_-]+$/.test(input)) {
+            return '파일명은 영문, 숫자, 한글, 언더스코어, 하이픈만 사용 가능합니다.';
+          }
+          return true;
+        },
+      },
       {
         type: 'input',
         name: 'title',
@@ -83,73 +70,49 @@ async function createPost() {
         default: '',
       },
       {
-        type: 'input',
-        name: 'filename',
-        message: '파일명을 입력하세요 (기본값: 제목 기반):',
-        default: (answers) => toSlug(answers.title),
-        validate: (input) => {
-          if (!input.trim()) {
-            return '파일명을 입력해주세요.';
-          }
-          if (!/^[a-zA-Z0-9가-힣_-]+$/.test(input)) {
-            return '파일명은 영문, 숫자, 한글, 언더스코어, 하이픈만 사용 가능합니다.';
-          }
-          return true;
-        },
+        type: 'checkbox',
+        name: 'components',
+        message: '추가로 import할 컴포넌트를 선택하세요 (스페이스바로 선택):',
+        choices: [
+          { name: 'AudioPlayer - 오디오 플레이어', value: 'AudioPlayer' },
+          { name: 'YouTube - 유튜브 임베드', value: 'YouTube' },
+          { name: 'GoogleMap - 구글 맵', value: 'GoogleMap' },
+          { name: 'Video - 비디오 플레이어', value: 'Video' },
+          { name: 'InstagramEmbed - 인스타그램 임베드', value: 'InstagramEmbed' },
+        ],
+        default: [],
       },
     ]);
 
-    // 날짜 정보
-    const date = formatDate();
-    const pubDate = formatDateDisplay();
+    // 날짜 정보 - ISO 8601 형식
+    const date = new Date().toISOString();
+
+    // import 문 생성
+    const baseImports = ['LinkPreview'];
+    const allImports = [...baseImports, ...answers.components];
+
+    const importStatements = allImports
+      .map(component => {
+        if (component === 'LinkPreview' || component === 'AudioPlayer') {
+          return `import ${component} from "../../components/${component}.astro";`;
+        }
+        return `import ${component} from "@components/${component}.astro";`;
+      })
+      .join('\n');
 
     // MDX 템플릿 생성
     const mdxContent = `---
 title: "${answers.title}"
 description: "${answers.description || answers.title}"
 author: "Yongseok"
-pubDate: "${pubDate}"
-date: "${date}"
-categories: ${JSON.stringify(answers.categories)}${answers.series ? `\nseries: "${answers.series}"` : ''}
+categories: ${JSON.stringify(answers.categories)}
+date: "${date}"${answers.series ? `\nseries: "${answers.series}"` : ''}
 heroImage: "/post/images/${answers.filename}/thumb.png"
 ---
 
-import YouTube from '@components/YouTube.astro';
-import GoogleMap from '@components/GoogleMap.astro';
-import LinkPreview from '@components/LinkPreview.astro';
-
-# ${answers.title}
+${importStatements}
 
 여기에 내용을 작성하세요.
-
-## 섹션 제목
-
-내용...
-
-### 하위 섹션
-
-더 자세한 내용...
-
-\`\`\`javascript
-// 코드 예시
-console.log('Hello, World!');
-\`\`\`
-
-> 인용구 예시
-
-- 리스트 아이템 1
-- 리스트 아이템 2
-- 리스트 아이템 3
-
-1. 순서 있는 리스트 1
-2. 순서 있는 리스트 2
-3. 순서 있는 리스트 3
-
-**굵은 글씨** 그리고 *기울임 글씨*
-
-[링크 예시](https://example.com)
-
-![이미지 설명](/post/images/${answers.filename}/image.png)
 `;
 
     // 파일 경로 설정
