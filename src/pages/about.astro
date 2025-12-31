@@ -72,11 +72,7 @@ import { dateRange } from "@lib/utils";
         <ul class="flex flex-col space-y-4">
           <li class="animate">
             <div class="text-sm opacity-75">
-              {
-                dateRange(new Date("2021-06-21"), "Current", {
-                  showPeriod: true,
-                })
-              }
+              {dateRange(new Date("2025-08"), new Date("2025-12"))}
             </div>
             <div class="font-semibold text-black">
               <a
@@ -86,8 +82,21 @@ import { dateRange } from "@lib/utils";
                 >리멤버앤컴퍼니(Remember&Company)</a
               >
             </div>
-            <div class="text-sm opacity-75">Web Frontend Team Tech Lead</div>
-            <article></article>
+            <div class="text-sm opacity-75">Web Frontend Tech Lead</div>
+          </li>
+          <li class="animate">
+            <div class="text-sm opacity-75">
+              {dateRange(new Date("2021-06"), new Date("2025-08"))}
+            </div>
+            <div class="font-semibold text-black">
+              <a
+                href="https://corp.remember.co.kr"
+                target="_blank"
+                rel="noopener noreferrer"
+                >리멤버앤컴퍼니(Remember&Company)</a
+              >
+            </div>
+            <div class="text-sm opacity-75">Frontend Engineer</div>
           </li>
         </ul>
       </section>
