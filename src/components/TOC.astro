@@ -47,24 +47,14 @@ const filteredHeadings = headings.filter(heading =>
       >
         <!-- Progress Line (Desktop Only) -->
         <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-8">
-          <!-- Curved Depth Lines -->
-          <svg 
+          <svg
             id="toc-lines-svg"
-            class="absolute inset-0 w-full h-full" 
+            class="absolute inset-0 w-full h-full"
             aria-hidden="true"
-          >
-            <!-- Lines will be dynamically generated based on TOC items -->
-          </svg>
-          
-          <!-- Dynamic Progress Indicator -->
-          <div 
-            id="toc-progress-indicator" 
-            class="absolute left-1 w-1.5 h-1.5 bg-zinc-900 rounded-full transition-all duration-300 ease-out"
-            style="top: 0; opacity: 0;"
-          ></div>
+          ></svg>
         </div>
-        
-        <!-- TOC List with indent lines -->
+
+        <!-- TOC List -->
         <ul id="toc-links-list" class="mb-2.5 mt-1 list-none space-y-1 pl-0 lg:pl-8 lg:mb-1 lg:space-y-1.5 relative">
           {filteredHeadings.map((heading, index) => (
             <li
@@ -99,105 +89,49 @@ const filteredHeadings = headings.filter(heading =>
 )}
 
 <style>
+  /* Smooth scroll for anchor links */
+  html {
+    scroll-behavior: smooth;
+  }
+
   /* Mobile accordion toggle */
   #toc-toggle:checked ~ #toc-accordion-wrapper {
     grid-template-rows: 1fr;
   }
-  
+
   /* Desktop: always open, hide checkbox behavior */
   @media (min-width: 1024px) {
     #toc-toggle:checked ~ #toc-accordion-wrapper {
       grid-template-rows: 1fr;
     }
   }
-  
-  /* Active link styles */
-  .toc-link-active {
-    color: rgb(0 0 0);
-    font-weight: 500;
-  }
-  
-  @media (min-width: 1024px) {
-    .toc-link-active {
-      color: rgb(39 39 42);
-    }
-  }
-  
-  /* Hover effect on container */
-  @media (min-width: 1024px) {
-    #toc-container:hover .toc-link {
-      color: rgb(113 113 122);
-    }
-    
-    #toc-container:hover .toc-link:hover {
-      color: rgb(0 0 0);
-    }
-    
-    #toc-container:hover .toc-link-active {
-      color: rgb(0 0 0);
-    }
-  }
-  
-  /* Progress indicator pulse animation */
-  @keyframes indicatorPulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.2);
-      opacity: 0.8;
-    }
-  }
-  
-  #toc-progress-indicator {
-    animation: indicatorPulse 2s ease-in-out infinite;
-  }
-  
-  /* Line animations on load */
-  @media (min-width: 1024px) {
-    @keyframes drawPath {
-      from {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 200;
-      }
-      to {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 0;
-      }
-    }
-    
-    .toc-line-path {
-      animation: drawPath 0.8s ease-out forwards;
-    }
-  }
-  
+
   /* Scrollbar styling */
   #toc-accordion-content {
     scrollbar-width: thin;
     scrollbar-color: rgb(161 161 170 / 0.3) transparent;
   }
-  
+
   #toc-accordion-content::-webkit-scrollbar {
     width: 4px;
   }
-  
+
   #toc-accordion-content::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   #toc-accordion-content::-webkit-scrollbar-thumb {
     background-color: rgb(161 161 170 / 0.3);
     border-radius: 2px;
   }
-  
+
   /* Animation for TOC items */
   @media (min-width: 1024px) {
     #toc-links-list > * {
       opacity: 0;
       animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
     }
-    
+
     #toc-links-list > *:nth-child(1) { animation-delay: 0.175s; }
     #toc-links-list > *:nth-child(2) { animation-delay: 0.2s; }
     #toc-links-list > *:nth-child(3) { animation-delay: 0.225s; }
@@ -209,43 +143,102 @@ const filteredHeadings = headings.filter(heading =>
     #toc-links-list > *:nth-child(9) { animation-delay: 0.375s; }
     #toc-links-list > *:nth-child(10) { animation-delay: 0.4s; }
     #toc-links-list > *:nth-child(n+11) { animation-delay: 0.425s; }
+
+    /* CSS Scroll-driven TOC highlight using modern CSS */
+    #toc-links-list {
+      scroll-target-group: auto;
+    }
+
+    /* Active link styles via :target-current */
+    .toc-link:target-current {
+      color: rgb(39 39 42);
+      font-weight: 500;
+      anchor-name: --active-toc;
+    }
+
+    /* CSS Anchor-positioned indicator (the moving dot) */
+    #toc-accordion-content::after {
+      content: '';
+      position: absolute;
+      position-anchor: --active-toc;
+      width: 8px;
+      height: 8px;
+      background: rgb(39 39 42);
+      border-radius: 50%;
+      top: anchor(center);
+      left: anchor(left);
+      transform: translate3d(-28px, -50%, 0);
+      transition: top 0.3s ease-out, left 0.3s ease-out, transform 0.3s ease-out;
+      z-index: 1;
+      will-change: transform, top, left;
+    }
+
+    /* Adjust indicator position per depth */
+    #toc-accordion-content:has(.toc-item[data-depth="3"] .toc-link:target-current)::after {
+      transform: translate3d(-36px, -50%, 0);
+    }
+
+    #toc-accordion-content:has(.toc-item[data-depth="4"] .toc-link:target-current)::after {
+      transform: translate3d(-44px, -50%, 0);
+    }
+
+    /* SVG line animation on load */
+    .toc-line-path {
+      animation: drawPath 0.8s ease-out forwards;
+    }
+
+    @keyframes drawPath {
+      from {
+        stroke-dasharray: 200;
+        stroke-dashoffset: 200;
+      }
+      to {
+        stroke-dasharray: 200;
+        stroke-dashoffset: 0;
+      }
+    }
+
+    /* Hover effect on container */
+    #toc-container:hover .toc-link {
+      color: rgb(113 113 122);
+    }
+
+    #toc-container:hover .toc-link:hover {
+      color: rgb(0 0 0);
+    }
+
+    #toc-container:hover .toc-link:target-current {
+      color: rgb(0 0 0);
+    }
   }
 </style>
 
-<!-- TOC Highlight Script -->
+<!-- TOC Script -->
 <script>
-let headingObserver: IntersectionObserver | null = null
-let contentEndObserver: IntersectionObserver | null = null
-
 function drawTOCLines() {
   const svg = document.getElementById('toc-lines-svg') as SVGElement
   if (!svg) return
-  
+
   const tocItems = document.querySelectorAll('.toc-item')
   if (tocItems.length === 0) return
-  
+
   svg.innerHTML = ''
-  
-  const xPositions = {
-    2: 8,
-    3: 16,
-    4: 24
-  }
-  
+
+  const xPositions = { 2: 8, 3: 16, 4: 24 }
+
   let prevDepth = 2
   let prevY = 0
-  
+
   tocItems.forEach((item, index) => {
     const depth = parseInt((item as HTMLElement).dataset.depth || '2')
     const rect = item.getBoundingClientRect()
     const containerRect = svg.getBoundingClientRect()
     const y = rect.top - containerRect.top + rect.height / 2
-    
+
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    
     const currentX = xPositions[depth as keyof typeof xPositions] || 8
     const prevX = xPositions[prevDepth as keyof typeof xPositions] || 8
-    
+
     if (index === 0) {
       path.setAttribute('d', `M ${currentX} 0 L ${currentX} ${y}`)
     } else {
@@ -256,197 +249,27 @@ function drawTOCLines() {
         path.setAttribute('d', `M ${currentX} ${prevY} L ${currentX} ${y}`)
       }
     }
-    
+
     path.setAttribute('stroke', 'rgb(228 228 231)')
     path.setAttribute('stroke-width', '1')
     path.setAttribute('fill', 'none')
     path.setAttribute('class', 'toc-line-path')
-    
+
     svg.appendChild(path)
-    
+
     prevDepth = depth
     prevY = y
   })
 }
 
-function setupTOCHighlight() {
-  const isDesktop = window.innerWidth >= 1024
-  if (!isDesktop) {
-    return
-  }
-  
-  drawTOCLines()
-  
-  const tocContent = document.getElementById('toc-accordion-content')
-  if (!tocContent) {
-    return
-  }
-  
-  const tocLinksCollection = tocContent.getElementsByTagName('a')
-  if (tocLinksCollection.length === 0) {
-    return
-  }
-  
-  const tocLinks = Array.from(tocLinksCollection, item => item as HTMLAnchorElement)
-  
-  const hasH2Headings = tocLinks.some(linkItem => linkItem.classList.contains('toc-links-h2'))
-  const topLevelClass = hasH2Headings ? 'toc-links-h2' : 'toc-links-h3'
-  const headingMap = new Map<string, HTMLAnchorElement>()
-  tocLinks.forEach((link) => {
-    const id = link.getAttribute('href')?.substring(1)
-    if (id) {
-      headingMap.set(id, link)
-    }
-  })
-  
-  let activeLink: HTMLAnchorElement | null = null
-  
-  function highlightParentLink(childLink: HTMLAnchorElement) {
-    const currentIndex = tocLinks.indexOf(childLink)
-    for (let i = currentIndex - 1; i >= 0; i--) {
-      const linkItem = tocLinks[i]
-      if (linkItem.classList.contains(topLevelClass)) {
-        linkItem.classList.add('toc-link-active')
-        break
-      }
-    }
-  }
-  
-  function highlightLink(link: HTMLAnchorElement) {
-    if (link === activeLink) {
-      return
-    }
-    
-    tocLinks.forEach((linkItem) => {
-      linkItem.classList.remove('toc-link-active')
-    })
-    
-    link.classList.add('toc-link-active')
-    
-    if (!link.classList.contains(topLevelClass)) {
-      highlightParentLink(link)
-    }
-    
-    activeLink = link
-    
-    const linkElement = link.closest('.toc-item') as HTMLElement
-    if (linkElement) {
-      const indicator = document.getElementById('toc-progress-indicator')
-      if (indicator) {
-        const linkRect = linkElement.getBoundingClientRect()
-        const svgRect = document.getElementById('toc-lines-svg')?.getBoundingClientRect()
-        if (svgRect) {
-          const relativeTop = linkRect.top - svgRect.top + linkRect.height / 2 - 3
-          indicator.style.top = `${relativeTop}px`
-          indicator.style.opacity = '1'
-          
-          const depth = parseInt(linkElement.dataset.depth || '2')
-          if (depth === 2) {
-            indicator.style.left = '5px'  // 8px line position - 3px for centering
-          } else if (depth === 3) {
-            indicator.style.left = '13px' // 16px line position - 3px for centering
-          } else if (depth === 4) {
-            indicator.style.left = '21px' // 24px line position - 3px for centering
-          }
-        }
-      }
-    }
-    
-    link.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    })
-  }
-  
-  headingObserver = new IntersectionObserver(
-    (entries: IntersectionObserverEntry[]) => {
-      const headingId = entries.find(entry => entry.isIntersecting)?.target?.id
-      if (headingId) {
-        const link = headingMap.get(headingId)
-        if (link) {
-          highlightLink(link)
-        }
-      }
-    },
-    {
-      rootMargin: '0% 0% -66% 0%',
-      threshold: [0.4],
-    },
-  )
-  
-  Array.from(document.querySelectorAll('h2, h3, h4'))
-    .filter(heading => heading.id && heading.id !== 'footnotes')
-    .forEach(heading => headingObserver?.observe(heading))
-  
-  const contentEndElement = document.querySelector('article')?.lastElementChild
-  if (!contentEndElement) {
-    return
-  }
-  
-  contentEndObserver = new IntersectionObserver(
-    (entries: IntersectionObserverEntry[]) => {
-      if (!entries[0].isIntersecting && entries[0].boundingClientRect.top < 0) {
-        tocLinks.forEach(linkItem => linkItem.classList.remove('toc-link-active'))
-        activeLink = null
-        
-        const indicator = document.getElementById('toc-progress-indicator')
-        if (indicator) {
-          indicator.style.opacity = '0'
-        }
-      }
-    },
-    {
-      rootMargin: '0px 0px 0px 0px',
-      threshold: 0,
-    },
-  )
-  
-  contentEndObserver?.observe(contentEndElement)
-  
-  if (tocLinks.length > 0) {
-    highlightLink(tocLinks[0])
-  }
-}
-
-function cleanupTOCObservers() {
-  headingObserver?.disconnect()
-  contentEndObserver?.disconnect()
-  headingObserver = null
-  contentEndObserver = null
-}
-
-// Smooth scroll for TOC links
-function setupSmoothScroll() {
-  const tocLinks = document.querySelectorAll('#toc-links-list a')
-  
-  tocLinks.forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault()
-      const targetId = link.getAttribute('href')?.substring(1)
-      if (targetId) {
-        const targetElement = document.getElementById(targetId)
-        if (targetElement) {
-          targetElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          })
-          // Update URL without scrolling
-          history.pushState(null, '', `#${targetId}`)
-        }
-      }
-    })
-  })
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-  setupTOCHighlight()
-  setupSmoothScroll()
+  if (window.innerWidth >= 1024) {
+    drawTOCLines()
+  }
 })
-
 window.addEventListener('resize', () => {
-  cleanupTOCObservers()
-  setupTOCHighlight()
+  if (window.innerWidth >= 1024) {
+    drawTOCLines()
+  }
 })
-
-window.addEventListener('beforeunload', cleanupTOCObservers)
 </script>
