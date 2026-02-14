@@ -66,6 +66,10 @@ const t = useTranslations(currentLocale as any);
   title={post.data.title}
   description={post.data.description ?? ""}
   heroImage={post.data.heroImage}
+  webmcpPageType="blog-post"
+  webmcpHasTranslation={hasTranslation}
+  webmcpTranslationSlug={translationSlug}
+  webmcpCurrentLocale={currentLocale}
 >
   <!--- Starts component --->
   <div id="scroll-progress" class="bg-blue-600 h-1 fixed top-0 left-0 z-50">

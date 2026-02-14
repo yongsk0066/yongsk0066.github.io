@@ -1,0 +1,180 @@
+---
+interface Props {
+  pageType?: "blog-post" | "blog-list" | "other";
+  hasTranslation?: boolean;
+  translationSlug?: string;
+  currentLocale?: string;
+}
+
+const {
+  pageType = "other",
+  hasTranslation = false,
+  translationSlug = "",
+  currentLocale = Astro.currentLocale ?? "ko",
+} = Astro.props;
+---
+
+<div
+  id="webmcp-data"
+  hidden
+  data-page-type={pageType}
+  data-has-translation={String(hasTranslation)}
+  data-translation-slug={translationSlug}
+  data-current-locale={currentLocale}
+></div>
+
+<script is:inline>
+(function() {
+  if (!('modelContext' in navigator)) return;
+
+  function registerTools() {
+    // 1. Clear previous registrations
+    try {
+      navigator.modelContext.clearContext();
+    } catch(e) {}
+
+    // 2. Read page context from data attributes
+    var el = document.getElementById('webmcp-data');
+    if (!el) return;
+    var pageType = el.dataset.pageType || 'other';
+    var hasTranslation = el.dataset.hasTranslation === 'true';
+    var translationSlug = el.dataset.translationSlug || '';
+    var currentLocale = el.dataset.currentLocale || 'ko';
+
+    console.log('[WebMCP] pageType:', pageType, '| locale:', currentLocale, '| hasTranslation:', hasTranslation);
+
+    // 3. Pre-fetch search index (non-blocking)
+    if (!window.__webmcpSearchCache) {
+      fetch('/search-index.json')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          window.__webmcpSearchCache = data;
+          console.log('[WebMCP] Search index loaded:', data.length, 'posts');
+        })
+        .catch(function(err) {
+          console.error('[WebMCP] Failed to load search index:', err);
+        });
+    }
+
+    // 4. Tool: search_posts (all pages)
+    navigator.modelContext.registerTool({
+      name: 'search_posts',
+      description: 'Search blog posts by keyword. Returns matching posts with title, URL, date, and categories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search keyword' },
+          locale: { type: 'string', enum: ['ko', 'en'], description: 'Filter by language (optional)' }
+        },
+        required: ['query']
+      },
+      execute: function(input) {
+        var posts = window.__webmcpSearchCache;
+        if (!posts) {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: 'Search index not loaded yet. Please try again.' }) }] };
+        }
+        var q = (input.query || '').toLowerCase();
+        var results = posts.filter(function(p) {
+          if (input.locale && p.locale !== input.locale) return false;
+          var hay = (p.title + ' ' + p.description + ' ' + (p.categories || []).join(' ')).toLowerCase();
+          return hay.indexOf(q) !== -1;
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(results.slice(0, 20)) }] };
+      }
+    });
+
+    // 5. Tool: switch_language (all pages)
+    navigator.modelContext.registerTool({
+      name: 'switch_language',
+      description: 'Switch between Korean and English. Returns new URL or error if no translation available.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          targetLocale: { type: 'string', enum: ['ko', 'en'], description: 'Target language' }
+        },
+        required: ['targetLocale']
+      },
+      execute: function(input) {
+        var target = input.targetLocale;
+        if (target === currentLocale) {
+          return { content: [{ type: 'text', text: JSON.stringify({ url: window.location.href, message: 'Already viewing in this language.' }) }] };
+        }
+
+        var newUrl = '';
+
+        if (pageType === 'blog-post') {
+          if (!hasTranslation) {
+            return { content: [{ type: 'text', text: JSON.stringify({ error: 'No translation available for this post.' }) }] };
+          }
+          newUrl = '/blog/' + translationSlug + '/';
+        } else if (pageType === 'blog-list') {
+          newUrl = target === 'en' ? '/blog/en/' : '/blog/';
+        } else {
+          var path = window.location.pathname;
+          if (target === 'en') {
+            newUrl = path.replace(/\/$/, '') + '/en/';
+            if (path === '/') newUrl = '/en/';
+          } else {
+            newUrl = path.replace(/\/en\/?$/, '/');
+            if (newUrl === '') newUrl = '/';
+          }
+        }
+
+        window.location.href = newUrl;
+        return { content: [{ type: 'text', text: JSON.stringify({ url: newUrl, message: 'Navigating to ' + target + ' version.' }) }] };
+      }
+    });
+
+    // 6. Blog-post only tools
+    if (pageType === 'blog-post') {
+      navigator.modelContext.registerTool({
+        name: 'get_table_of_contents',
+        description: 'Get headings for the current blog post with text, level, and anchor ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        },
+        execute: function() {
+          var headings = document.querySelectorAll('#post-content h2, #post-content h3, #post-content h4');
+          var toc = [];
+          headings.forEach(function(h) {
+            toc.push({
+              level: parseInt(h.tagName.charAt(1)),
+              text: h.textContent.trim(),
+              id: h.id
+            });
+          });
+          return { content: [{ type: 'text', text: JSON.stringify(toc) }] };
+        }
+      });
+
+      navigator.modelContext.registerTool({
+        name: 'navigate_to_section',
+        description: 'Scroll to a section by heading ID. Use get_table_of_contents to find available IDs.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sectionId: { type: 'string', description: 'The heading ID to scroll to' }
+          },
+          required: ['sectionId']
+        },
+        execute: function(input) {
+          var target = document.getElementById(input.sectionId);
+          if (!target) {
+            return { content: [{ type: 'text', text: JSON.stringify({ error: 'Section not found: ' + input.sectionId }) }] };
+          }
+          target.scrollIntoView({ behavior: 'smooth' });
+          return { content: [{ type: 'text', text: JSON.stringify({ success: true, message: 'Scrolled to: ' + input.sectionId }) }] };
+        }
+      });
+
+      console.log('[WebMCP] Registered 4 tools (blog-post)');
+    } else {
+      console.log('[WebMCP] Registered 2 tools (' + pageType + ')');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', registerTools);
+  document.addEventListener('astro:after-swap', registerTools);
+})();
+</script>

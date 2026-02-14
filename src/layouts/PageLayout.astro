@@ -2,6 +2,7 @@
 import Head from "@components/Head.astro";
 import Header from "@components/Header.astro";
 import Footer from "@components/Footer.astro";
+import WebMCP from "@components/WebMCP.astro";
 import ClarityIdentify from "@components/ClarityIdentify.astro";
 import { SITE_TITLE } from "@consts";
 
@@ -9,9 +10,21 @@ type Props = {
   title: string;
   description: string;
   heroImage?: string;
+  webmcpPageType?: "blog-post" | "blog-list" | "other";
+  webmcpHasTranslation?: boolean;
+  webmcpTranslationSlug?: string;
+  webmcpCurrentLocale?: string;
 };
 
-const { title, description, heroImage } = Astro.props;
+const {
+  title,
+  description,
+  heroImage,
+  webmcpPageType = "other",
+  webmcpHasTranslation = false,
+  webmcpTranslationSlug = "",
+  webmcpCurrentLocale = Astro.currentLocale,
+} = Astro.props;
 ---
 
 <!doctype html>
@@ -62,5 +75,11 @@ const { title, description, heroImage } = Astro.props;
       <slot />
     </main>
     <Footer />
+    <WebMCP
+      pageType={webmcpPageType}
+      hasTranslation={webmcpHasTranslation}
+      translationSlug={webmcpTranslationSlug}
+      currentLocale={webmcpCurrentLocale}
+    />
   </body>
 </html>
