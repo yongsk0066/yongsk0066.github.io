@@ -1,13 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "yongseok-blog",
+  "main": "src/worker.js",
   "compatibility_date": "2025-01-01",
 
   // Static assets configuration for Astro SSG output
   "assets": {
     "directory": "./dist",
-    // SPA fallback for client-side routing
-    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "404-page",
     "html_handling": "auto-trailing-slash"
   }
 }
