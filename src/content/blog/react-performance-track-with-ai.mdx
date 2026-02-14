@@ -1,0 +1,35 @@
+---
+title: "React 성능측정과 AI "
+description: "React 성능측정과 AI "
+author: "Yongseok"
+categories: ["blog"]
+date: "2026-01-25T04:42:26.224Z"
+heroImage: "/post/images/react-performance-track-with-ai/thumb.png"
+draft: true
+---
+
+import LinkPreview from "../../components/LinkPreview.astro";
+import YouTube from "@components/YouTube.astro";
+
+## 서론
+
+작년(2025)에 React Devtools의 기능이 강화되었다. Component의 랜더링 및 Scheduler 에 대한 정보를
+Chrome Devtools의 preformance 탭에서 같이 볼 수 있게 되었다.
+
+<LinkPreview src="https://react.dev/reference/dev-tools/react-performance-tracks" />
+<YouTube src="https://youtu.be/CclO4tPoebs?si=Wh87iqqdCO9TFxrE" />
+
+Chrome팀에서 chrome의 조작하고 devtools 의 정보를 접근할 수 있는 Chrome-devtools-mcp 를 공개했다.
+이걸 통해서 AI가 Performance 관련 측정을 할 수 있게 되었다.
+
+<LinkPreview src="https://github.com/ChromeDevTools/chrome-devtools-mcp" />
+
+claude code 와 같은 개발을 도와주는 여러 AI 툴들이 등장했다. 이 AI들은 CLI에서 동작하면서 React 코드도 짜주고 개발서버도 실행할 수 있다.
+mcp 와 같은 도구들도 활용할 수 있다.
+
+위의 세가지를 한번에 누릴 순 없을까? 생각이 들었다. AI 가 chrome devtools mcp 에 접근할 수 있고 chrome devtools performance에 React의 랜더링 및 스케쥴링 정보가 보여진다면 AI 가 코드도 짜주고
+어플리케이션의 디테일한 React 성능 지표들도 확인 할 수 있지 않을까? 이 세가지를 연결해주려면 무엇이 필요할까?
+
+결론 부터 말하자면 chrome-devtools-mcp 를 확장하여 AI에게 mcp 를 통해서 React Devtools의 정보를 보여줄 수 있다!
+
+여기까지 도달하기위해 어떤 것들에 대한 이해가 필요할지에 대해 같이 떠나보자
