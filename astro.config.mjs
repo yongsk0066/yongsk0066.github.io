@@ -1,4 +1,3 @@
-import lit from "@astrojs/lit";
 import mdx from "@astrojs/mdx";
 import { defineConfig } from 'astro/config';
 import remarkMath from "remark-math";
@@ -27,7 +26,7 @@ export default defineConfig({
       prefixDefaultLocale: false
     }
   },
-  integrations: [lit(), mdx({
+  integrations: [mdx({
     optimize: true,
     remarkPlugins: [remarkMath],
     rehypePlugins: [() => rehypeKatex({
