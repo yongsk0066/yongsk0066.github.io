@@ -3,9 +3,9 @@ import { getCollection } from 'astro:content';
 import { SITE_DESCRIPTION, SITE_TITLE } from '@consts';
 
 export async function GET(context) {
-	const posts = await getCollection("blog", ({ id }) => {
+	const posts = (await getCollection("blog", ({ id }) => {
     return !id.startsWith("en/");
-  })
+  })).filter((post) => !post.data.draft);
 
 	// 날짜 기준 내림차순 정렬 (최신 글이 먼저 표시)
 	posts.sort((a, b) => new Date(b.data.date).getTime() - new Date(a.data.date).getTime());

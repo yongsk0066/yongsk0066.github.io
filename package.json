@@ -9,15 +9,18 @@
     "preview": "astro preview",
     "astro": "astro",
     "new": "node scripts/create-post.js",
-    "new:post": "node scripts/create-post.js"
+    "new:post": "node scripts/create-post.js",
+    "cf:dev": "yarn build && wrangler dev",
+    "cf:deploy": "yarn build && wrangler deploy",
+    "cf:preview": "wrangler dev"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.6",
     "@astrojs/lit": "^4.3.0",
     "@astrojs/mdx": "4.3.13",
     "@astrojs/react": "4.4.2",
-    "@astrojs/rss": "4.0.14",
-    "@astrojs/sitemap": "3.6.0",
+    "@astrojs/rss": "4.0.15",
+    "@astrojs/sitemap": "3.7.0",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@lit-labs/ssr": "^3.2.2",
     "@lit-labs/ssr-client": "^1.1.7",
@@ -29,7 +32,7 @@
     "@react-three/rapier": "^2.2.0",
     "@tailwindcss/vite": "^4.1.18",
     "@webcomponents/template-shadowroot": "^0.2.1",
-    "astro": "5.16.5",
+    "astro": "5.16.11",
     "clsx": "^2.1.1",
     "debounce": "^3.0.0",
     "framer-motion": "^12.23.26",
@@ -68,7 +71,8 @@
     "inquirer": "^13.0.2",
     "prettier": "^3.7.4",
     "prettier-plugin-astro": "^0.14.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.61.1"
   },
   "packageManager": "yarn@4.10.3"
 }

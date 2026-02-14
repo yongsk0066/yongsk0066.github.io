@@ -5,8 +5,7 @@ import PageLayout from "@layouts/PageLayout.astro";
 import { type CollectionEntry, getCollection } from "astro:content";
 
 const data = (await getCollection("blog"))
-  .filter((post) => !post.data.draft)
-
+  .filter((post) => import.meta.env.DEV || !post.data.draft)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .filter((post, index, self) => {
     const hasEnglishVersion = self.some((p) => p.id === `en/${post.id}`);
