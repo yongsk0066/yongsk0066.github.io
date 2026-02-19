@@ -218,7 +218,8 @@ void main() {
     : min(floor(cellPos / u_detail), u_grid - 1.0);
   vec2 dataUV = (dataCell + 0.5) / u_grid;
   vec3 color = texture(u_frame, dataUV).rgb;
-  float luma = dot(vec3(0.2126, 0.7152, 0.0722), color);
+  float rawLuma = dot(vec3(0.2126, 0.7152, 0.0722), color);
+  float luma = smoothstep(0.15, 0.85, rawLuma);
 
   float t = 0.0;
 
