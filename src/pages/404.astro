@@ -18,7 +18,7 @@ import PageLayout from "@layouts/PageLayout.astro";
             referrerpolicy="strict-origin-when-cross-origin"
             loading="lazy"
             allowfullscreen></iframe>
-          <canvas class="ascii-overlay" width="600" height="400"></canvas>
+          <canvas class="ascii-overlay" width="1500" height="1000"></canvas>
           <div class="controls">
             <button id="btn-play" type="button" aria-label="일시정지">
               <svg
@@ -133,7 +133,7 @@ import PageLayout from "@layouts/PageLayout.astro";
   const asciiImg = new Image();
   asciiImg.src = "/assets/images/ascii.png";
 
-  const BLOCK = 10;
+  const BLOCK = 25;
   const GRID = 10;
   const CHAR_PX = 256 / GRID; // 25.6
   const VIDEO_START = 32;
@@ -203,10 +203,10 @@ import PageLayout from "@layouts/PageLayout.astro";
 
         ctx.drawImage(
           asciiImg,
-          charCol * CHAR_PX,
-          charRow * CHAR_PX,
-          CHAR_PX,
-          CHAR_PX,
+          Math.round(charCol * CHAR_PX),
+          Math.round(charRow * CHAR_PX),
+          Math.round(CHAR_PX),
+          Math.round(CHAR_PX),
           c * BLOCK,
           r * BLOCK,
           BLOCK,
@@ -248,11 +248,7 @@ import PageLayout from "@layouts/PageLayout.astro";
             player.seekTo(32, true);
             player.playVideo();
           }
-          const playing = e.data === YT.PlayerState.PLAYING;
-          setPlaying(playing);
-          document
-            .querySelector(".video-crop")!
-            .toggleAttribute("data-paused", !playing);
+          setPlaying(e.data === YT.PlayerState.PLAYING);
         },
       },
     });
@@ -290,7 +286,7 @@ import PageLayout from "@layouts/PageLayout.astro";
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 3;
+    z-index: 2;
     font-size: 10rem;
     font-weight: 700;
     margin: 0;
@@ -337,30 +333,12 @@ import PageLayout from "@layouts/PageLayout.astro";
     image-rendering: pixelated;
   }
 
-  .video-crop::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: rgba(0, 0, 0, 0);
-    backdrop-filter: blur(0);
-    transition:
-      background 0.3s,
-      backdrop-filter 0.3s;
-    pointer-events: none;
-  }
-
-  .video-crop[data-paused]::after {
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-  }
-
   .controls {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 4;
+    z-index: 3;
     display: flex;
     gap: 0.25rem;
     padding: 0.5rem;
