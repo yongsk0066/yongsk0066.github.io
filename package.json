@@ -68,6 +68,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@types/three": "^0.182.0",
+    "@types/youtube": "^0.1.2",
     "inquirer": "^13.0.2",
     "prettier": "^3.7.4",
     "prettier-plugin-astro": "^0.14.1",
