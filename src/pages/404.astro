@@ -81,6 +81,19 @@ import PageLayout from "@layouts/PageLayout.astro";
                   stroke-linecap="round"></path>
               </svg>
             </button>
+            <button id="btn-mode" type="button" aria-label="효과: ASCII">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="20"
+                height="20"
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+              </svg>
+            </button>
           </div>
         </div>
       </figure>
@@ -102,6 +115,7 @@ import PageLayout from "@layouts/PageLayout.astro";
   let player: YT.Player;
   const btnPlay = document.getElementById("btn-play")!;
   const btnMute = document.getElementById("btn-mute")!;
+  const btnMode = document.getElementById("btn-mode")!;
 
   function setPlaying(playing: boolean) {
     btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
@@ -127,6 +141,47 @@ import PageLayout from "@layouts/PageLayout.astro";
   setPlaying(true);
   setMuted(true);
 
+  // --- Mode state ---
+  const MODE_NAMES = ["ASCII", "Receipt", "ノハメラマ木", "Stripes", "Weave"];
+  let currentMode = 0;
+  let lastMode = -1;
+
+  // prettier-ignore
+  const STRIPES_M = [
+    0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2,
+    0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0,
+    1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0,
+    1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2,
+    0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2,
+    0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0,
+    1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0,
+    1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2,
+  ];
+
+  // prettier-ignore
+  const CROSS_STRIPES_M = [
+    1.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.0,
+    0.2, 1.0, 0.2, 0.2, 0.2, 0.2, 1.0, 0.2,
+    0.2, 0.2, 1.0, 0.2, 0.2, 1.0, 0.2, 0.2,
+    0.2, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 0.2,
+    0.2, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 0.2,
+    0.2, 0.2, 1.0, 0.2, 0.2, 1.0, 0.2, 0.2,
+    0.2, 1.0, 0.2, 0.2, 0.2, 0.2, 1.0, 0.2,
+    1.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.0,
+  ];
+
+  // prettier-ignore
+  const WEAVE_M = [
+    0.99, 0.75, 0.2,  0.2,  0.2,  0.2,  0.99, 0.99,
+    0.99, 0.99, 0.75, 0.2,  0.2,  0.99, 0.99, 0.75,
+    0.2,  0.99, 0.99, 0.75, 0.99, 0.99, 0.2,  0.2,
+    0.2,  0.2,  0.99, 0.99, 0.99, 0.2,  0.2,  0.2,
+    0.2,  0.2,  0.2,  0.99, 0.99, 0.99, 0.2,  0.2,
+    0.2,  0.2,  0.99, 0.99, 0.75, 0.99, 0.99, 0.2,
+    0.75, 0.99, 0.99, 0.2,  0.2,  0.75, 0.99, 0.99,
+    0.99, 0.99, 0.2,  0.2,  0.2,  0.2,  0.75, 0.99,
+  ];
+
   // --- Pre-baked ASCII overlay ---
   const asciiCanvas = document.querySelector<HTMLCanvasElement>(".ascii-overlay")!;
   const ctx = asciiCanvas.getContext("2d")!;
@@ -137,6 +192,23 @@ import PageLayout from "@layouts/PageLayout.astro";
   const GRID = 10;
   const CHAR_PX = 256 / GRID; // 25.6
   const VIDEO_START = 32;
+  const DETAIL = 1.5;
+
+  // Generate ASCII character texture (scene 3 style)
+  const ASCII_CHARS = "./ノハメラマ木";
+  const charCanvas = document.createElement("canvas");
+  const charCtx = charCanvas.getContext("2d")!;
+  charCanvas.width = BLOCK * ASCII_CHARS.length;
+  charCanvas.height = BLOCK;
+  charCtx.fillStyle = "black";
+  charCtx.fillRect(0, 0, charCanvas.width, charCanvas.height);
+  charCtx.fillStyle = "white";
+  charCtx.font = `${BLOCK}px monospace`;
+  charCtx.textBaseline = "middle";
+  charCtx.textAlign = "center";
+  [...ASCII_CHARS].forEach((char, i) => {
+    charCtx.fillText(char, (i + 0.5) * BLOCK, BLOCK / 2);
+  });
 
   let asciiData: {
     cols: number;
@@ -162,9 +234,10 @@ import PageLayout from "@layouts/PageLayout.astro";
 
   let lastFrameIdx = -1;
 
-  function renderAscii() {
-    requestAnimationFrame(renderAscii);
-    if (!asciiData || !asciiImg.complete || !player) return;
+  function renderOverlay() {
+    requestAnimationFrame(renderOverlay);
+    if (!asciiData || !player) return;
+    if (currentMode === 0 && !asciiImg.complete) return;
 
     let currentTime: number;
     try {
@@ -174,71 +247,157 @@ import PageLayout from "@layouts/PageLayout.astro";
     }
 
     const clipTime = Math.max(0, currentTime - VIDEO_START);
-    const frameIdx = Math.floor(clipTime * asciiData.fps) % asciiData.frameCount;
-    if (frameIdx === lastFrameIdx) return;
+    const frameIdx =
+      Math.floor(clipTime * asciiData.fps) % asciiData.frameCount;
+    if (frameIdx === lastFrameIdx && currentMode === lastMode) return;
     lastFrameIdx = frameIdx;
+    lastMode = currentMode;
 
     const { cols, rows, frames } = asciiData;
-    const bpf = cols * rows * 3; // bytes per frame
+    const bpf = cols * rows * 3;
     const offset = frameIdx * bpf;
-    const w = cols * BLOCK; // 600
-    const h = rows * BLOCK; // 400
+    const w = cols * BLOCK;
+    const h = rows * BLOCK;
 
-    // 1. Draw ASCII characters (white on black) based on brightness
-    ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, w, h);
+    if (currentMode === 0 || currentMode === 2) {
+      // --- Mode 0: Original ASCII (ascii.png) ---
+      // --- Mode 2: ノハメラマ木 ASCII (scene 3, charCanvas) ---
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, w, h);
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const i = offset + (r * cols + c) * 3;
-        const sr = frames[i],
-          sg = frames[i + 1],
-          sb = frames[i + 2];
-        const lum = (sr + sg + sb) / 765; // 0..1
-
-        // Select character: brightness → column (pow curve from original shader)
-        const charCol = Math.min(Math.floor(GRID * lum * lum), GRID - 1);
-        // Deterministic row per cell position (like random in shader)
-        const charRow = ((r * 7 + c * 13) & 0xff) % GRID;
-
-        ctx.drawImage(
-          asciiImg,
-          Math.round(charCol * CHAR_PX),
-          Math.round(charRow * CHAR_PX),
-          Math.round(CHAR_PX),
-          Math.round(CHAR_PX),
-          c * BLOCK,
-          r * BLOCK,
-          BLOCK,
-          BLOCK,
-        );
+      if (currentMode === 0) {
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = offset + (r * cols + c) * 3;
+            const lum = (frames[i] + frames[i + 1] + frames[i + 2]) / 765;
+            const charCol = Math.min(
+              Math.floor(GRID * lum * lum),
+              GRID - 1,
+            );
+            const charRow = ((r * 7 + c * 13) & 0xff) % GRID;
+            ctx.drawImage(
+              asciiImg,
+              Math.round(charCol * CHAR_PX),
+              Math.round(charRow * CHAR_PX),
+              Math.round(CHAR_PX),
+              Math.round(CHAR_PX),
+              c * BLOCK,
+              r * BLOCK,
+              BLOCK,
+              BLOCK,
+            );
+          }
+        }
+      } else {
+        const charCount = ASCII_CHARS.length;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = offset + (r * cols + c) * 3;
+            const lum = (frames[i] + frames[i + 1] + frames[i + 2]) / 765;
+            const charIdx = Math.min(
+              Math.floor(lum * (charCount - 1)),
+              charCount - 1,
+            );
+            ctx.drawImage(
+              charCanvas,
+              charIdx * BLOCK,
+              0,
+              BLOCK,
+              BLOCK,
+              c * BLOCK,
+              r * BLOCK,
+              BLOCK,
+              BLOCK,
+            );
+          }
+        }
       }
-    }
 
-    // 2. Post-process: white chars → video color, black bg → dark
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const d = imgData.data;
-
-    for (let y = 0; y < h; y++) {
-      const br = Math.min((y / BLOCK) | 0, rows - 1);
-      for (let x = 0; x < w; x++) {
-        const bc = Math.min((x / BLOCK) | 0, cols - 1);
-        const pi = (y * w + x) * 4;
-        const fi = offset + (br * cols + bc) * 3;
-        const t = (d[pi] + d[pi + 1] + d[pi + 2]) / 765; // 0=bg, 1=char
-
-        // char → video color, bg → dark semi-transparent
-        d[pi] = (frames[fi] * t) | 0;
-        d[pi + 1] = (frames[fi + 1] * t) | 0;
-        d[pi + 2] = (frames[fi + 2] * t) | 0;
-        d[pi + 3] = (227 * (1 - t) + 255 * t) | 0;
+      // Post-process: white chars → video color, black bg → dark
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const d = imgData.data;
+      for (let y = 0; y < h; y++) {
+        const br = Math.min((y / BLOCK) | 0, rows - 1);
+        for (let x = 0; x < w; x++) {
+          const bc = Math.min((x / BLOCK) | 0, cols - 1);
+          const pi = (y * w + x) * 4;
+          const fi = offset + (br * cols + bc) * 3;
+          const t = (d[pi] + d[pi + 1] + d[pi + 2]) / 765;
+          d[pi] = (frames[fi] * t) | 0;
+          d[pi + 1] = (frames[fi + 1] * t) | 0;
+          d[pi + 2] = (frames[fi + 2] * t) | 0;
+          d[pi + 3] = (227 * (1 - t) + 255 * t) | 0;
+        }
       }
-    }
+      ctx.putImageData(imgData, 0, 0);
+    } else {
+      // --- Mode 1: Receipt / Mode 3: Stripes / Mode 4: Weave ---
+      // Per-pixel rendering with 1.5x detail grid
+      const vCols = Math.floor(cols * DETAIL);
+      const vRows = Math.floor(rows * DETAIL);
+      const vBlock = w / vCols;
+      const imgData = ctx.createImageData(w, h);
+      const d = imgData.data;
 
-    ctx.putImageData(imgData, 0, 0);
+      for (let y = 0; y < h; y++) {
+        const vr = Math.min((y / vBlock) | 0, vRows - 1);
+        const br = Math.min((vr / DETAIL) | 0, rows - 1);
+        for (let x = 0; x < w; x++) {
+          const vc = Math.min((x / vBlock) | 0, vCols - 1);
+          const bc = Math.min((vc / DETAIL) | 0, cols - 1);
+          const pi = (y * w + x) * 4;
+          const fi = offset + (br * cols + bc) * 3;
+          const luma =
+            (frames[fi] + frames[fi + 1] + frames[fi + 2]) / 765;
+          const cellUVx = x / vBlock - vc;
+          const cellUVy = y / vBlock - vr;
+
+          let t = 0;
+
+          if (currentMode === 1) {
+            // Receipt (scene 1): horizontal bar width based on luma
+            let lineWidth = 0.0;
+            if (luma > 0.0) lineWidth = 1.0;
+            if (luma > 0.3) lineWidth = 0.7;
+            if (luma > 0.5) lineWidth = 0.5;
+            if (luma > 0.7) lineWidth = 0.3;
+            if (luma > 0.9) lineWidth = 0.1;
+            if (luma > 0.99) lineWidth = 0.0;
+            t =
+              cellUVy > 0.05 &&
+              cellUVy < 0.95 &&
+              cellUVx > 0.0 &&
+              cellUVx < lineWidth
+                ? 1
+                : 0;
+          } else if (currentMode === 3) {
+            // Stripes (scene 5 pattern 0): two threshold matrices
+            const mx = Math.min((cellUVx * 8) | 0, 7);
+            const my = Math.min((cellUVy * 8) | 0, 7);
+            const mIdx = my * 8 + mx;
+            const threshold =
+              luma < 0.6 ? STRIPES_M[mIdx] : CROSS_STRIPES_M[mIdx];
+            t = threshold <= luma ? 1 : 0;
+          } else {
+            // Weave (scene 5 pattern 1): single threshold matrix
+            const mx = Math.min((cellUVx * 8) | 0, 7);
+            const my = Math.min((cellUVy * 8) | 0, 7);
+            const mIdx = my * 8 + mx;
+            t = WEAVE_M[mIdx] <= luma ? 1 : 0;
+          }
+
+          d[pi] = (frames[fi] * t) | 0;
+          d[pi + 1] = (frames[fi + 1] * t) | 0;
+          d[pi + 2] = (frames[fi + 2] * t) | 0;
+          d[pi + 3] = (227 * (1 - t) + 255 * t) | 0;
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+    }
   }
 
-  requestAnimationFrame(renderAscii);
+  requestAnimationFrame(renderOverlay);
 
   (window as any).onYouTubeIframeAPIReady = () => {
     player = new YT.Player("yt-player", {
@@ -272,6 +431,11 @@ import PageLayout from "@layouts/PageLayout.astro";
       player.mute();
       setMuted(true);
     }
+  });
+
+  btnMode.addEventListener("click", () => {
+    currentMode = (currentMode + 1) % MODE_NAMES.length;
+    btnMode.setAttribute("aria-label", `효과: ${MODE_NAMES[currentMode]}`);
   });
 </script>
 
