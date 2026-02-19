@@ -18,6 +18,7 @@ import PageLayout from "@layouts/PageLayout.astro";
             referrerpolicy="strict-origin-when-cross-origin"
             loading="lazy"
             allowfullscreen></iframe>
+          <canvas class="ascii-overlay" width="600" height="400"></canvas>
           <div class="controls">
             <button id="btn-play" type="button" aria-label="일시정지">
               <svg
@@ -126,6 +127,119 @@ import PageLayout from "@layouts/PageLayout.astro";
   setPlaying(true);
   setMuted(true);
 
+  // --- Pre-baked ASCII overlay ---
+  const asciiCanvas = document.querySelector<HTMLCanvasElement>(".ascii-overlay")!;
+  const ctx = asciiCanvas.getContext("2d")!;
+  const asciiImg = new Image();
+  asciiImg.src = "/assets/images/ascii.png";
+
+  const BLOCK = 10;
+  const GRID = 10;
+  const CHAR_PX = 256 / GRID; // 25.6
+  const VIDEO_START = 32;
+
+  let asciiData: {
+    cols: number;
+    rows: number;
+    fps: number;
+    frameCount: number;
+    frames: Uint8Array;
+  } | null = null;
+
+  // Load pre-baked data
+  fetch("/assets/404-ascii.bin")
+    .then((r) => r.arrayBuffer())
+    .then((buf) => {
+      const v = new DataView(buf);
+      asciiData = {
+        cols: v.getUint16(0, true),
+        rows: v.getUint16(2, true),
+        fps: v.getUint16(4, true),
+        frameCount: v.getUint16(6, true),
+        frames: new Uint8Array(buf, 8),
+      };
+    });
+
+  let lastFrameIdx = -1;
+
+  function renderAscii() {
+    requestAnimationFrame(renderAscii);
+    if (!asciiData || !asciiImg.complete || !player) return;
+
+    let currentTime: number;
+    try {
+      currentTime = player.getCurrentTime();
+    } catch {
+      return;
+    }
+
+    const clipTime = Math.max(0, currentTime - VIDEO_START);
+    const frameIdx = Math.floor(clipTime * asciiData.fps) % asciiData.frameCount;
+    if (frameIdx === lastFrameIdx) return;
+    lastFrameIdx = frameIdx;
+
+    const { cols, rows, frames } = asciiData;
+    const bpf = cols * rows * 3; // bytes per frame
+    const offset = frameIdx * bpf;
+    const w = cols * BLOCK; // 600
+    const h = rows * BLOCK; // 400
+
+    // 1. Draw ASCII characters (white on black) based on brightness
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, w, h);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = offset + (r * cols + c) * 3;
+        const sr = frames[i],
+          sg = frames[i + 1],
+          sb = frames[i + 2];
+        const lum = (sr + sg + sb) / 765; // 0..1
+
+        // Select character: brightness → column (pow curve from original shader)
+        const charCol = Math.min(Math.floor(GRID * lum * lum), GRID - 1);
+        // Deterministic row per cell position (like random in shader)
+        const charRow = ((r * 7 + c * 13) & 0xff) % GRID;
+
+        ctx.drawImage(
+          asciiImg,
+          charCol * CHAR_PX,
+          charRow * CHAR_PX,
+          CHAR_PX,
+          CHAR_PX,
+          c * BLOCK,
+          r * BLOCK,
+          BLOCK,
+          BLOCK,
+        );
+      }
+    }
+
+    // 2. Post-process: white chars → video color, black bg → dark
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+
+    for (let y = 0; y < h; y++) {
+      const br = Math.min((y / BLOCK) | 0, rows - 1);
+      for (let x = 0; x < w; x++) {
+        const bc = Math.min((x / BLOCK) | 0, cols - 1);
+        const pi = (y * w + x) * 4;
+        const fi = offset + (br * cols + bc) * 3;
+        const t = (d[pi] + d[pi + 1] + d[pi + 2]) / 765; // 0=bg, 1=char
+
+        // char → video color, bg → dark semi-transparent
+        d[pi] = (frames[fi] * t) | 0;
+        d[pi + 1] = (frames[fi + 1] * t) | 0;
+        d[pi + 2] = (frames[fi + 2] * t) | 0;
+        d[pi + 3] = (227 * (1 - t) + 255 * t) | 0;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  requestAnimationFrame(renderAscii);
+
   (window as any).onYouTubeIframeAPIReady = () => {
     player = new YT.Player("yt-player", {
       events: {
@@ -176,7 +290,7 @@ import PageLayout from "@layouts/PageLayout.astro";
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 2;
+    z-index: 3;
     font-size: 10rem;
     font-weight: 700;
     margin: 0;
@@ -213,11 +327,21 @@ import PageLayout from "@layouts/PageLayout.astro";
     pointer-events: none;
   }
 
+  .ascii-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    image-rendering: pixelated;
+  }
+
   .video-crop::after {
     content: "";
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: 2;
     background: rgba(0, 0, 0, 0);
     backdrop-filter: blur(0);
     transition:
@@ -236,7 +360,7 @@ import PageLayout from "@layouts/PageLayout.astro";
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 3;
+    z-index: 4;
     display: flex;
     gap: 0.25rem;
     padding: 0.5rem;
