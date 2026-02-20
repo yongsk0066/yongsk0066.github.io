@@ -18,7 +18,7 @@ import PageLayout from "@layouts/PageLayout.astro";
             referrerpolicy="strict-origin-when-cross-origin"
             loading="lazy"
             allowfullscreen></iframe>
-          <canvas class="ascii-overlay" width="1500" height="1000"></canvas>
+          <canvas class="ascii-overlay" width="2250" height="1500"></canvas>
           <div class="controls">
             <button id="btn-play" type="button" aria-label="일시정지">
               <svg
@@ -142,8 +142,13 @@ import PageLayout from "@layouts/PageLayout.astro";
 
   // ---- Mode state ----
   const MODE_NAMES = ["ASCII", "Receipt", "ノハメラマ木", "Stripes", "Weave"];
+  const BPM = 128;
+  const BEATS_PER_SWITCH = 4; // 4 beats = 1.875s
+  const SWITCH_INTERVAL = (60 / BPM) * BEATS_PER_SWITCH;
+  const BEAT_OFFSET = 0.805;
   let currentMode = 0;
   let lastMode = -1;
+  let autoMode = true;
 
   // ---- WebGL2 Setup ----
   const canvas = document.querySelector<HTMLCanvasElement>(".ascii-overlay")!;
@@ -242,7 +247,7 @@ void main() {
       ? 1.0 : 0.0;
   } else if (u_mode == 2) {
     // Scene 3 ASCII (charCanvas, 7 characters)
-    float charCount = 7.0;
+    float charCount = 8.0;
     float charIdx = min(floor(luma * (charCount - 1.0)), charCount - 1.0);
     vec2 charUV = vec2((charIdx + cellUV.x) / charCount, cellUV.y);
     t = texture(u_chars, charUV).r;
@@ -334,9 +339,9 @@ void main() {
   asciiImg.src = "/assets/images/ascii.png";
 
   // Generate ノハメラマ木 canvas → texture unit 2
-  const BLOCK = 25;
+  const BLOCK = 38;
   const VIDEO_START = 32;
-  const DETAIL = 1.5;
+  const DETAIL = 3.0;
   const ASCII_CHARS = "./ノハメラマ木";
   const charCanvas = document.createElement("canvas");
   const charCtx = charCanvas.getContext("2d")!;
@@ -422,10 +427,17 @@ void main() {
     }
 
     const clipTime = Math.max(0, currentTime - VIDEO_START);
+    if (autoMode) {
+      const beatTime = clipTime - BEAT_OFFSET;
+      currentMode = beatTime < 0 ? 0 : Math.floor(beatTime / SWITCH_INTERVAL) % MODE_NAMES.length;
+    }
     const frameIdx =
       Math.floor(clipTime * asciiData.fps) % asciiData.frameCount;
     if (frameIdx === lastFrameIdx && currentMode === lastMode) return;
     lastFrameIdx = frameIdx;
+    if (lastMode !== currentMode) {
+      btnMode.setAttribute("aria-label", `효과: ${MODE_NAMES[currentMode]}`);
+    }
     lastMode = currentMode;
 
     const { cols, rows, frames } = asciiData;
@@ -488,7 +500,10 @@ void main() {
   });
 
   btnMode.addEventListener("click", () => {
-    currentMode = (currentMode + 1) % MODE_NAMES.length;
+    autoMode = !autoMode;
+    if (!autoMode) {
+      currentMode = (currentMode + 1) % MODE_NAMES.length;
+    }
     btnMode.setAttribute("aria-label", `효과: ${MODE_NAMES[currentMode]}`);
   });
 </script>

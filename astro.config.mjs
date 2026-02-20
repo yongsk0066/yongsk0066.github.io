@@ -48,5 +48,8 @@ export default defineConfig({
   base: '/',
   vite: {
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      exclude: ['toastify-js'],
+    },
   },
 });
