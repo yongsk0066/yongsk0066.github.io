@@ -8,8 +8,8 @@ export const MODES = [
   "Receipt",
   "ノハメラマ木",
   "Stripes",
-  "Weave",
   "CMYK",
+  "Bayer",
 ] as const;
 
 export type ModeName = (typeof MODES)[number];
@@ -89,6 +89,17 @@ const float WEAVE_M[64] = float[64](
   0.99, 0.99, 0.2,  0.2,  0.2,  0.2,  0.75, 0.99
 );
 
+const float BAYER_M[64] = float[64](
+  0.000, 0.500, 0.125, 0.625, 0.031, 0.531, 0.156, 0.656,
+  0.750, 0.250, 0.875, 0.375, 0.781, 0.281, 0.906, 0.406,
+  0.188, 0.688, 0.063, 0.563, 0.219, 0.719, 0.094, 0.594,
+  0.938, 0.438, 0.813, 0.313, 0.969, 0.469, 0.844, 0.344,
+  0.047, 0.547, 0.172, 0.672, 0.016, 0.516, 0.141, 0.641,
+  0.797, 0.297, 0.922, 0.422, 0.766, 0.266, 0.891, 0.391,
+  0.234, 0.734, 0.109, 0.609, 0.203, 0.703, 0.078, 0.578,
+  0.984, 0.484, 0.859, 0.359, 0.953, 0.453, 0.828, 0.328
+);
+
 // ---- CMYK Halftone helpers ----
 
 const float CMYK_DOT_SIZE = 0.65;
@@ -137,12 +148,14 @@ void main() {
   vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
 
   // Common preamble — used by modes 0–4
-  vec2 grid = (u_mode == 0 || u_mode == 2) ? u_grid : u_grid * u_detail;
+  float scale = (u_mode == 0 || u_mode == 2) ? 1.0
+    : u_detail;
+  vec2 grid = u_grid * scale;
   vec2 cellPos = floor(uv * grid);
   vec2 cellUV = fract(uv * grid);
 
-  vec2 dataCell = (u_mode == 0 || u_mode == 2)
-    ? cellPos
+  vec2 dataCell = (scale <= 1.0)
+    ? min(cellPos, u_grid - 1.0)
     : min(floor(cellPos / u_detail), u_grid - 1.0);
   vec2 dataUV = (dataCell + 0.5) / u_grid;
   vec3 color = texture(u_frame, dataUV).rgb;
@@ -191,14 +204,6 @@ void main() {
     outColor = color * t;
     outAlpha = mix(0.89, 1.0, t);
   } else if (u_mode == 4) {
-    // Weave
-    int mx = min(int(cellUV.x * 8.0), 7);
-    int my = min(int(cellUV.y * 8.0), 7);
-    int idx = my * 8 + mx;
-    float t = (WEAVE_M[idx] <= luma) ? 1.0 : 0.0;
-    outColor = color * t;
-    outAlpha = mix(0.89, 1.0, t);
-  } else {
     // CMYK Halftone
     vec2 density = u_grid * CMYK_DENSITY;
 
@@ -223,6 +228,14 @@ void main() {
     outColor.b *= (1.0 - 0.95 * dotY);
     outColor *= (1.0 - 1.10 * dotK);
     outAlpha = 1.0;
+  } else {
+    // Bayer ordered dithering — threshold by grid position, not sub-cell
+    int mx = int(mod(cellPos.x, 8.0));
+    int my = int(mod(cellPos.y, 8.0));
+    int idx = my * 8 + mx;
+    float t = (BAYER_M[idx] <= luma) ? 1.0 : 0.0;
+    outColor = color * t;
+    outAlpha = mix(0.89, 1.0, t);
   }
 
   fragColor = vec4(outColor, outAlpha);
