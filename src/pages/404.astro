@@ -108,11 +108,17 @@ import PageLayout from "@layouts/PageLayout.astro";
 </PageLayout>
 
 <script>
+  import { createOverlayRenderer } from "@lib/not-found/overlay-renderer";
+
+  // ---- YouTube API ----
   const tag = document.createElement("script");
   tag.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(tag);
 
+  const VIDEO_START = 32;
   let player: YT.Player;
+
+  // ---- UI elements ----
   const btnPlay = document.getElementById("btn-play")!;
   const btnMute = document.getElementById("btn-mute")!;
   const btnMode = document.getElementById("btn-mode")!;
@@ -140,329 +146,19 @@ import PageLayout from "@layouts/PageLayout.astro";
   setPlaying(true);
   setMuted(true);
 
-  // ---- Mode state ----
-  const MODE_NAMES = ["ASCII", "Receipt", "ノハメラマ木", "Stripes", "Weave"];
-  const BPM = 128;
-  const BEATS_PER_SWITCH = 4; // 4 beats = 1.875s
-  const SWITCH_INTERVAL = (60 / BPM) * BEATS_PER_SWITCH;
-  const BEAT_OFFSET = 0.805;
-  let currentMode = 0;
-  let lastMode = -1;
-  let autoMode = true;
-
-  // ---- WebGL2 Setup ----
-  const canvas = document.querySelector<HTMLCanvasElement>(".ascii-overlay")!;
-  const gl = canvas.getContext("webgl2", {
-    alpha: true,
-    premultipliedAlpha: false,
-  })!;
-
-  const VERT = `#version 300 es
-in vec2 a_pos;
-out vec2 v_uv;
-void main() {
-  v_uv = a_pos * 0.5 + 0.5;
-  gl_Position = vec4(a_pos, 0.0, 1.0);
-}`;
-
-  const FRAG = `#version 300 es
-precision highp float;
-
-uniform sampler2D u_frame;
-uniform sampler2D u_ascii;
-uniform sampler2D u_chars;
-uniform vec2 u_grid;
-uniform int u_mode;
-uniform float u_detail;
-
-in vec2 v_uv;
-out vec4 fragColor;
-
-const float STRIPES_M[64] = float[64](
-  0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2,
-  0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0,
-  1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0,
-  1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2,
-  0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2,
-  0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0,
-  1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 1.0,
-  1.0, 1.0, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2
-);
-
-const float CROSS_STRIPES_M[64] = float[64](
-  1.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.0,
-  0.2, 1.0, 0.2, 0.2, 0.2, 0.2, 1.0, 0.2,
-  0.2, 0.2, 1.0, 0.2, 0.2, 1.0, 0.2, 0.2,
-  0.2, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 0.2,
-  0.2, 0.2, 0.2, 1.0, 1.0, 0.2, 0.2, 0.2,
-  0.2, 0.2, 1.0, 0.2, 0.2, 1.0, 0.2, 0.2,
-  0.2, 1.0, 0.2, 0.2, 0.2, 0.2, 1.0, 0.2,
-  1.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.0
-);
-
-const float WEAVE_M[64] = float[64](
-  0.99, 0.75, 0.2,  0.2,  0.2,  0.2,  0.99, 0.99,
-  0.99, 0.99, 0.75, 0.2,  0.2,  0.99, 0.99, 0.75,
-  0.2,  0.99, 0.99, 0.75, 0.99, 0.99, 0.2,  0.2,
-  0.2,  0.2,  0.99, 0.99, 0.99, 0.2,  0.2,  0.2,
-  0.2,  0.2,  0.2,  0.99, 0.99, 0.99, 0.2,  0.2,
-  0.2,  0.2,  0.99, 0.99, 0.75, 0.99, 0.99, 0.2,
-  0.75, 0.99, 0.99, 0.2,  0.2,  0.75, 0.99, 0.99,
-  0.99, 0.99, 0.2,  0.2,  0.2,  0.2,  0.75, 0.99
-);
-
-void main() {
-  vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
-
-  vec2 grid = (u_mode == 0 || u_mode == 2) ? u_grid : u_grid * u_detail;
-  vec2 cellPos = floor(uv * grid);
-  vec2 cellUV = fract(uv * grid);
-
-  vec2 dataCell = (u_mode == 0 || u_mode == 2)
-    ? cellPos
-    : min(floor(cellPos / u_detail), u_grid - 1.0);
-  vec2 dataUV = (dataCell + 0.5) / u_grid;
-  vec3 color = texture(u_frame, dataUV).rgb;
-  float rawLuma = dot(vec3(0.2126, 0.7152, 0.0722), color);
-  float luma = smoothstep(0.15, 0.85, rawLuma);
-
-  float t = 0.0;
-
-  if (u_mode == 0) {
-    // Original ASCII (ascii.png, 10x10 grid)
-    float charCol = min(floor(10.0 * luma * luma), 9.0);
-    float charRow = mod(float((int(cellPos.y) * 7 + int(cellPos.x) * 13) & 0xFF), 10.0);
-    vec2 asciiUV = (vec2(charCol, charRow) + cellUV) / 10.0;
-    t = texture(u_ascii, asciiUV).r;
-  } else if (u_mode == 1) {
-    // Receipt (scene 1): horizontal bar width based on luma
-    float lineWidth = 0.0;
-    if (luma > 0.0)  lineWidth = 1.0;
-    if (luma > 0.3)  lineWidth = 0.7;
-    if (luma > 0.5)  lineWidth = 0.5;
-    if (luma > 0.7)  lineWidth = 0.3;
-    if (luma > 0.9)  lineWidth = 0.1;
-    if (luma > 0.99) lineWidth = 0.0;
-    t = (cellUV.y > 0.05 && cellUV.y < 0.95 && cellUV.x > 0.0 && cellUV.x < lineWidth)
-      ? 1.0 : 0.0;
-  } else if (u_mode == 2) {
-    // Scene 3 ASCII (charCanvas, 7 characters)
-    float charCount = 8.0;
-    float charIdx = min(floor(luma * (charCount - 1.0)), charCount - 1.0);
-    vec2 charUV = vec2((charIdx + cellUV.x) / charCount, cellUV.y);
-    t = texture(u_chars, charUV).r;
-  } else if (u_mode == 3) {
-    // Stripes (scene 5 pattern 0)
-    int mx = min(int(cellUV.x * 8.0), 7);
-    int my = min(int(cellUV.y * 8.0), 7);
-    int idx = my * 8 + mx;
-    float threshold = (luma < 0.6) ? STRIPES_M[idx] : CROSS_STRIPES_M[idx];
-    t = (threshold <= luma) ? 1.0 : 0.0;
-  } else {
-    // Weave (scene 5 pattern 1)
-    int mx = min(int(cellUV.x * 8.0), 7);
-    int my = min(int(cellUV.y * 8.0), 7);
-    int idx = my * 8 + mx;
-    t = (WEAVE_M[idx] <= luma) ? 1.0 : 0.0;
-  }
-
-  fragColor = vec4(color * t, mix(0.89, 1.0, t));
-}`;
-
-  // Compile shader helper
-  function compile(type: number, src: string) {
-    const s = gl.createShader(type)!;
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      console.error("Shader compile error:", gl.getShaderInfoLog(s));
-    }
-    return s;
-  }
-
-  const prog = gl.createProgram()!;
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
-  gl.linkProgram(prog);
-  gl.useProgram(prog);
-
-  // Fullscreen quad
-  const quad = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-    gl.STATIC_DRAW,
+  // ---- Overlay renderer ----
+  const renderer = createOverlayRenderer(
+    document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
+    () => {
+      try {
+        return Math.max(0, player.getCurrentTime() - VIDEO_START);
+      } catch {
+        return null;
+      }
+    },
+    (name) => btnMode.setAttribute("aria-label", `효과: ${name}`),
   );
-  const aPos = gl.getAttribLocation(prog, "a_pos");
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-  // Uniform locations
-  const uFrame = gl.getUniformLocation(prog, "u_frame");
-  const uAscii = gl.getUniformLocation(prog, "u_ascii");
-  const uChars = gl.getUniformLocation(prog, "u_chars");
-  const uGrid = gl.getUniformLocation(prog, "u_grid");
-  const uMode = gl.getUniformLocation(prog, "u_mode");
-  const uDetail = gl.getUniformLocation(prog, "u_detail");
-
-  // Texture helper
-  function createTex(unit: number) {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    const tex = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return tex;
-  }
-
-  const frameTex = createTex(0);
-  const asciiTex = createTex(1);
-  const charsTex = createTex(2);
-
-  // Load ascii.png → texture unit 1
-  const asciiImg = new Image();
-  asciiImg.onload = () => {
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, asciiTex);
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      asciiImg,
-    );
-  };
-  asciiImg.src = "/assets/images/ascii.png";
-
-  // Generate ノハメラマ木 canvas → texture unit 2
-  const BLOCK = 38;
-  const VIDEO_START = 32;
-  const DETAIL = 3.0;
-  const ASCII_CHARS = "./ノハメラマ木";
-  const charCanvas = document.createElement("canvas");
-  const charCtx = charCanvas.getContext("2d")!;
-  charCanvas.width = BLOCK * ASCII_CHARS.length;
-  charCanvas.height = BLOCK;
-  charCtx.fillStyle = "black";
-  charCtx.fillRect(0, 0, charCanvas.width, charCanvas.height);
-  charCtx.fillStyle = "white";
-  charCtx.font = `${BLOCK}px monospace`;
-  charCtx.textBaseline = "middle";
-  charCtx.textAlign = "center";
-  [...ASCII_CHARS].forEach((char, i) => {
-    charCtx.fillText(char, (i + 0.5) * BLOCK, BLOCK / 2);
-  });
-  gl.activeTexture(gl.TEXTURE2);
-  gl.bindTexture(gl.TEXTURE_2D, charsTex);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    charCanvas,
-  );
-
-  // Static uniforms
-  gl.uniform1i(uFrame, 0);
-  gl.uniform1i(uAscii, 1);
-  gl.uniform1i(uChars, 2);
-  gl.uniform1f(uDetail, DETAIL);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-
-  // ---- Pre-baked data ----
-  let asciiData: {
-    cols: number;
-    rows: number;
-    fps: number;
-    frameCount: number;
-    frames: Uint8Array;
-  } | null = null;
-
-  fetch("/assets/404-ascii.bin")
-    .then((r) => r.arrayBuffer())
-    .then((buf) => {
-      const v = new DataView(buf);
-      asciiData = {
-        cols: v.getUint16(0, true),
-        rows: v.getUint16(2, true),
-        fps: v.getUint16(4, true),
-        frameCount: v.getUint16(6, true),
-        frames: new Uint8Array(buf, 8),
-      };
-      // Allocate frame texture
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, frameTex);
-      gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGB8,
-        asciiData.cols,
-        asciiData.rows,
-        0,
-        gl.RGB,
-        gl.UNSIGNED_BYTE,
-        null,
-      );
-      gl.uniform2f(uGrid, asciiData.cols, asciiData.rows);
-    });
-
-  let lastFrameIdx = -1;
-
-  function renderOverlay() {
-    requestAnimationFrame(renderOverlay);
-    if (!asciiData || !player) return;
-    if (currentMode === 0 && !asciiImg.complete) return;
-
-    let currentTime: number;
-    try {
-      currentTime = player.getCurrentTime();
-    } catch {
-      return;
-    }
-
-    const clipTime = Math.max(0, currentTime - VIDEO_START);
-    if (autoMode) {
-      const beatTime = clipTime - BEAT_OFFSET;
-      currentMode = beatTime < 0 ? 0 : Math.floor(beatTime / SWITCH_INTERVAL) % MODE_NAMES.length;
-    }
-    const frameIdx =
-      Math.floor(clipTime * asciiData.fps) % asciiData.frameCount;
-    if (frameIdx === lastFrameIdx && currentMode === lastMode) return;
-    lastFrameIdx = frameIdx;
-    if (lastMode !== currentMode) {
-      btnMode.setAttribute("aria-label", `효과: ${MODE_NAMES[currentMode]}`);
-    }
-    lastMode = currentMode;
-
-    const { cols, rows, frames } = asciiData;
-    const bpf = cols * rows * 3;
-
-    // Upload frame data → texture unit 0
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, frameTex);
-    gl.texSubImage2D(
-      gl.TEXTURE_2D,
-      0,
-      0,
-      0,
-      cols,
-      rows,
-      gl.RGB,
-      gl.UNSIGNED_BYTE,
-      frames.subarray(frameIdx * bpf, (frameIdx + 1) * bpf),
-    );
-
-    gl.uniform1i(uMode, currentMode);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-  }
-
-  requestAnimationFrame(renderOverlay);
+  renderer.start();
 
   // ---- YouTube Player ----
   (window as any).onYouTubeIframeAPIReady = () => {
@@ -479,6 +175,7 @@ void main() {
     });
   };
 
+  // ---- Controls ----
   btnPlay.addEventListener("click", () => {
     if (!player) return;
     if (player.getPlayerState() === YT.PlayerState.PLAYING) {
@@ -499,13 +196,7 @@ void main() {
     }
   });
 
-  btnMode.addEventListener("click", () => {
-    autoMode = !autoMode;
-    if (!autoMode) {
-      currentMode = (currentMode + 1) % MODE_NAMES.length;
-    }
-    btnMode.setAttribute("aria-label", `효과: ${MODE_NAMES[currentMode]}`);
-  });
+  btnMode.addEventListener("click", () => renderer.toggleAutoMode());
 </script>
 
 <style>
