@@ -203,7 +203,7 @@ import PageLayout from "@layouts/PageLayout.astro";
   btnMode.addEventListener("click", () => renderer.toggleAutoMode());
 
   // ---- Audio Spectrogram Border ----
-  const TRACK_WIDTH = 36; // CSS pixels
+  const TRACK_WIDTH = 48; // CSS pixels
   const borderCanvas = document.querySelector<HTMLCanvasElement>(
     ".spectro-border",
   )!;
@@ -298,8 +298,13 @@ import PageLayout from "@layouts/PageLayout.astro";
 
   .video-border-wrap {
     position: relative;
-    padding: 36px;
-    margin: -36px -36px 0;
+    padding: 48px;
+    margin: -48px -48px 0;
+    visibility: hidden;
+  }
+
+  .video-border-wrap > .video-crop {
+    visibility: visible;
   }
 
   .spectro-border {
