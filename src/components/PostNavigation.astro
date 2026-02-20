@@ -1,0 +1,65 @@
+---
+import { DEFAULT_LOCALE } from "@consts";
+import { useTranslations } from "@i18n/utils";
+
+type NavPost = {
+  slug: string;
+  title: string;
+};
+
+type Props = {
+  prevPost?: NavPost;
+  nextPost?: NavPost;
+};
+
+const { prevPost, nextPost } = Astro.props;
+const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
+const t = useTranslations(currentLocale as any);
+---
+
+{(prevPost || nextPost) && (
+  <div class="grid grid-cols-2 gap-3 my-6">
+    {prevPost ? (
+      <a
+        href={`/blog/${prevPost.slug}`}
+        class="group flex flex-col gap-2 p-4 rounded border border-black/15 hover:bg-black/5 hover:text-black transition-colors duration-300 ease-in-out"
+      >
+        <div class="flex items-center gap-1.5 text-sm text-black/50 group-hover:text-black/70 transition-colors duration-300">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            class="size-4 stroke-2 fill-none stroke-current"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" class="translate-x-2 group-hover:translate-x-0 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-in-out" />
+            <polyline points="12 5 5 12 12 19" class="translate-x-1 group-hover:translate-x-0 transition-transform duration-300 ease-in-out" />
+          </svg>
+          <span>{t("word.prev_post")}</span>
+        </div>
+        <div class="text-sm font-medium line-clamp-2">{prevPost.title}</div>
+      </a>
+    ) : (
+      <div />
+    )}
+    {nextPost ? (
+      <a
+        href={`/blog/${nextPost.slug}`}
+        class="group flex flex-col items-end gap-2 p-4 rounded border border-black/15 hover:bg-black/5 hover:text-black transition-colors duration-300 ease-in-out text-right"
+      >
+        <div class="flex items-center gap-1.5 text-sm text-black/50 group-hover:text-black/70 transition-colors duration-300">
+          <span>{t("word.next_post")}</span>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            class="size-4 stroke-2 fill-none stroke-current"
+          >
+            <line x1="5" y1="12" x2="19" y2="12" class="-translate-x-2 group-hover:translate-x-0 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-in-out" />
+            <polyline points="12 5 19 12 12 19" class="-translate-x-1 group-hover:translate-x-0 transition-transform duration-300 ease-in-out" />
+          </svg>
+        </div>
+        <div class="text-sm font-medium line-clamp-2">{nextPost.title}</div>
+      </a>
+    ) : (
+      <div />
+    )}
+  </div>
+)}

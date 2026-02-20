@@ -3,6 +3,7 @@ import BackToPrev from "@components/BackToPrev.astro";
 import Comments from "@components/Comments.astro";
 import Container from "@components/Container.astro";
 import FormattedDate from "@components/FormattedDate.astro";
+import PostNavigation from "@components/PostNavigation.astro";
 import Share from "@components/Share.astro";
 import TOC from "@components/TOC.astro";
 import { DEFAULT_LOCALE } from "@consts";
@@ -14,18 +15,34 @@ import { getCollection, type CollectionEntry } from "astro:content";
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 
 export async function getStaticPaths() {
-  const posts = (await getCollection("blog"))
+  const allPosts = (await getCollection("blog"))
     .filter((post) => import.meta.env.DEV || !post.data.draft)
     .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
-  return posts.map((post) => ({
-    params: { slug: post.slug },
-    props: post,
-  }));
-}
-type Props = CollectionEntry<"blog">;
+  return allPosts.map((post, index) => {
+    const isEnPost = post.slug.startsWith("en/");
+    const sameLangPosts = allPosts.filter((p) =>
+      isEnPost ? p.slug.startsWith("en/") : !p.slug.startsWith("en/")
+    );
+    const langIndex = sameLangPosts.findIndex((p) => p.slug === post.slug);
 
-const post = Astro.props;
+    const prevPost = langIndex < sameLangPosts.length - 1
+      ? { slug: sameLangPosts[langIndex + 1].slug, title: sameLangPosts[langIndex + 1].data.title }
+      : undefined;
+    const nextPost = langIndex > 0
+      ? { slug: sameLangPosts[langIndex - 1].slug, title: sameLangPosts[langIndex - 1].data.title }
+      : undefined;
+
+    return {
+      params: { slug: post.slug },
+      props: { post, prevPost, nextPost },
+    };
+  });
+}
+type NavPost = { slug: string; title: string };
+type Props = { post: CollectionEntry<"blog">; prevPost?: NavPost; nextPost?: NavPost };
+
+const { post, prevPost, nextPost } = Astro.props;
 
 const seriesPosts = (
   await getCollection("blog", ({ id }) => {
@@ -162,6 +179,7 @@ const t = useTranslations(currentLocale as any);
       )
     }
     <Share />
+    <PostNavigation prevPost={prevPost} nextPost={nextPost} />
     <Comments />
   </Container>
 </PageLayout>
