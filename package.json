@@ -15,12 +15,11 @@
     "cf:preview": "wrangler dev"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.6",
-    "@astrojs/lit": "^4.3.0",
-    "@astrojs/mdx": "4.3.13",
-    "@astrojs/react": "4.4.2",
-    "@astrojs/rss": "4.0.15",
-    "@astrojs/sitemap": "3.7.0",
+    "@astrojs/check": "0.9.7-beta.1",
+    "@astrojs/mdx": "5.0.0-beta.8",
+    "@astrojs/react": "5.0.0-beta.3",
+    "@astrojs/rss": "4.0.15-beta.3",
+    "@astrojs/sitemap": "3.6.1-beta.3",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@lit-labs/ssr": "^3.2.2",
     "@lit-labs/ssr-client": "^1.1.7",
@@ -32,7 +31,7 @@
     "@react-three/rapier": "^2.2.0",
     "@tailwindcss/vite": "^4.1.18",
     "@webcomponents/template-shadowroot": "^0.2.1",
-    "astro": "5.16.11",
+    "astro": "6.0.0-beta.14",
     "clsx": "^2.1.1",
     "debounce": "^3.0.0",
     "framer-motion": "^12.23.26",
@@ -74,6 +73,9 @@
     "prettier-plugin-astro": "^0.14.1",
     "typescript": "^5.9.3",
     "wrangler": "^4.61.1"
+  },
+  "resolutions": {
+    "esbuild": "0.25.9"
   },
   "packageManager": "yarn@4.10.3"
 }
