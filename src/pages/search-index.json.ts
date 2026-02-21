@@ -10,13 +10,13 @@ export async function GET() {
 	);
 
 	const index = posts.map((post) => ({
-		slug: post.slug,
+		slug: post.id,
 		title: post.data.title,
 		description: post.data.description ?? "",
 		date: post.data.date.toISOString(),
 		categories: post.data.categories ?? [],
-		locale: post.slug.startsWith("en/") ? "en" : "ko",
-		url: `/blog/${post.slug}/`,
+		locale: post.id.startsWith("en/") ? "en" : "ko",
+		url: `/blog/${post.id}/`,
 	}));
 
 	return new Response(JSON.stringify(index), {

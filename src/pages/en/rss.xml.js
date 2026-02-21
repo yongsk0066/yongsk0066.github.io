@@ -23,7 +23,7 @@ export async function GET(context) {
 			return ({
 			...post.data,
 			pubDate: post.data.date,
-			link: `/blog/${post.slug}/`,
+			link: `/blog/${post.id}/`,
 			customData: post.data.heroImage 
 				? `<media:content url="${new URL(post.data.heroImage, context.site).href}" medium="image" />` 
 				: ''

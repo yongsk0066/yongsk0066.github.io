@@ -10,7 +10,7 @@ import { DEFAULT_LOCALE } from "@consts";
 import { useTranslations } from "@i18n/utils";
 import PageLayout from "@layouts/PageLayout.astro";
 import { readingTime } from "@lib/utils";
-import { getCollection, type CollectionEntry } from "astro:content";
+import { getCollection, render, type CollectionEntry } from "astro:content";
 
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 
@@ -20,21 +20,21 @@ export async function getStaticPaths() {
     .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
   return allPosts.map((post, index) => {
-    const isEnPost = post.slug.startsWith("en/");
+    const isEnPost = post.id.startsWith("en/");
     const sameLangPosts = allPosts.filter((p) =>
-      isEnPost ? p.slug.startsWith("en/") : !p.slug.startsWith("en/")
+      isEnPost ? p.id.startsWith("en/") : !p.id.startsWith("en/")
     );
-    const langIndex = sameLangPosts.findIndex((p) => p.slug === post.slug);
+    const langIndex = sameLangPosts.findIndex((p) => p.id === post.id);
 
     const prevPost = langIndex < sameLangPosts.length - 1
-      ? { slug: sameLangPosts[langIndex + 1].slug, title: sameLangPosts[langIndex + 1].data.title }
+      ? { slug: sameLangPosts[langIndex + 1].id, title: sameLangPosts[langIndex + 1].data.title }
       : undefined;
     const nextPost = langIndex > 0
-      ? { slug: sameLangPosts[langIndex - 1].slug, title: sameLangPosts[langIndex - 1].data.title }
+      ? { slug: sameLangPosts[langIndex - 1].id, title: sameLangPosts[langIndex - 1].data.title }
       : undefined;
 
     return {
-      params: { slug: post.slug },
+      params: { slug: post.id },
       props: { post, prevPost, nextPost },
     };
   });
@@ -63,14 +63,14 @@ let translationSlug = "";
 const allPosts = await getCollection("blog");
 
 if (currentLocale === DEFAULT_LOCALE) {
-  translationSlug = `en/${post.slug}`;
-  hasTranslation = allPosts.some((p) => p.slug === translationSlug);
+  translationSlug = `en/${post.id}`;
+  hasTranslation = allPosts.some((p) => p.id === translationSlug);
 } else {
-  translationSlug = post.slug.replace("en/", "");
-  hasTranslation = allPosts.some((p) => p.slug === translationSlug);
+  translationSlug = post.id.replace("en/", "");
+  hasTranslation = allPosts.some((p) => p.id === translationSlug);
 }
 
-const { Content, headings } = await post.render();
+const { Content, headings } = await render(post);
 const t = useTranslations(currentLocale as any);
 ---
 
@@ -108,7 +108,7 @@ const t = useTranslations(currentLocale as any);
           </div>
           &bull;
           <div class="font-base text-sm">
-            {readingTime(post.body)}
+            {readingTime(post.body ?? "")}
           </div>
         </div>
 
@@ -140,7 +140,7 @@ const t = useTranslations(currentLocale as any);
             </div>
             <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
               {seriesPosts.map((seriesPost) => {
-                const link = `/${seriesPost.collection}/${seriesPost.slug}`;
+                const link = `/${seriesPost.collection}/${seriesPost.id}`;
                 return (
                   <li class="text-sm indent-2 underline hover:text-zinc-800">
                     <a href={link} rel="noopener noreferrer" target="_blank">
@@ -167,7 +167,7 @@ const t = useTranslations(currentLocale as any);
           </div>
           <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
             {seriesPosts.map((seriesPost) => {
-              const link = `/${seriesPost.collection}/${seriesPost.slug}`;
+              const link = `/${seriesPost.collection}/${seriesPost.id}`;
               return (
                 <li class="text-sm indent-2 underline hover:text-zinc-800">
                   <a href={link}>{seriesPost.data.title}</a>
