@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "yongseok-blog",
   "main": "src/worker.js",
-  "compatibility_date": "2025-01-01",
+  "compatibility_date": "2025-05-21",
 
   // Static assets configuration for Astro SSG output
   "assets": {
