@@ -1,11 +1,13 @@
 name: Deploy to Cloudflare Workers
 
 on:
-  # 수동 실행만 가능 (테스트용)
-  # 나중에 자동 배포 원하면 아래 주석 해제
-  # push:
-  #   branches: [main]
+  push:
+    branches: [cloudflare/main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
 
 jobs:
   deploy:
@@ -33,3 +35,50 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Slack (success)
+        if: success()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            blocks:
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: "✅ *블로그 배포 완료* — yongseok.me"
+              - type: section
+                fields:
+                  - type: mrkdwn
+                    text: "*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"
+                  - type: mrkdwn
+                    text: "*환경:*\nProduction (Workers)"
+              - type: context
+                elements:
+                  - type: mrkdwn
+                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
+
+      - name: Notify Slack (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            blocks:
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: "❌ *블로그 배포 실패*"
+              - type: section
+                fields:
+                  - type: mrkdwn
+                    text: "*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"
+                  - type: mrkdwn
+                    text: "*로그:*\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|확인하기>"
+              - type: context
+                elements:
+                  - type: mrkdwn
+                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
