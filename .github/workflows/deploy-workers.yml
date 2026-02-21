@@ -22,7 +22,7 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"🚀 *블로그 배포 시작* — yongseok.me"}},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"🚀 *블로그 배포 시작* — yongseok.me"}},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }} · <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|빌드 로그>"}]}]}
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,7 +55,7 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"✅ *블로그 배포 완료* — yongseok.me"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*환경:*\nProduction (Workers)"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"✅ *블로그 배포 완료* — yongseok.me"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*환경:*\nProduction (Workers)"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }} · <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|빌드 로그>"}]}]}
 
       - name: Notify Slack (failure)
         if: failure()
@@ -64,4 +64,4 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"❌ *블로그 배포 실패*"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*로그:*\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|확인하기>"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"❌ *블로그 배포 실패*"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*환경:*\nProduction (Workers)"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }} · <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|빌드 로그>"}]}]}
