@@ -35,6 +35,14 @@ export const korText = `
 /대한민국헌법 대한민국은 통일을 지향하며, 자유민주적 기본질서에 입각한 평화적 통일 정책을 수립하고 이를 추진한다.
 `;
 
+export const overlayArt = [
+  " _____     _              _   _          _   _         ",
+  "|   __|___| |_ ___ ___   | |_| |_ ___   | |_| |___ ___ ",
+  "|   __|   |  _| -_|  _|  |  _|   | -_|  | . | | . | . |",
+  "|_____|_|_|_| |___|_|    |_| |_|_|___|  |___|_|___|_  |",
+  "                                                  |___|",
+];
+
 export const overview = `
 /helloWorld This section contains a non-normative overview of the ECMAScript language.
 /helloWorld ECMAScript is an object-oriented programming language for performing computations and manipulating computational objects within a host environment. 
