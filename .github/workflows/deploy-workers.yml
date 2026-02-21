@@ -13,21 +13,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Set commit message
+        run: echo "COMMIT_MSG=$(echo '${{ github.event.head_commit.message }}' | head -1 | sed 's/[\"\\]//g')" >> $GITHUB_ENV
+
       - name: Notify Slack (start)
         uses: slackapi/slack-github-action@v2
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            blocks:
-              - type: section
-                text:
-                  type: mrkdwn
-                  text: "🚀 *블로그 배포 시작* — yongseok.me"
-              - type: context
-                elements:
-                  - type: mrkdwn
-                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"🚀 *블로그 배포 시작* — yongseok.me"}},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,21 +55,7 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            blocks:
-              - type: section
-                text:
-                  type: mrkdwn
-                  text: "✅ *블로그 배포 완료* — yongseok.me"
-              - type: section
-                fields:
-                  - type: mrkdwn
-                    text: "*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"
-                  - type: mrkdwn
-                    text: "*환경:*\nProduction (Workers)"
-              - type: context
-                elements:
-                  - type: mrkdwn
-                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"✅ *블로그 배포 완료* — yongseok.me"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*환경:*\nProduction (Workers)"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
 
       - name: Notify Slack (failure)
         if: failure()
@@ -83,18 +64,4 @@ jobs:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            blocks:
-              - type: section
-                text:
-                  type: mrkdwn
-                  text: "❌ *블로그 배포 실패*"
-              - type: section
-                fields:
-                  - type: mrkdwn
-                    text: "*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"
-                  - type: mrkdwn
-                    text: "*로그:*\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|확인하기>"
-              - type: context
-                elements:
-                  - type: mrkdwn
-                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
+            {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"❌ *블로그 배포 실패*"}},{"type":"section","fields":[{"type":"mrkdwn","text":"*커밋:*\n<https://github.com/${{ github.repository }}/commit/${{ github.sha }}|`${{ github.sha }}`>"},{"type":"mrkdwn","text":"*로그:*\n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|확인하기>"}]},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }}"}]}]}
