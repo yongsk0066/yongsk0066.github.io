@@ -6,7 +6,6 @@ interface Props {
   description?: string;
   imagePosition: CSSProperties["objectPosition"];
 }
-import jsdom from "jsdom";
 import type { CSSProperties } from "react";
 const {
   src,
@@ -19,19 +18,27 @@ let title = _title;
 let description = _description;
 let image: string | null | undefined;
 
+function extractMeta(html: string, property: string): string | null {
+  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${property}["']`, "i");
+  const match = html.match(re);
+  return match ? (match[1] || match[2]) : null;
+}
+
+function extractTitle(html: string): string | null {
+  const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  return match ? match[1].trim() : null;
+}
+
 try {
   const response = await fetch(src);
   const html = await response.text();
-  const { document } = new jsdom.JSDOM(html)?.window;
 
-  title = title || document.querySelector("title")?.textContent || src;
+  title = title || extractMeta(html, "og:title") || extractTitle(html) || src;
   description =
     description ||
-    document.querySelector("meta[name=description]")?.getAttribute("content") ||
+    extractMeta(html, "og:description") || extractMeta(html, "description") ||
     "No description available";
-  image = document
-    .querySelector("meta[property='og:image']")
-    ?.getAttribute("content");
+  image = extractMeta(html, "og:image");
 } catch (error) {
   console.error(`Failed to fetch or parse ${src}:`, error);
   title = title || src;

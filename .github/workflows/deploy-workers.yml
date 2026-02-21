@@ -13,6 +13,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Notify Slack (start)
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            blocks:
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: "🚀 *블로그 배포 시작* — yongseok.me"
+              - type: context
+                elements:
+                  - type: mrkdwn
+                    text: "${{ github.event.head_commit.message }} · ${{ github.actor }}"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
