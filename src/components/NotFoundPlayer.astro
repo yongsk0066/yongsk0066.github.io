@@ -123,15 +123,6 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
 
   let player: YT.Player;
 
-  const btnPlay = document.getElementById("btn-play")!;
-  const btnMute = document.getElementById("btn-mute")!;
-  const volumeRange = document.getElementById(
-    "volume-range",
-  ) as HTMLInputElement;
-  const modeRoller = document.getElementById("mode-roller")!;
-
-  // ---- Utilities ----
-
   function getClipTime(): number | null {
     try {
       return Math.max(0, player.getCurrentTime() - VIDEO_START);
@@ -140,40 +131,46 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     }
   }
 
-  function toggleIcons(
-    btn: HTMLElement,
-    active: boolean,
-    icons: [string, string],
-    labels: [string, string],
-  ) {
-    btn.querySelector<SVGElement>(icons[0])!.style.display = active
+  // ---- Playback ----
+
+  const btnPlay = document.getElementById("btn-play")!;
+
+  function setPlaying(playing: boolean) {
+    btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
       ? "block"
       : "none";
-    btn.querySelector<SVGElement>(icons[1])!.style.display = active
+    btnPlay.querySelector<SVGElement>(".icon-play")!.style.display = playing
       ? "none"
       : "block";
-    btn.setAttribute("aria-label", active ? labels[0] : labels[1]);
+    btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
   }
 
-  const setPlaying = (playing: boolean) =>
-    toggleIcons(
-      btnPlay,
-      playing,
-      [".icon-pause", ".icon-play"],
-      ["일시정지", "재생"],
-    );
+  setPlaying(true);
 
-  const setMuted = (muted: boolean) =>
-    toggleIcons(
-      btnMute,
-      muted,
-      [".icon-muted", ".icon-unmuted"],
-      ["음소거 해제", "음소거"],
-    );
+  btnPlay.addEventListener("click", () => {
+    if (!player) return;
+    player.getPlayerState() === YT.PlayerState.PLAYING
+      ? player.pauseVideo()
+      : player.playVideo();
+  });
 
   // ---- Volume ----
 
+  const btnMute = document.getElementById("btn-mute")!;
+  const volumeRange = document.getElementById(
+    "volume-range",
+  ) as HTMLInputElement;
   let savedVolume = DEFAULT_VOLUME;
+
+  function setMuted(muted: boolean) {
+    btnMute.querySelector<SVGElement>(".icon-muted")!.style.display = muted
+      ? "block"
+      : "none";
+    btnMute.querySelector<SVGElement>(".icon-unmuted")!.style.display = muted
+      ? "none"
+      : "block";
+    btnMute.setAttribute("aria-label", muted ? "음소거 해제" : "음소거");
+  }
 
   function applyVolume(vol: number) {
     if (!player) return;
@@ -189,54 +186,25 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     setMuted(muted);
   }
 
-  // ---- Mode display ----
-
-  function rollToMode(name: string) {
-    const current = modeRoller.querySelector("span:not(.exiting)");
-    if (current) {
-      if (current.textContent === name) return;
-      current.classList.add("exiting");
-      current.addEventListener("transitionend", () => current.remove(), {
-        once: true,
-      });
-    }
-    const next = document.createElement("span");
-    next.textContent = name;
-    modeRoller.appendChild(next);
-  }
-
-  // ---- Spectrogram data ----
-
-  function parseSpectroData(buf: ArrayBuffer) {
-    const v = new DataView(buf);
-    const binsPerFrame = v.getUint16(0, true);
-    const fps = v.getUint16(2, true);
-    const frameCount = v.getUint16(4, true);
-    const frames = new Uint8Array(buf, 6);
-
-    let lastFrame = -1;
-
-    return {
-      getColumn(clipTime: number) {
-        const idx = Math.floor(clipTime * fps) % frameCount;
-        if (idx === lastFrame) return null;
-        lastFrame = idx;
-        return { frames, offset: idx * binsPerFrame, binsPerFrame };
-      },
-    };
-  }
-
-  // ---- Initialize ----
-
-  setPlaying(true);
   setMuted(true);
 
-  const renderer = createOverlayRenderer(
-    document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
-    getClipTime,
-    rollToMode,
-  );
-  renderer.start();
+  btnMute.addEventListener("click", () => {
+    if (!player) return;
+    if (player.isMuted()) {
+      applyVolume(savedVolume);
+    } else {
+      savedVolume = player.getVolume() || DEFAULT_VOLUME;
+      applyVolume(0);
+    }
+  });
+
+  volumeRange.addEventListener("input", () => {
+    const vol = Number(volumeRange.value);
+    if (vol > 0) savedVolume = vol;
+    applyVolume(vol);
+  });
+
+  // ---- YouTube Player ----
 
   const ytScript = document.createElement("script");
   ytScript.src = "https://www.youtube.com/iframe_api";
@@ -256,30 +224,53 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     });
   };
 
-  btnPlay.addEventListener("click", () => {
-    if (!player) return;
-    player.getPlayerState() === YT.PlayerState.PLAYING
-      ? player.pauseVideo()
-      : player.playVideo();
-  });
+  // ---- Mode Display ----
 
-  btnMute.addEventListener("click", () => {
-    if (!player) return;
-    if (player.isMuted()) {
-      applyVolume(savedVolume);
-    } else {
-      savedVolume = player.getVolume() || DEFAULT_VOLUME;
-      applyVolume(0);
+  const modeRoller = document.getElementById("mode-roller")!;
+
+  function rollToMode(name: string) {
+    const current = modeRoller.querySelector("span:not(.exiting)");
+    if (current) {
+      if (current.textContent === name) return;
+      current.classList.add("exiting");
+      current.addEventListener("transitionend", () => current.remove(), {
+        once: true,
+      });
     }
-  });
+    const next = document.createElement("span");
+    next.textContent = name;
+    modeRoller.appendChild(next);
+  }
 
-  volumeRange.addEventListener("input", () => {
-    const vol = Number(volumeRange.value);
-    if (vol > 0) savedVolume = vol;
-    applyVolume(vol);
-  });
+  // ---- Overlay ----
 
-  // ---- Spectrogram border ----
+  const renderer = createOverlayRenderer(
+    document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
+    getClipTime,
+    rollToMode,
+  );
+  renderer.start();
+
+  // ---- Spectrogram Border ----
+
+  function parseSpectroData(buf: ArrayBuffer) {
+    const v = new DataView(buf);
+    const binsPerFrame = v.getUint16(0, true);
+    const fps = v.getUint16(2, true);
+    const frameCount = v.getUint16(4, true);
+    const frames = new Uint8Array(buf, 6);
+
+    let lastFrame = -1;
+
+    return {
+      getColumn(clipTime: number) {
+        const idx = Math.floor(clipTime * fps) % frameCount;
+        if (idx === lastFrame) return null;
+        lastFrame = idx;
+        return { frames, offset: idx * binsPerFrame, binsPerFrame };
+      },
+    };
+  }
 
   const borderCanvas =
     document.querySelector<HTMLCanvasElement>(".spectro-border")!;
