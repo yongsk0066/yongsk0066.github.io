@@ -117,47 +117,79 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
   import { createOverlayRenderer } from "@lib/not-found/overlay-renderer";
   import { createSpectroBorderRenderer } from "@lib/not-found/spectro-border";
 
-  // ---- YouTube API ----
-  const tag = document.createElement("script");
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(tag);
-
   const VIDEO_START = 32;
+  const DEFAULT_VOLUME = 50;
+  const SPECTRO_TRACK_WIDTH = 48;
+
   let player: YT.Player;
 
-  // ---- UI elements ----
   const btnPlay = document.getElementById("btn-play")!;
   const btnMute = document.getElementById("btn-mute")!;
   const volumeRange = document.getElementById(
     "volume-range",
   ) as HTMLInputElement;
-  let savedVolume = 50;
-
-  function setPlaying(playing: boolean) {
-    btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
-      ? "block"
-      : "none";
-    btnPlay.querySelector<SVGElement>(".icon-play")!.style.display = playing
-      ? "none"
-      : "block";
-    btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
-  }
-
-  function setMuted(muted: boolean) {
-    btnMute.querySelector<SVGElement>(".icon-muted")!.style.display = muted
-      ? "block"
-      : "none";
-    btnMute.querySelector<SVGElement>(".icon-unmuted")!.style.display = muted
-      ? "none"
-      : "block";
-    btnMute.setAttribute("aria-label", muted ? "음소거 해제" : "음소거");
-  }
-
-  setPlaying(true);
-  setMuted(true);
-
-  // ---- Mode display (slot-machine roll) ----
   const modeRoller = document.getElementById("mode-roller")!;
+
+  // ---- Utilities ----
+
+  function getClipTime(): number | null {
+    try {
+      return Math.max(0, player.getCurrentTime() - VIDEO_START);
+    } catch {
+      return null;
+    }
+  }
+
+  function toggleIcons(
+    btn: HTMLElement,
+    active: boolean,
+    icons: [string, string],
+    labels: [string, string],
+  ) {
+    btn.querySelector<SVGElement>(icons[0])!.style.display = active
+      ? "block"
+      : "none";
+    btn.querySelector<SVGElement>(icons[1])!.style.display = active
+      ? "none"
+      : "block";
+    btn.setAttribute("aria-label", active ? labels[0] : labels[1]);
+  }
+
+  const setPlaying = (playing: boolean) =>
+    toggleIcons(
+      btnPlay,
+      playing,
+      [".icon-pause", ".icon-play"],
+      ["일시정지", "재생"],
+    );
+
+  const setMuted = (muted: boolean) =>
+    toggleIcons(
+      btnMute,
+      muted,
+      [".icon-muted", ".icon-unmuted"],
+      ["음소거 해제", "음소거"],
+    );
+
+  // ---- Volume ----
+
+  let savedVolume = DEFAULT_VOLUME;
+
+  function applyVolume(vol: number) {
+    if (!player) return;
+    const muted = vol === 0;
+    if (muted) {
+      player.mute();
+    } else {
+      if (player.isMuted()) player.unMute();
+      player.setVolume(vol);
+    }
+    volumeRange.value = String(vol);
+    volumeRange.style.setProperty("--vol", `${vol}%`);
+    setMuted(muted);
+  }
+
+  // ---- Mode display ----
 
   function rollToMode(name: string) {
     const current = modeRoller.querySelector("span:not(.exiting)");
@@ -168,33 +200,54 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
         once: true,
       });
     }
-
     const next = document.createElement("span");
     next.textContent = name;
     modeRoller.appendChild(next);
   }
 
-  // ---- Overlay renderer ----
+  // ---- Spectrogram data ----
+
+  function parseSpectroData(buf: ArrayBuffer) {
+    const v = new DataView(buf);
+    const binsPerFrame = v.getUint16(0, true);
+    const fps = v.getUint16(2, true);
+    const frameCount = v.getUint16(4, true);
+    const frames = new Uint8Array(buf, 6);
+
+    let lastFrame = -1;
+
+    return {
+      getColumn(clipTime: number) {
+        const idx = Math.floor(clipTime * fps) % frameCount;
+        if (idx === lastFrame) return null;
+        lastFrame = idx;
+        return { frames, offset: idx * binsPerFrame, binsPerFrame };
+      },
+    };
+  }
+
+  // ---- Initialize ----
+
+  setPlaying(true);
+  setMuted(true);
+
   const renderer = createOverlayRenderer(
     document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
-    () => {
-      try {
-        return Math.max(0, player.getCurrentTime() - VIDEO_START);
-      } catch {
-        return null;
-      }
-    },
-    (name) => rollToMode(name),
+    getClipTime,
+    rollToMode,
   );
   renderer.start();
 
-  // ---- YouTube Player ----
+  const ytScript = document.createElement("script");
+  ytScript.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(ytScript);
+
   (window as any).onYouTubeIframeAPIReady = () => {
     player = new YT.Player("yt-player", {
       events: {
         onStateChange(e: YT.OnStateChangeEvent) {
           if (e.data === YT.PlayerState.ENDED) {
-            player.seekTo(32, true);
+            player.seekTo(VIDEO_START, true);
             player.playVideo();
           }
           setPlaying(e.data === YT.PlayerState.PLAYING);
@@ -203,57 +256,33 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     });
   };
 
-  // ---- Controls ----
   btnPlay.addEventListener("click", () => {
     if (!player) return;
-    if (player.getPlayerState() === YT.PlayerState.PLAYING) {
-      player.pauseVideo();
-    } else {
-      player.playVideo();
-    }
+    player.getPlayerState() === YT.PlayerState.PLAYING
+      ? player.pauseVideo()
+      : player.playVideo();
   });
-
-  function syncVolumeBar(val: number) {
-    volumeRange.style.setProperty("--vol", `${val}%`);
-  }
 
   btnMute.addEventListener("click", () => {
     if (!player) return;
     if (player.isMuted()) {
-      player.unMute();
-      player.setVolume(savedVolume);
-      volumeRange.value = String(savedVolume);
-      syncVolumeBar(savedVolume);
-      setMuted(false);
+      applyVolume(savedVolume);
     } else {
-      savedVolume = player.getVolume() || 50;
-      player.mute();
-      volumeRange.value = "0";
-      syncVolumeBar(0);
-      setMuted(true);
+      savedVolume = player.getVolume() || DEFAULT_VOLUME;
+      applyVolume(0);
     }
   });
 
   volumeRange.addEventListener("input", () => {
-    if (!player) return;
     const vol = Number(volumeRange.value);
-    syncVolumeBar(vol);
-    if (vol === 0) {
-      player.mute();
-      setMuted(true);
-    } else {
-      if (player.isMuted()) player.unMute();
-      player.setVolume(vol);
-      savedVolume = vol;
-      setMuted(false);
-    }
+    if (vol > 0) savedVolume = vol;
+    applyVolume(vol);
   });
 
-  // ---- Audio Spectrogram Border ----
-  const TRACK_WIDTH = 48; // CSS pixels
-  const borderCanvas = document.querySelector<HTMLCanvasElement>(
-    ".spectro-border",
-  )!;
+  // ---- Spectrogram border ----
+
+  const borderCanvas =
+    document.querySelector<HTMLCanvasElement>(".spectro-border")!;
   const wrap = document.querySelector<HTMLElement>(".video-border-wrap")!;
   const dpr = Math.min(window.devicePixelRatio, 2);
   const wrapRect = wrap.getBoundingClientRect();
@@ -262,52 +291,31 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
 
   const spectroRenderer = createSpectroBorderRenderer(
     borderCanvas,
-    TRACK_WIDTH,
+    SPECTRO_TRACK_WIDTH,
   );
 
-  let spectroData: {
-    binsPerFrame: number;
-    fps: number;
-    frameCount: number;
-    frames: Uint8Array;
-  } | null = null;
+  let spectroData: ReturnType<typeof parseSpectroData> | null = null;
 
   fetch("/assets/404-audio.bin")
     .then((r) => r.arrayBuffer())
     .then((buf) => {
-      const v = new DataView(buf);
-      spectroData = {
-        binsPerFrame: v.getUint16(0, true),
-        fps: v.getUint16(2, true),
-        frameCount: v.getUint16(4, true),
-        frames: new Uint8Array(buf, 6),
-      };
+      spectroData = parseSpectroData(buf);
     });
-
-  let lastVizFrame = -1;
 
   function renderViz() {
     requestAnimationFrame(renderViz);
-    if (!spectroData || !player) return;
+    const clipTime = getClipTime();
+    if (clipTime == null || !spectroData) return;
 
-    let clipTime: number;
-    try {
-      clipTime = Math.max(0, player.getCurrentTime() - VIDEO_START);
-    } catch {
-      return;
+    const col = spectroData.getColumn(clipTime);
+    if (col) {
+      spectroRenderer.pushColumn(
+        col.frames,
+        col.offset,
+        col.binsPerFrame,
+        clipTime,
+      );
     }
-
-    const frameIdx =
-      Math.floor(clipTime * spectroData.fps) % spectroData.frameCount;
-    if (frameIdx === lastVizFrame) return;
-    lastVizFrame = frameIdx;
-
-    spectroRenderer.pushColumn(
-      spectroData.frames,
-      frameIdx * spectroData.binsPerFrame,
-      spectroData.binsPerFrame,
-      clipTime,
-    );
   }
 
   requestAnimationFrame(renderViz);
