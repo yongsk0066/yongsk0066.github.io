@@ -1,0 +1,517 @@
+---
+interface Props {
+  autoplay?: boolean;
+}
+
+const { autoplay = true } = Astro.props;
+
+const VIDEO_ID = "zhHB4dZTChw";
+const iframeParams = new URLSearchParams({
+  start: "32",
+  autoplay: autoplay ? "1" : "0",
+  mute: "1",
+  controls: "0",
+  enablejsapi: "1",
+  modestbranding: "1",
+  rel: "0",
+});
+const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
+---
+
+<figure class="not-found-player">
+  <div class="video-border-wrap">
+    <canvas class="spectro-border"></canvas>
+    <div class="video-crop">
+      <h1>404</h1>
+      <iframe
+        id="yt-player"
+        src={iframeSrc}
+        title="YouTube video player"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin"
+        loading="lazy"
+        allowfullscreen></iframe>
+      <canvas class="ascii-overlay" width="2250" height="1500"></canvas>
+      <div class="controls">
+        <button id="btn-play" type="button" aria-label="일시정지">
+          <svg
+            class="icon-pause"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            width="20"
+            height="20"
+          >
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+          <svg
+            class="icon-play"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            width="20"
+            height="20"
+          >
+            <polygon points="6,3 20,12 6,21"></polygon>
+          </svg>
+        </button>
+        <button id="btn-mute" type="button" aria-label="음소거 해제">
+          <svg
+            class="icon-muted"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            width="20"
+            height="20"
+          >
+            <polygon points="11,5 6,9 2,9 2,15 6,15 11,19"></polygon>
+            <line
+              x1="23"
+              y1="9"
+              x2="17"
+              y2="15"
+              stroke="currentColor"
+              stroke-width="2"></line>
+            <line
+              x1="17"
+              y1="9"
+              x2="23"
+              y2="15"
+              stroke="currentColor"
+              stroke-width="2"></line>
+          </svg>
+          <svg
+            class="icon-unmuted"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            width="20"
+            height="20"
+          >
+            <polygon points="11,5 6,9 2,9 2,15 6,15 11,19"></polygon>
+            <path
+              d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"></path>
+          </svg>
+        </button>
+        <div class="volume-slider">
+          <input
+            id="volume-range"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            aria-label="볼륨"
+          />
+        </div>
+        <div class="mode-display" id="mode-roller">
+          <span>ASCII</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+<script>
+  import { createOverlayRenderer } from "@lib/not-found/overlay-renderer";
+  import { createSpectroBorderRenderer } from "@lib/not-found/spectro-border";
+
+  // ---- YouTube API ----
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+
+  const VIDEO_START = 32;
+  let player: YT.Player;
+
+  // ---- UI elements ----
+  const btnPlay = document.getElementById("btn-play")!;
+  const btnMute = document.getElementById("btn-mute")!;
+  const volumeRange = document.getElementById(
+    "volume-range",
+  ) as HTMLInputElement;
+  let savedVolume = 50;
+
+  function setPlaying(playing: boolean) {
+    btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
+      ? "block"
+      : "none";
+    btnPlay.querySelector<SVGElement>(".icon-play")!.style.display = playing
+      ? "none"
+      : "block";
+    btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
+  }
+
+  function setMuted(muted: boolean) {
+    btnMute.querySelector<SVGElement>(".icon-muted")!.style.display = muted
+      ? "block"
+      : "none";
+    btnMute.querySelector<SVGElement>(".icon-unmuted")!.style.display = muted
+      ? "none"
+      : "block";
+    btnMute.setAttribute("aria-label", muted ? "음소거 해제" : "음소거");
+  }
+
+  setPlaying(true);
+  setMuted(true);
+
+  // ---- Mode display (slot-machine roll) ----
+  const modeRoller = document.getElementById("mode-roller")!;
+
+  function rollToMode(name: string) {
+    const current = modeRoller.querySelector("span:not(.exiting)");
+    if (current) {
+      if (current.textContent === name) return;
+      current.classList.add("exiting");
+      current.addEventListener("transitionend", () => current.remove(), {
+        once: true,
+      });
+    }
+
+    const next = document.createElement("span");
+    next.textContent = name;
+    modeRoller.appendChild(next);
+  }
+
+  // ---- Overlay renderer ----
+  const renderer = createOverlayRenderer(
+    document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
+    () => {
+      try {
+        return Math.max(0, player.getCurrentTime() - VIDEO_START);
+      } catch {
+        return null;
+      }
+    },
+    (name) => rollToMode(name),
+  );
+  renderer.start();
+
+  // ---- YouTube Player ----
+  (window as any).onYouTubeIframeAPIReady = () => {
+    player = new YT.Player("yt-player", {
+      events: {
+        onStateChange(e: YT.OnStateChangeEvent) {
+          if (e.data === YT.PlayerState.ENDED) {
+            player.seekTo(32, true);
+            player.playVideo();
+          }
+          setPlaying(e.data === YT.PlayerState.PLAYING);
+        },
+      },
+    });
+  };
+
+  // ---- Controls ----
+  btnPlay.addEventListener("click", () => {
+    if (!player) return;
+    if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+      player.pauseVideo();
+    } else {
+      player.playVideo();
+    }
+  });
+
+  function syncVolumeBar(val: number) {
+    volumeRange.style.setProperty("--vol", `${val}%`);
+  }
+
+  btnMute.addEventListener("click", () => {
+    if (!player) return;
+    if (player.isMuted()) {
+      player.unMute();
+      player.setVolume(savedVolume);
+      volumeRange.value = String(savedVolume);
+      syncVolumeBar(savedVolume);
+      setMuted(false);
+    } else {
+      savedVolume = player.getVolume() || 50;
+      player.mute();
+      volumeRange.value = "0";
+      syncVolumeBar(0);
+      setMuted(true);
+    }
+  });
+
+  volumeRange.addEventListener("input", () => {
+    if (!player) return;
+    const vol = Number(volumeRange.value);
+    syncVolumeBar(vol);
+    if (vol === 0) {
+      player.mute();
+      setMuted(true);
+    } else {
+      if (player.isMuted()) player.unMute();
+      player.setVolume(vol);
+      savedVolume = vol;
+      setMuted(false);
+    }
+  });
+
+  // ---- Audio Spectrogram Border ----
+  const TRACK_WIDTH = 48; // CSS pixels
+  const borderCanvas = document.querySelector<HTMLCanvasElement>(
+    ".spectro-border",
+  )!;
+  const wrap = document.querySelector<HTMLElement>(".video-border-wrap")!;
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  const wrapRect = wrap.getBoundingClientRect();
+  borderCanvas.width = Math.round(wrapRect.width * dpr);
+  borderCanvas.height = Math.round(wrapRect.height * dpr);
+
+  const spectroRenderer = createSpectroBorderRenderer(
+    borderCanvas,
+    TRACK_WIDTH,
+  );
+
+  let spectroData: {
+    binsPerFrame: number;
+    fps: number;
+    frameCount: number;
+    frames: Uint8Array;
+  } | null = null;
+
+  fetch("/assets/404-audio.bin")
+    .then((r) => r.arrayBuffer())
+    .then((buf) => {
+      const v = new DataView(buf);
+      spectroData = {
+        binsPerFrame: v.getUint16(0, true),
+        fps: v.getUint16(2, true),
+        frameCount: v.getUint16(4, true),
+        frames: new Uint8Array(buf, 6),
+      };
+    });
+
+  let lastVizFrame = -1;
+
+  function renderViz() {
+    requestAnimationFrame(renderViz);
+    if (!spectroData || !player) return;
+
+    let clipTime: number;
+    try {
+      clipTime = Math.max(0, player.getCurrentTime() - VIDEO_START);
+    } catch {
+      return;
+    }
+
+    const frameIdx =
+      Math.floor(clipTime * spectroData.fps) % spectroData.frameCount;
+    if (frameIdx === lastVizFrame) return;
+    lastVizFrame = frameIdx;
+
+    spectroRenderer.pushColumn(
+      spectroData.frames,
+      frameIdx * spectroData.binsPerFrame,
+      spectroData.binsPerFrame,
+      clipTime,
+    );
+  }
+
+  requestAnimationFrame(renderViz);
+</script>
+
+<style>
+  .not-found-player {
+    margin: 0 0 2rem;
+  }
+
+  h1 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    font-size: 10rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1;
+    color: white;
+    pointer-events: none;
+  }
+
+  .video-border-wrap {
+    position: relative;
+    padding: 48px;
+    margin: -48px -48px 0;
+    visibility: hidden;
+  }
+
+  .video-border-wrap > .video-crop {
+    visibility: visible;
+  }
+
+  .spectro-border {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .video-crop {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    overflow: hidden;
+  }
+
+  .video-crop iframe {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .ascii-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    image-rendering: pixelated;
+  }
+
+  .controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+  }
+
+  .controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s;
+  }
+
+  .controls button:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .controls svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* initial: playing → show pause, hide play */
+  .icon-play {
+    display: none;
+  }
+
+  /* initial: muted → show muted, hide unmuted */
+  .icon-unmuted {
+    display: none;
+  }
+
+  .volume-slider {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+  }
+
+  #volume-range {
+    --vol: 0%;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 60px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(
+      to right,
+      white var(--vol),
+      rgba(255, 255, 255, 0.3) var(--vol)
+    );
+    outline: none;
+    cursor: grab;
+    transition: height 0.15s;
+  }
+
+  #volume-range:hover {
+    height: 14px;
+  }
+
+  #volume-range:active {
+    cursor: grabbing;
+    height: 14px;
+  }
+
+  #volume-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 0;
+    height: 0;
+    border: none;
+  }
+
+  #volume-range::-moz-range-thumb {
+    width: 0;
+    height: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .mode-display {
+    position: relative;
+    height: 36px;
+    min-width: 80px;
+    padding: 0 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    color: white;
+    font-size: 11px;
+    font-family: monospace;
+    overflow: hidden;
+  }
+
+  .mode-display :global(span) {
+    position: absolute;
+    top: 0;
+    left: 10px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    transition:
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @starting-style {
+    .mode-display :global(span) {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+  }
+
+  .mode-display :global(span.exiting) {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+</style>
