@@ -5,6 +5,7 @@ import {
   CHAR_CONFIG,
   VERT_SHADER,
   FRAG_SHADER,
+  compileShader,
 } from "./shader-modes";
 
 export interface OverlayRenderer {
@@ -29,19 +30,9 @@ export function createOverlayRenderer(
 
   // ---- Shader compilation ----
 
-  function compile(type: number, src: string) {
-    const s = gl.createShader(type)!;
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      console.error("Shader compile error:", gl.getShaderInfoLog(s));
-    }
-    return s;
-  }
-
   const prog = gl.createProgram()!;
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT_SHADER));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG_SHADER));
+  gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER, VERT_SHADER));
+  gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SHADER));
   gl.linkProgram(prog);
   gl.useProgram(prog);
 

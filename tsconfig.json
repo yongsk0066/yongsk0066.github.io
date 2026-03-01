@@ -20,9 +20,6 @@
       "@lib/*": [
         "src/lib/*"
       ],
-      "@utils/*": [
-        "src/utils/*"
-      ],
       "@consts": [
         "src/consts"
       ],

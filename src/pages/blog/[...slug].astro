@@ -2,14 +2,14 @@
 import BackToPrev from "@components/BackToPrev.astro";
 import Comments from "@components/Comments.astro";
 import Container from "@components/Container.astro";
-import FormattedDate from "@components/FormattedDate.astro";
-import PostNavigation from "@components/PostNavigation.astro";
-import Share from "@components/Share.astro";
-import TOC from "@components/TOC.astro";
+import FormattedDate from "@components/blog/FormattedDate.astro";
+import PostNavigation from "@components/blog/PostNavigation.astro";
+import Share from "@components/blog/Share.astro";
+import TOC from "@components/blog/TOC.astro";
 import { DEFAULT_LOCALE } from "@consts";
 import { useTranslations } from "@i18n/utils";
 import PageLayout from "@layouts/PageLayout.astro";
-import { readingTime } from "@lib/utils";
+import { readingTime } from "@lib/blog";
 import { getCollection, render, type CollectionEntry } from "astro:content";
 
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;

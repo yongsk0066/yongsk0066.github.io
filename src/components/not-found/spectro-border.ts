@@ -4,6 +4,7 @@ import {
   MODES,
   BEAT_SYNC,
   SWITCH_INTERVAL,
+  compileShader,
 } from "./shader-modes";
 
 // ---- Colormap ----
@@ -360,18 +361,9 @@ export function createSpectroBorderRenderer(
 
   // ---- Shader compilation ----
 
-  function compile(type: number, src: string) {
-    const s = gl.createShader(type)!;
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-      console.error("Shader:", gl.getShaderInfoLog(s));
-    return s;
-  }
-
   const prog = gl.createProgram()!;
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT_SHADER));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, BORDER_FRAG));
+  gl.attachShader(prog, compileShader(gl, gl.VERTEX_SHADER, VERT_SHADER));
+  gl.attachShader(prog, compileShader(gl, gl.FRAGMENT_SHADER, BORDER_FRAG));
   gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
     console.error("Link:", gl.getProgramInfoLog(prog));
