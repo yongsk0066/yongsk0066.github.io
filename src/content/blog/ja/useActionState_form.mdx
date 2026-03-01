@@ -1,0 +1,769 @@
+---
+title: "useActionState (formとは何か 2)"
+author: "Yongseok"
+pubDate: "2024-04-28"
+date: "2024-04-28"
+categories: ["react"]
+heroImage: "/blog-placeholder-3.jpg"
+description: "Reactにもform actionやuseFormState、useFormStatusといったフォームに関連するフックがある。
+これらのフックがどのように動作するのかを見ていきたい。useActionStateは非同期アクションを処理するためのフックである。useFormStateについて調べていたところ、useActionStateという名前に変更されていた。"
+
+---
+
+import LinkPreview from '../../../components/embeds/LinkPreview.astro';
+
+
+前回の内容ではformの基本的な実装について見てきた。
+Reactにもform actionやuseFormState、useFormStatusといったフォームに関連するフックがある。\
+これらのフックがどのように動作するのかを見ていきたい。
+
+
+### useActionState
+
+非同期アクションを処理するためのフックである。
+
+https://react.dev/reference/react/useActionState
+
+```tsx
+import { useActionState } from "react"; // not react-dom
+
+function Form({ formAction }) {
+  const [state, action, isPending] = useActionState(formAction);
+
+  return (
+    <form action={action}>
+      <input type="email" name="email" disabled={isPending} />
+      <button type="submit" disabled={isPending}>
+        Submit
+      </button>
+      {state.errorMessage && <p>{state.errorMessage}</p>}
+    </form>
+  );
+}
+```
+useFormStateについて調べていたところ、useActionStateという名前に変更されていた。
+<LinkPreview src="https://github.com/facebook/react/pull/28491" />
+
+フォームに依存せず、非同期アクションを処理するためのフックとして使うためである。
+
+ソースコードを通じてどのように動作するのか見ていこう。
+
+マウントされる過程を見てみよう。
+マウントされるとmountActionState関数が呼び出され、初期状態が設定される。
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js
+(HooksDispatcherOnMountInDEV: Dispatcher).useActionState =
+      function useActionState<S, P>(
+        action: (Awaited<S>, P) => S,
+        initialState: Awaited<S>,
+        permalink?: string,
+      ): [Awaited<S>, (P) => void, boolean] {
+        currentHookNameInDev = 'useActionState';
+        mountHookTypesDev();
+        return mountActionState(action, initialState, permalink);
+      };
+```
+
+
+
+
+```ts
+// フックがマウントされるときに呼び出される関数
+function mountActionState<S, P>(
+  action: (Awaited<S>, P) => S,
+  initialStateProp: Awaited<S>,
+  permalink?: string,
+): [Awaited<S>, (P) => void, boolean] {
+  // 初期状態を取得する。
+  let initialState: Awaited<S> = initialStateProp;
+
+  // ハイドレーション中の場合
+  if (getIsHydrating()) {
+    // サーバーでレンダリングされたフォーム状態を取得する。
+    const root: FiberRoot = (getWorkInProgressRoot(): any);
+    const ssrFormState = root.formState;
+    // If a formState option was passed to the root, there are form state
+    // markers that we need to hydrate. These indicate whether the form state
+    // matches this hook instance.
+    // formStateオプションがルートに渡された場合、ハイドレートする必要のあるフォーム状態マーカーがある。
+    // これらはフォーム状態がこのフックインスタンスと一致するかどうかを示す。
+    if (ssrFormState !== null) {
+      // tryToClaimNextHydratableFormMarkerInstanceを通じて現在のFiberと一致するフォームマーカーを見つけ、
+      // 一致する場合は初期状態を取得する。
+      const isMatching = tryToClaimNextHydratableFormMarkerInstance(
+        currentlyRenderingFiber,
+      );
+      if (isMatching) {
+        initialState = ssrFormState[0];
+      }
+    }
+  }
+  // ...
+```
+
+useActionStateは引数としてactionとinitialStateを受け取る（追加でpermalink）。\
+非同期処理を行うため、初期値はAwaitedになり得る。
+
+useActionStateは3つのフックを組み合わせて使用する。このフックは以下の値を返す。
+
+- state: アクションの現在の状態値
+- dispatch: アクションをディスパッチする関数
+- isPending: アクションが現在進行中かどうかを示すboolean値
+
+これにより、コンポーネントは現在の状態を読み取り、新しいアクションをディスパッチし、アクションの完了状態を知ることができる。
+
+## stateHook - stateを保持するためのフック
+
+actionのstate（状態）を保持するためのフックを生成する。\
+初期値としてinitialStateが渡されるが、型は`Awaited<S>`である。\
+非同期アクションの結果を保持するために`Awaited<S>`型を使用する。
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountActionState 関数
+
+// ...
+// ========================================================
+// stateを保持するためのフック
+// ========================================================
+
+// State hook. The state is stored in a thenable which is then unwrapped by
+// the `use` algorithm during render.
+// ステートフック。状態はレンダリング中に'use'アルゴリズムによってアンラップされるthenableに格納される。
+
+
+  // mountWorkInProgressHookを通じて新しいフックを生成する。
+  const stateHook = mountWorkInProgressHook();
+  stateHook.memoizedState = stateHook.baseState = initialState;
+  // TODO: Typing this "correctly" results in recursion limit errors
+  // const stateQueue: UpdateQueue<S | Awaited<S>, S | Awaited<S>> = {
+  const stateQueue = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: (null: any),
+    lastRenderedReducer: actionStateReducer,
+    lastRenderedState: initialState,
+  };
+  // stateQueueオブジェクトを生成し、stateHook.queueに割り当てる。
+  stateHook.queue = stateQueue;
+  // dispatchSetState関数をcurrentlyRenderingFiberとstateQueueとバインドしてsetState関数を生成する。
+  // stateQueue.dispatchにsetState関数を割り当てる。
+
+  // ここまではuseStateと類似した部分
+  const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+  ): any);
+  stateQueue.dispatch = setState;
+
+```
+
+<aside>
+<b> ここで思ったこと：</b>
+useStateと名前も似ていて、状態を保持するフックという点も似ているが、何が違うのだろうか？
+</aside>
+
+useStateで見慣れた動作が含まれている。
+
+少しだけuseStateのマウント過程（mountState）を見てみよう。
+
+```ts
+// packages/react-reconciler/src/ReactFiberHooks.js mountState 関数
+
+// ...
+function mountState<S>(
+  initialState: (() => S) | S,
+): [S, Dispatch<BasicStateAction<S>>] {
+  const hook = mountStateImpl(initialState);
+  const queue = hook.queue;
+  const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    queue,
+  ): any);
+  queue.dispatch = dispatch;
+  return [hook.memoizedState, dispatch];
+}
+
+function mountStateImpl<S>(initialState: (() => S) | S): Hook {
+  const hook = mountWorkInProgressHook();
+  // 同じくフックを作り
+  if (typeof initialState === 'function') {
+    // ...
+  }
+  // 状態を初期化する。
+  hook.memoizedState = hook.baseState = initialState;
+  // キューを作り
+  const queue: UpdateQueue<S, BasicStateAction<S>> = {
+    pending: null,
+    lanes: NoLanes,
+    dispatch: null,
+    lastRenderedReducer: basicStateReducer,
+    lastRenderedState: (initialState: any),
+  };
+
+  // キューをフックに割り当てる。
+  hook.queue = queue;
+  // そしてフックを返す。
+  return hook;
+}
+
+
+```
+
+2つの違いを見てみよう。
+
+
+```ts
+// useState (mountState) の型
+type BasicStateAction<S> = (S => S) | S;
+
+const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  queue, // UpdateQueue<S, BasicStateAction<S>>
+): any);
+```
+useStateの場合はキューの型が`UpdateQueue<S, BasicStateAction<S>>`型にキャストされる。
+
+```ts
+// useActionState (mountActionState の stateHook) の型
+
+const setState: Dispatch<S | Awaited<S>> = (dispatchSetState.bind(
+  null,
+  currentlyRenderingFiber,
+  ((stateQueue: any): UpdateQueue<S | Awaited<S>, S | Awaited<S>>),
+): any);
+```
+一方、useActionStateは非同期アクションの結果を保持するために`UpdateQueue<S | Awaited<S>, S | Awaited<S>>`型にキャストされる。
+
+
+Awaitedは以下のように定義されている。
+
+面白いのは、再帰を通じて何重にも重なったThenableからも最終的にresolveされる値を返すということだ。
+
+```ts
+// packages/shared/ReactTypes.js
+export type Awaited<T> = T extends null | void
+
+  ? T // nullまたはundefinedの場合そのまま返す
+  : T extends Object // Tがオブジェクト型の場合
+
+    ? T extends {then(onfulfilled: infer F): any} // thenメソッドを持つThenableオブジェクトの場合
+      ? F extends (value: infer V) => any // thenメソッドの第1引数が関数の場合
+        ? Awaited<V> // 関数の第1引数の型を再帰的にAwaitedで包む
+        : empty // thenメソッドの第1引数が関数でない場合（無効なThenable）
+
+      : T // thenメソッドを持たない通常のオブジェクトの場合
+    : T; // オブジェクトでない場合（数値、文字列など）
+  ```
+
+
+## pendingStateHook - ペンディング状態処理のための部分
+
+非同期アクションの現在のペンディング状態を処理するための部分である。
+pendingStateHookも基本的にuseStateと類似している。
+mountStateImplを通じてフックを生成する。
+
+またペンディング状態はすぐに更新される必要があるため、楽観的更新（オプティミスティックアップデート）を使用する。\
+これについてはdispatchOptimisticSetStateと合わせて後述する。
+
+このとき少し異なる点は、初期値として`Thenable<boolean> | boolean`を渡すことである（デフォルト値はfalse）。
+
+<aside>
+<b> ここで思ったこと：</b>
+全体的にコードを見たところ、楽観的更新の対象でもあり、そうであればpendingの型がThenableである必要があるのだろうか？
+</aside>
+この疑問からPRを出してみた。
+<LinkPreview src="https://github.com/facebook/react/pull/28942" />
+
+useTransition側のコードを参考にしたようだが、そちらではbooleanOrThenableなので有効だが、このケースではそうではないのでbooleanが適切ではないだろうか...
+
+
+```ts
+// ========================================================
+// ペンディング状態処理のための部分
+// ========================================================
+// Pending state. This is used to store the pending state of the action.
+// Tracked optimistically, like a transition pending state.
+// ペンディング状態。これはアクションの保留中の状態を格納するために使用される。
+// トランジションのペンディング状態のように楽観的に追跡される。
+
+  // mountStateImplを通じて進行中状態のためのフックを生成
+  const pendingStateHook = mountStateImpl((false: Thenable<boolean> | boolean));
+  // dispatchOptimisticSetState関数をcurrentlyRenderingFiber、false、
+  // そしてpendingStateHook.queueとバインドしてsetPendingState関数を生成
+  const setPendingState: boolean => void = (dispatchOptimisticSetState.bind(
+    null,
+    currentlyRenderingFiber,
+    false,
+    ((pendingStateHook.queue: any): UpdateQueue<
+      S | Awaited<S>, // SがPromiseまたはThenableの場合
+      S | Awaited<S>,
+    >),
+  ): any);
+```
+
+Thenable型は以下の通りである。興味がある方のために添付。
+
+```ts
+// packages/shared/ReactTypes.js
+
+// The subset of a Thenable required by things thrown by Suspense.
+// This doesn't require a value to be passed to either handler.
+export interface Wakeable {
+  then(onFulfill: () => mixed, onReject: () => mixed): void | Wakeable;
+}
+
+// The subset of a Promise that React APIs rely on. This resolves a value.
+// This doesn't require a return value neither from the handler nor the
+// then function.
+interface ThenableImpl<T> {
+  then(
+    onFulfill: (value: T) => mixed,
+    onReject: (error: mixed) => mixed,
+  ): void | Wakeable;
+}
+interface UntrackedThenable<T> extends ThenableImpl<T> {
+  status?: void;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface PendingThenable<T> extends ThenableImpl<T> {
+  status: 'pending';
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface FulfilledThenable<T> extends ThenableImpl<T> {
+  status: 'fulfilled';
+  value: T;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export interface RejectedThenable<T> extends ThenableImpl<T> {
+  status: 'rejected';
+  reason: mixed;
+  _debugInfo?: null | ReactDebugInfo;
+}
+
+export type Thenable<T> =
+  | UntrackedThenable<T>
+  | PendingThenable<T>
+  | FulfilledThenable<T>
+  | RejectedThenable<T>;
+  ```
+
+
+## actionQueueHook - アクションキューフック
+
+アクションをキューに入れて管理するための部分である。
+このとき前述の2つのフックのdispatchも一緒に渡される。
+
+```ts
+
+// ========================================================
+// アクションキューフック
+// ========================================================
+
+// Action queue hook. This is used to queue pending actions. The queue is
+// shared between all instances of the hook. Similar to a regular state queue,
+// but different because the actions are run sequentially, and they run in
+// an event instead of during render.
+
+// アクションキューフック。これは保留中のアクションをキューに入れるために使用される。キューはフックのすべてのインスタンス間で共有される。
+// 通常の状態キューと似ているが、アクションは順次実行され、レンダリング中ではなくイベント内で実行される。
+  const actionQueueHook = mountWorkInProgressHook();
+  // memorizedStateはここでは設定されない。
+  const actionQueue: ActionStateQueue<S, P> = {
+    state: initialState, // このときinitialStateが入る。
+    dispatch: (null: any), // circular
+    action,
+    pending: null,
+  };
+  actionQueueHook.queue = actionQueue;
+  // ここまではqueueを作って渡す部分
+  const dispatch = (dispatchActionState: any).bind(
+    null,
+    currentlyRenderingFiber,
+    actionQueue,
+    setPendingState, // setPendingState関数を渡す。
+    setState, // setState関数を渡す。
+  );
+  actionQueue.dispatch = dispatch;
+
+  // Stash the action function on the memoized state of the hook. We'll use this
+  // to detect when the action function changes so we can update it in
+  // an effect.
+
+  // フックのメモ化された状態にアクション関数を保存する。
+  // アクション関数が変更されたときにそれを検出し、エフェクト内で更新できるようにする。
+  actionQueueHook.memoizedState = action;
+
+  // 最終的に[state, dispatch, isPending]を返す。
+  return [initialState, dispatch, false];
+}
+
+```
+
+この3つのフックのもう1つの違いは、それぞれ
+`dispatchSetState`、`dispatchOptimisticSetState`、`dispatchActionState`関数を通じて状態を変更するということである。
+
+この3つを比較してみよう。
+
+## dispatch比較
+
+### dispatchSetState
+
+```ts
+function dispatchSetState<S, A>(
+  fiber: Fiber,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const lane = requestUpdateLane(fiber);
+  // 更新を乗せるLaneをリクエストする。
+
+  const update: Update<S, A> = {
+    lane,
+    revertLane: NoLane, // Optimistic updateではないのでNoLane
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+  // 更新オブジェクトを生成する。
+
+  // レンダリングフェーズかどうか確認する。
+  if (isRenderPhaseUpdate(fiber)) {
+    // レンダリングフェーズの場合
+    enqueueRenderPhaseUpdate(queue, update);
+  } else {
+    // レンダリングフェーズではない場合
+    const alternate = fiber.alternate;
+    // 以前のFiberを取得する。
+    if (
+      fiber.lanes === NoLanes && // 現在のFiberのLaneがNoLanesで
+      (alternate === null || alternate.lanes === NoLanes) // 以前のFiberのLaneがNoLanesの場合
+    ) { // つまり以前にスケジュールされた更新がないことを意味する
+      const lastRenderedReducer = queue.lastRenderedReducer; // lastRenderedReducerは最後にレンダリングされたreducer関数
+      // キューが現在空であれば、レンダリングフェーズに入る前に
+      // 次の状態をeagerに計算できる。事前に計算すると考えればよい。
+      // 新しい状態が現在の状態と同じであれば、完全にスキップできる。
+      if (lastRenderedReducer !== null) {
+        let prevDispatcher = null;
+        try {
+          const currentState: S = (queue.lastRenderedState: any);
+          const eagerState = lastRenderedReducer(currentState, action);
+          // eagerに計算された状態とそれを計算するために使用されたreducerを更新オブジェクトに保存する。
+          // レンダリングフェーズに入るまでreducerが変更されなければ、
+          // reducerを再度呼び出さずにeager stateを使用できる。
+          update.hasEagerState = true;
+          update.eagerState = eagerState;
+          if (is(eagerState, currentState)) {
+            // 高速パス。Reactを再レンダリングするようにスケジュールせずにスキップできる。
+            // コンポーネントが他の理由で再レンダリングされ、その時までにreducerが変更された場合、
+            // 後でこの更新を再調整する必要があるかもしれない。
+            // TODO: この場合もtransitionを絡ませるべきだろうか？
+
+            // 再レンダリングが不要な場合
+            enqueueConcurrentHookUpdateAndEagerlyBailout(fiber, queue, update);
+            return;
+          }
+        } catch (error) {
+        // エラーを抑制する。レンダリングフェーズで再度throwされる。
+        } finally {
+        }
+      }
+    }
+
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
+    if (root !== null) {
+      scheduleUpdateOnFiber(root, fiber, lane);
+      entangleTransitionUpdate(root, queue, lane);
+    }
+  }
+
+  markUpdateInDevTools(fiber, lane, action);
+}
+```
+
+```ts
+
+function isRenderPhaseUpdate(fiber: Fiber): boolean {
+  const alternate = fiber.alternate;
+  return (
+    fiber === currentlyRenderingFiber ||
+    (alternate !== null && alternate === currentlyRenderingFiber)
+  );
+}
+
+function enqueueRenderPhaseUpdate<S, A>(
+  queue: UpdateQueue<S, A>,
+  update: Update<S, A>,
+): void {
+  // This is a render phase update. Stash it in a lazily-created map of
+  // queue -> linked list of updates. After this render pass, we'll restart
+  // and apply the stashed updates on top of the work-in-progress hook.
+  didScheduleRenderPhaseUpdateDuringThisPass = didScheduleRenderPhaseUpdate =
+    true;
+  const pending = queue.pending;
+  if (pending === null) {
+    // This is the first update. Create a circular list.
+    update.next = update;
+  } else {
+    update.next = pending.next;
+    pending.next = update;
+  }
+  queue.pending = update;
+}
+
+```
+
+### dispatchOptimisticSetState
+
+楽観的更新（オプティミスティックアップデート）を処理するための関数である。\
+楽観的更新は状態をすぐに更新することが目的なので、同期的に動作し、
+それに伴いsyncLaneを利用する。
+
+そして先行反映に対する後処理のために、トランジションが終了した後に状態を元に戻すためにrevertLaneを使用する。
+
+だからこそなおさらThenableである必要がないのではないか... ということでPRを出してみた。
+
+```ts
+function dispatchOptimisticSetState<S, A>(
+  fiber: Fiber,
+  throwIfDuringRender: boolean,
+  queue: UpdateQueue<S, A>,
+  action: A,
+): void {
+  const transition = requestCurrentTransition();
+
+  const update: Update<S, A> = {
+    // 楽観的更新は同期的に行われるのでSyncLaneを使用する。ユーザーにすぐ見せる必要があるためだ。
+    lane: SyncLane,
+    // After committing, the optimistic update is "reverted" using the same
+    // lane as the transition it's associated with.
+    // 楽観的更新はすぐに行われるため、後で実際のデータと不一致が発生する可能性がある。
+    // これを解決するためにrevertLaneを使用する。
+    // 適切なタイミングで状態を元に戻すためにtransitionLaneを使用する。
+    // Transitionが終了
+    revertLane: requestTransitionLane(transition),
+    action,
+    hasEagerState: false,
+    eagerState: null,
+    next: (null: any),
+  };
+
+  if (isRenderPhaseUpdate(fiber)) {
+    // レンダリング中にstartTransitionを呼び出す場合、例外をスローするのではなく警告を発する。例外をスローすると重大な変更になり得るためだ。
+    // setOptimisticStateは新しいAPIなので、例外をスローすることが許される。
+    if (throwIfDuringRender) {
+      throw new Error('Cannot update optimistic state while rendering.');
+    } else {
+      // レンダリング中にstartTransitionが呼び出された。
+      // レンダリングフェーズの更新がどうせ2番目の更新によって上書きされるため、ここでは警告以外何もする必要がない。
+      // このブランチを削除して、将来のリリースで例外をスローするようにすることができる。
+    }
+  } else {
+    const root = enqueueConcurrentHookUpdate(fiber, queue, update, SyncLane);
+    if (root !== null) {
+      // 楽観的更新の実装は、Transitionが楽観的更新より先に試行されないことを前提としている。
+      // これは現在、楽観的更新が常に同期的に処理されるため有効である。
+      // もしこの動作方式が変更されれば、これを考慮する必要がある。
+      scheduleUpdateOnFiber(root, fiber, SyncLane);
+      // 楽観的更新は常に同期的なので、ここでentangleTransitionUpdate関数を呼び出す必要がない。
+    }
+  }
+
+  markUpdateInDevTools(fiber, SyncLane, action);
+}
+```
+
+### dispatchActionState
+
+アクションを処理するための関数である。\
+基本的には循環連結リスト（Circular Linked List）のデータ構造を使用してアクションをキューに入れる。
+
+これによりアクションの順次実行が保証される。
+
+<aside>
+<b> ここで思ったこと：</b>
+循環リンクドリストを使用したより直接的な理由があるのだろうか？配列ベースで処理するより追加の実装が少なくて済むからではないだろうか...
+</aside>
+
+ここで直接的にアクションが実行される。
+
+```ts
+function dispatchActionState<S, P>(
+  fiber: Fiber,
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+): void {
+  if (isRenderPhaseUpdate(fiber)) {
+    // レンダリング中にはフォーム状態を更新できない！
+    throw new Error('Cannot update form state while rendering.');
+  }
+  // アクションキューが空かどうか確認
+  const last = actionQueue.pending;
+  if (last === null) {
+    // 空の場合（no pending actions）これが最初のアクションなので即座に実行
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: (null: any), // circular（state更新と同様に連結リストで実装）
+    };
+    // 循環連結リスト形態で作られる。
+    newLast.next = actionQueue.pending = newLast; // 新しく生成したアクションをキューに入れる。
+    // actionQueue.pending = newLast; 開始点を設定する。
+    // 新しいアクションノードのnextプロパティを自分自身に設定する。次のノードは自分自身になる。
+
+    runActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+      payload,
+    );
+  } else {
+
+    // すでに実行中のアクションがある場合、キューに追加する。
+    const first = last.next; // 次のアクションを取得する。（循環連結リストなので最後のノードの次のノードが最初のノードになる。）
+    const newLast: ActionStateQueueNode<P> = {
+      payload,
+      next: first, // 取得した次のアクションを新しいアクションの次に設定する。
+    };
+    actionQueue.pending = last.next = newLast; // 新しいアクションをキューに入れる。
+    // actionQueue.pending = last.next = newLast; 最後のノードの次のノードを新しいノードに設定する。
+  }
+}
+
+function runActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: boolean => void,
+  setState: Dispatch<S | Awaited<S>>,
+  payload: P,
+) {
+  const action = actionQueue.action; // アクションを取得する。
+  const prevState = actionQueue.state; // 以前の状態を取得する。
+
+  // startTransitionから取得した部分
+  const prevTransition = ReactSharedInternals.T;
+  const currentTransition: BatchConfigTransition = {
+    _callbacks: new Set<(BatchConfigTransition, mixed) => mixed>(),
+  };
+  ReactSharedInternals.T = currentTransition;
+  if (__DEV__) {
+    ReactSharedInternals.T._updatedFibers = new Set();
+  }
+
+  // ペンディング状態を楽観的に更新する。useTransitionと類似している。
+  // すべてのアクションが完了すると自動的に元に戻す。
+  setPendingState(true);
+
+  try {
+    const returnValue = action(prevState, payload); // アクションを実行する。
+    if (
+      returnValue !== null &&
+      typeof returnValue === 'object' &&
+      typeof returnValue.then === 'function'
+    ) {
+      // アクションがnullではなく、オブジェクトであり、thenメソッドを持っている場合
+      // thenableに変換する。
+      const thenable = ((returnValue: any): Thenable<Awaited<S>>);
+      notifyTransitionCallbacks(currentTransition, thenable);
+
+      // アクションの返却状態を読み取るためのリスナーを追加する。
+      // これが解決されると、シーケンス内の次のアクションを実行できる。
+      thenable.then( // thenableを使用して非同期アクションを処理する。
+        (nextState: Awaited<S>) => { // 成功した場合
+          actionQueue.state = nextState; // 状態を更新する。
+          finishRunningActionStateAction(  // アクション実行が終了したら実行する。
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          );
+        },
+        () => // 失敗した場合
+          finishRunningActionStateAction(
+            actionQueue,
+            (setPendingState: any),
+            (setState: any),
+          ),
+      );
+
+      setState((thenable: any)); // stateHookのsetStateを呼び出す。thenableを渡す。
+    } else { // 返り値がthenableではない場合、つまり同期的な場合
+      setState((returnValue: any)); // stateHookのsetStateを呼び出す。返り値を渡す。
+
+      const nextState = ((returnValue: any): Awaited<S>); // 返り値をnextStateに代入する。
+      actionQueue.state = nextState; // 状態を更新する。
+      finishRunningActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+      );
+    }
+  } catch (error) {
+    // This is a trick to get the `useActionState` hook to rethrow the error.
+    // When it unwraps the thenable with the `use` algorithm, the error
+    // will be thrown.
+    const rejectedThenable: S = ({
+      then() {},
+      status: 'rejected',
+      reason: error,
+      // $FlowFixMe: Not sure why this doesn't work
+    }: RejectedThenable<Awaited<S>>);
+    setState(rejectedThenable);
+    finishRunningActionStateAction(
+      actionQueue,
+      (setPendingState: any),
+      (setState: any),
+    );
+  } finally {
+    ReactSharedInternals.T = prevTransition;
+  }
+}
+
+// アクション実行が終了したら実行される関数
+function finishRunningActionStateAction<S, P>(
+  actionQueue: ActionStateQueue<S, P>,
+  setPendingState: Dispatch<S | Awaited<S>>,
+  setState: Dispatch<S | Awaited<S>>,
+) {
+  // The action finished running. Pop it from the queue and run the next pending
+  // action, if there are any.
+  // アクション実行が終了し、キューから取り出して、保留中のアクションがあれば次の保留中のアクションを実行する。
+  const last = actionQueue.pending; // 最後のアクションを取得する。
+  if (last !== null) { // 最後のアクションがnullでない場合
+    const first = last.next; // 次のアクションを取得する。
+    if (first === last) { // 最後のアクションが最初のアクションの場合（循環連結リストなので）
+      // キューの最後のアクションだった。
+      actionQueue.pending = null;  // キューを空にする。
+    } else { // 最後のアクションが最初のアクションではない場合
+      // 循環キューから最初のノードを削除する。
+      const next = first.next; // 次のノードを取得する。
+      last.next = next; // 最後のノードの次のノードを次のノードに設定する。
+
+      // 次のアクションを実行する。
+      runActionStateAction(
+        actionQueue,
+        (setPendingState: any),
+        (setState: any),
+        next.payload,
+      );
+    }
+  }
+}
+```
+
+このような過程を通じて、useActionStateフックは状態を管理し、アクションをディスパッチし、アクションの完了状態を知ることができるようになる。
+
+
+## まとめ
+
+useActionStateフックは、既存のuseFormStateフックが持っていた混乱と限界を解決するために導入されたフックである。\
+これにより、もはやレンダラーに依存せずに使用できるようになった。
+
+コードを調べる中で発見した部分について出したPRも通ると良いのだが。
+
+次回はよりフォームに近いuseFormStatusについて見ていくことにする。

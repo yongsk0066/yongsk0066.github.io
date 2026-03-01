@@ -1,0 +1,556 @@
+---
+title: 'What exactly is a form?'
+description: "What is a form, really? If someone asked you that question, how would you answer? According to Hypertext Markup Language - 2.0, a form is defined as follows: A form is a template for a form data set and an associated method and action URI."
+author: "Yongseok"
+pubDate: "2024-04-27"
+categories: ["web"]
+heroImage: "/blog-placeholder-4.jpg"
+date: "2024-04-27"
+---
+
+[Content being organized]
+
+https://react.dev/reference/react/use-server#server-actions-in-forms
+
+Let's explore server actions in forms and what they mean.
+
+But first, what exactly is a form?
+If someone asked you this question, how would you answer?
+
+## What is a form?
+
+According to [Hypertext Markup Language - 2.0](https://datatracker.ietf.org/doc/html/rfc1866#section-8),
+a form is defined as follows:
+
+<code>
+A form is a template for a form data set and an associated
+method and action URI. A form data set is a sequence of
+name/value pair fields. The names are specified on the NAME
+attributes of form input elements, and the values are given
+initial values by various forms of markup and edited by the
+user. The resulting form data set is used to access an
+information service as a function of the action and method.
+
+Forms elements can be mixed in with document structuring
+elements. For example, a `<PRE>` element may contain a `<FORM>`
+element, or a `<FORM>` element may contain lists which contain
+`<INPUT>` elements. This gives considerable flexibility in
+designing the layout of forms.
+
+Form processing is a level 2 feature.
+
+8.1. Form Elements
+
+8.1.1. Form: FORM
+
+   The `<FORM>` element contains a sequence of input elements, along
+   with document structuring elements. The attributes are:
+
+### ACTION
+            specifies the action URI for the form. The action URI of
+            a form defaults to the base URI of the document (see 7,
+            "Hyperlinks").
+
+### METHOD
+            selects a method of accessing the action URI. The set of
+            applicable methods is a function of the scheme of the
+            action URI of the form. See 8.2.2, "Query Forms:
+            METHOD=GET" and 8.2.3, "Forms with Side-Effects:
+            METHOD=POST".
+
+### ENCTYPE
+            specifies the media type used to encode the name/value
+            pairs for transport, in case the protocol does not
+            itself impose a format. See 8.2.1, "The form-urlencoded
+            Media Type".
+</code>
+
+As stated in the very first sentence, a form is defined as:
+>A form is a template for a form data set and an associated method and action URI
+
+In other words, a form can be thought of as a template for sending user-entered data to a server.
+
+So then, what does it mean to submit?
+
+<code>
+8.2. Form Submission
+
+   An HTML user agent begins processing a form by presenting the
+   document with the fields in their initial state. The user is allowed
+   to modify the fields, constrained by the field type etc.  When the
+   user indicates that the form should be submitted (using a submit
+   button or image input), the form data set is processed according to
+   its method, action URI and enctype.
+  When there is only one single-line text input field in a form, the
+   user agent should accept Enter in that field as a request to submit
+   the form.
+
+   8.2.2. Query Forms: METHOD=GET
+
+   If the processing of a form is idempotent (i.e. it has no lasting
+   observable effect on the state of the world), then the form method
+   should be `GET'. Many database searches have no visible side-effects
+   and make ideal applications of query forms.
+   To process a form whose action URL is an HTTP URL and whose method is
+   `GET', the user agent starts with the action URI and appends a `?'
+   and the form data set, in `application/x-www-form-urlencoded' format
+   as above. The user agent then traverses the link to this URI just as
+   if it were an anchor (see 7.2, "Activation of Hyperlinks").
+
+      NOTE - The URL encoding may result in very long URIs, which cause
+      some historical HTTP server implementations to exhibit defective
+      behavior. As a result, some HTML forms are written using
+      `METHOD=POST' even though the form submission has no side-effects.
+
+8.2.3. Forms with Side-Effects: METHOD=POST
+
+   If the service associated with the processing of a form has side
+   effects (for example, modification of a database or subscription to a
+   service), the method should be `POST'.
+
+   To process a form whose action URL is an HTTP URL and whose method is
+   `POST', the user agent conducts an HTTP POST transaction using the
+   action URI, and a message body of type `application/x-www-form-
+   urlencoded' format as above. The user agent should display the
+   response from the HTTP POST interaction just as it would display the
+   response from an HTTP GET above.
+
+</code>
+
+
+When the METHOD is GET, data is sent as query parameters. When it's POST, data is sent in the message body.
+
+Now let's look at how this actually works in the browser.
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;drc=c76cca217f4278f5c53a8d90f7870270ee4dd81e;l=429
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;l=288;drc=c76cca217f4278f5c53a8d90f7870270ee4dd81e;bpv=0;bpt=1
+
+### HTMLFormElement::PrepareForSubmission
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  LocalFrame* frame = GetDocument().GetFrame();
+  // If there's no frame, already submitting, or in a user JS submit event
+  if (!frame || is_submitting_ || in_user_js_submit_event_)
+    return;
+
+
+// Cancel submission if the form is not connected.
+//
+  if (!isConnected()) {
+    GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+        mojom::ConsoleMessageSource::kJavaScript,
+        mojom::ConsoleMessageLevel::kWarning,
+        "Form submission canceled because the form is not connected"));
+    return;
+  }
+// ...
+```
+What does it mean for a form to be "not connected"?
+```js
+let form = document.createElement('form');
+form.submit();  // Attempting to submit when the form is not connected to the document
+```
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  // Iterate through elements in the form and check if any block submission.
+  for (ListedElement* element : ListedElements()) {
+    // Check if this is a form control element that blocks submission.
+    auto* form_control_element = DynamicTo<HTMLFormControlElement>(element);
+
+    // If the element blocks form submission
+    if (form_control_element && form_control_element->BlocksFormSubmission()) {
+      // Increment the use counter.
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kFormSubmittedWithUnclosedFormControl);
+
+      // If the UnclosedFormControlIsInvalid flag is enabled,
+      // output a message indicating there's an unclosed form element.
+      if (RuntimeEnabledFeatures::UnclosedFormControlIsInvalidEnabled()) {
+        String tag_name = To<HTMLFormControlElement>(element)->tagName();
+        GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+            mojom::ConsoleMessageSource::kSecurity,
+            mojom::ConsoleMessageLevel::kError,
+            "Form submission failed, as the <" + tag_name +
+                "> element named "
+                "'" +
+                element->GetName() +
+                "' was implicitly closed by reaching "
+                "the end of the file. Please add an explicit end tag "
+                "('</" +
+                tag_name + ">')"));
+        // Dispatch an Error event.
+        DispatchEvent(*Event::Create(event_type_names::kError));
+        return;
+      }
+    }
+  }
+//...
+```
+
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  // Iterate through the form elements again, forcing validation.
+  for (ListedElement* element : ListedElements()) {
+    // If it's a form control element
+    if (auto* form_control =
+            DynamicTo<HTMLFormControlElementWithState>(element)) {
+      // After attempting form submission we have to make the controls start
+      // matching :user-valid/:user-invalid. We could do this by calling
+      // SetUserHasEditedTheFieldAndBlurred() even though the user has not
+      // actually taken those actions, but that would have side effects on
+      // autofill.
+
+      // After a form submission attempt, controls must match :user-valid/:user-invalid.
+      // We could call SetUserHasEditedTheFieldAndBlurred() even though the user
+      // hasn't actually performed those actions, but that would cause side effects
+      // on autofill.
+      // Force the form control to be user-valid.
+      form_control->ForceUserValid();
+    }
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+
+  // Whether to submit
+  bool should_submit;
+  {
+    // Set the in_user_js_submit_event_ flag to true.
+    base::AutoReset<bool> submit_event_handler_scope(&in_user_js_submit_event_,
+                                                     true);
+
+    // Whether to skip validation:
+    // If there's no associated page, or novalidate is true,
+    // or if there's a submit button with formnovalidate set to true
+    bool skip_validation = !GetDocument().GetPage() || NoValidate();
+    if (submit_button && submit_button->FormNoValidate())
+      skip_validation = true;
+
+    UseCounter::Count(GetDocument(), WebFeature::kFormSubmissionStarted);
+    // Interactive validation must be done before dispatching the submit event.
+
+    // If validation is not skipped and interactive validation fails, do not submit.
+    if (!skip_validation && !ValidateInteractively()) {
+      should_submit = false;
+    } else {
+
+    // Call DispatchWillSendSubmitEvent to signal that a submit event is about to fire.
+      frame->Client()->DispatchWillSendSubmitEvent(this);
+
+      // Create a SubmitEventInit object.
+      SubmitEventInit* submit_event_init = SubmitEventInit::Create();
+      // Set whether the event can bubble.
+      submit_event_init->setBubbles(true);
+      // Set whether the event is cancelable.
+      submit_event_init->setCancelable(true);
+      // If there's a submit button, set the submitter property to the button's HTMLElement; otherwise set it to nullptr.
+      submit_event_init->setSubmitter(
+          submit_button ? &submit_button->ToHTMLElement() : nullptr);
+      // Create and dispatch the SubmitEvent.
+      // If the event was not canceled, set should_submit to true.
+      should_submit = DispatchEvent(*MakeGarbageCollected<SubmitEvent>(
+                          event_type_names::kSubmit, submit_event_init)) ==
+                      DispatchEventResult::kNotCanceled;
+    }
+  }
+  // If we should submit
+  if (should_submit) {
+    // If this form already made a request to navigate another frame which is
+    // still pending, then we should cancel that one.
+
+    // If there's a pending submission to another frame (cancel_last_submission_), cancel that request.
+
+    if (cancel_last_submission_)
+      std::move(cancel_last_submission_).Run();
+    // Schedule the form submission.
+    ScheduleFormSubmission(event, submit_button);
+  }
+//...
+```
+The events dispatched here are events that JavaScript can listen for and handle.\
+You can cancel the event by calling `e.preventDefault()`.\
+You can check whether the event was canceled via `e.defaultPrevented`.
+
+The page gets an opportunity to control the submission process through these events.
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;l=429;bpv=1;bpt=1?q=ForceUserValid&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2Fhtml%2Fforms%2F
+HTMLFormElement::ScheduleFormSubmission
+
+
+Let's skip the early parts with similar logic...
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // If the form is already being submitted, return.
+  if (is_submitting_)
+    return;
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // Delay dispatching 'close' to dialog until done submitting.
+
+  // Set is_submitting_ to true.
+  EventQueueScope scope_for_dialog_close;
+  base::AutoReset<bool> submit_scope(&is_submitting_, true);
+
+  // If there's an event but no submit button (implicit submission)
+  if (event && !submit_button) {
+    // In a case of implicit submission without a submit button, 'submit'
+    // event handler might add a submit button. We search for a submit
+    // button again.
+    // TODO(tkent): Do we really need to activate such submit button?
+
+    // A submit button could be dynamically added, so search again.
+    for (ListedElement* listed_element : ListedElements()) {
+      auto* control = DynamicTo<HTMLFormControlElement>(listed_element);
+      if (!control)
+        continue;
+      DCHECK(!control->IsActivatedSubmit());
+      if (control->IsSuccessfulSubmitButton()) {
+        submit_button = control;
+        break;
+      }
+    }
+  }
+
+//...
+```
+Apparently, there are cases where buttons can be dynamically added like this.\
+It would look something like this:
+```js
+form.addEventListener('submit', function() {
+  if (!form.querySelector('input[type="submit"]')) {
+    const submitButton = document.createElement('input');
+    submitButton.type = 'submit';
+    form.appendChild(submitButton);
+  }
+});
+```
+
+
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+// Create the object that handles the actual form submission.
+  FormSubmission* form_submission =
+      FormSubmission::Create(this, attributes_, event, submit_button);
+  // If creation failed, return.
+  if (!form_submission) {
+    // Form submission is not allowed for some NavigationPolicies, e.g. Link
+    // Preview. If an user triggered such user event for form submission, just
+    // ignores it.
+    return;
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // If the submission method is dialog (kDialogMethod), call SubmitDialog.
+  if (form_submission->Method() == FormSubmission::kDialogMethod) {
+    SubmitDialog(form_submission);
+    return;
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // If the method is POST or GET
+  DCHECK(form_submission->Method() == FormSubmission::kPostMethod ||
+         form_submission->Method() == FormSubmission::kGetMethod);
+  DCHECK(form_submission->Data());
+
+  // If the action URL is empty, return.
+  if (form_submission->Action().IsEmpty())
+    return;
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // Get the scheduler.
+  FrameScheduler* scheduler = GetDocument().GetFrame()->GetFrameScheduler();
+
+  if (auto* target_local_frame = DynamicTo<LocalFrame>(target_frame)) {
+    // If navigation is not allowed on the target LocalFrame, return immediately.
+    if (!target_local_frame->IsNavigationAllowed())
+      return;
+
+    // Cancel parsing if the form submission is targeted at this frame.
+    // If the form submission targets the current frame and the action protocol is not JavaScript, cancel parsing of the current frame's document.
+    if (target_local_frame == GetDocument().GetFrame() &&
+        !form_submission->Action().ProtocolIsJavaScript()) {
+      target_local_frame->GetDocument()->CancelParsing();
+    }
+
+    // Use the target frame's frame scheduler. If we can't due to targeting a
+    // RemoteFrame, then use the frame scheduler from the frame this form is in.
+    // Use the target frame's FrameScheduler.
+    // If the target frame is a RemoteFrame and can't be used, use the FrameScheduler of the frame this form belongs to.
+    scheduler = target_local_frame->GetFrameScheduler();
+
+    // Cancel pending javascript url navigations for the target frame. This new
+    // form submission should take precedence over them.
+    // Cancel any pending JavaScript URL navigations for the target frame.
+    // This new form submission should take precedence over those navigations.
+    target_local_frame->GetDocument()->CancelPendingJavaScriptUrls();
+
+    // Cancel any pre-existing attempt to navigate the target frame which was
+    // already sent to the browser process so this form submission will take
+    // precedence over it.
+    // Cancel any pre-existing navigation attempts for the target frame that were already sent to the browser process,
+    // so this form submission takes precedence.
+    target_local_frame->Loader().CancelClientNavigation();
+  }
+
+  // Schedule the form submission and store the result in cancel_last_submission_.
+  cancel_last_submission_ =
+      target_frame->ScheduleFormSubmission(scheduler, form_submission);
+}
+
+//...
+```
+
+If we trace the GET and POST cases, they ultimately end up calling
+Frame::ScheduleFormSubmission.
+
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/frame.cc;l=561;bpv=1;bpt=1?q=FormSubmission::Navigate&sq=&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2F
+third_party/blink/renderer/core/frame/frame.cc
+Frame::ScheduleFormSubmission
+
+```cpp
+// Takes a FrameScheduler and FormSubmission pointer.
+base::OnceClosure Frame::ScheduleFormSubmission(
+    FrameScheduler* scheduler,
+    FormSubmission* form_submission) {
+  // Schedule a task that executes FormSubmission::Navigate via PostCancellableTask.
+  form_submit_navigation_task_ = PostCancellableTask(
+      // Get the TaskRunner for DOM manipulation.
+      *scheduler->GetTaskRunner(TaskType::kDOMManipulation),
+      FROM_HERE,
+      // Create a callback that calls FormSubmission::Navigate via WTF::BindOnce.
+      WTF::BindOnce(&FormSubmission::Navigate,
+      // Wrap FormSubmission with WeakPersistent
+      // so there's no issue even if FormSubmission is deleted.
+                    WrapPersistent(form_submission)));
+  // Increment the version to track the scheduled task.
+  form_submit_navigation_task_version_++;
+
+  // Create a cancellation handler.
+  return WTF::BindOnce(&Frame::CancelFormSubmissionWithVersion,
+                       WrapWeakPersistent(this),
+                       form_submit_navigation_task_version_);
+}
+```
+WTF stands for Web Template Framework, a template library used in Chromium.\
+It creates callback objects that can be executed later. As the name suggests, it creates callbacks that can only be executed once.
+
+Now FormSubmission::Navigate has been scheduled by the FrameScheduler.
+The browser will execute FormSubmission::Navigate at the scheduled time.
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/loader/form_submission.cc;l=388;bpv=1;bpt=1?q=FormSubmission::Navigate&sq=&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2F
+third_party/blink/renderer/core/loader/form_submission.cc
+FormSubmission::Navigate
+
+```cpp
+void FormSubmission::Navigate() {
+  // Create a FrameLoadRequest object.
+  // This object represents the navigation request.
+  // It takes the origin window (origin_window_) and
+  // the resource request information (resource_request_) as arguments.
+  FrameLoadRequest frame_request(origin_window_.Get(), *resource_request_);
+
+  // Set the navigation policy (new tab, current tab, etc.).
+  frame_request.SetNavigationPolicy(navigation_policy_);
+
+  // Set the client redirect reason.
+  // Indicates whether this was caused by a client-side redirect and what the reason was.
+  frame_request.SetClientRedirectReason(reason_);
+
+  // Set the source element to submitter_ (e.g., the form submit button).
+  frame_request.SetSourceElement(submitter_);
+
+  // Set the triggering event info.
+  // Represents information about the event that triggered the navigation.
+  frame_request.SetTriggeringEventInfo(triggering_event_info_);
+  frame_request.SetInitiatorFrameToken(initiator_frame_token_);
+  // Set the navigation state keep-alive handle.
+  // Ensures the frame's navigation state is preserved during navigation.
+  frame_request.SetInitiatorNavigationStateKeepAliveHandle(
+      std::move(initiator_navigation_state_keep_alive_handle_));
+
+  // Set the source location.
+  frame_request.SetSourceLocation(std::move(source_location_));
+
+  // If the target frame exists but has no page, return.
+  if (target_frame_ && !target_frame_->GetPage())
+    return;
+
+  // If the target frame exists and has a page
+  if (target_frame_)
+    // Perform navigation on the target frame.
+    target_frame_->Navigate(frame_request, load_type_);
+}
+```
+
+This Navigate function then calls LocalFrame::Navigate.
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/local_frame.cc;bpv=1;bpt=0
+third_party/blink/renderer/core/frame/local_frame.cc
+LocalFrame::Navigate
+
+```cpp
+void LocalFrame::Navigate(FrameLoadRequest& request,
+                          WebFrameLoadType frame_load_type) {
+  if (HTMLFrameOwnerElement* element = DeprecatedLocalOwner())
+    element->CancelPendingLazyLoad();
+
+  // Check if the navigation rate limiter allows us to proceed.
+  if (!navigation_rate_limiter().CanProceed())
+    return;
+
+  TRACE_EVENT2("navigation", "LocalFrame::Navigate", "url",
+               request.GetResourceRequest().Url().GetString().Utf8(),
+               "load_type", static_cast<int>(frame_load_type));
+
+  if (request.ClientRedirectReason() != ClientNavigationReason::kNone)
+    probe::FrameScheduledNavigation(this, request.GetResourceRequest().Url(),
+                                    base::TimeDelta(),
+                                    request.ClientRedirectReason());
+
+  if (NavigationShouldReplaceCurrentHistoryEntry(request, frame_load_type))
+    frame_load_type = WebFrameLoadType::kReplaceCurrentItem;
+
+  const ClientNavigationReason client_redirect_reason =
+      request.ClientRedirectReason();
+  loader_.StartNavigation(request, frame_load_type);
+
+  if (client_redirect_reason != ClientNavigationReason::kNone)
+    probe::FrameClearedScheduledNavigation(this);
+}
+
+```
+Ultimately, navigation begins through StartNavigation.
+
+
+
+
+```html
+<form action="https://example.com" method="post">
+  <input type="text" name="name" />
+  <input type="submit" value="Submit" />
+</form>
+```

@@ -1,0 +1,35 @@
+---
+title: "React Performance Measurement and AI"
+description: "React Performance Measurement and AI"
+author: "Yongseok"
+categories: ["react"]
+date: "2026-01-25T04:42:26.224Z"
+heroImage: "/post/images/react-performance-track-with-ai/thumb.png"
+draft: true
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import YouTube from "@components/embeds/YouTube.astro";
+
+## Introduction
+
+Last year (2025), React DevTools received a significant upgrade. Information about component rendering and the Scheduler became viewable directly in the Chrome DevTools Performance tab.
+
+<LinkPreview src="https://react.dev/reference/dev-tools/react-performance-tracks" />
+<YouTube src="https://youtu.be/CclO4tPoebs?si=Wh87iqqdCO9TFxrE" />
+
+The Chrome team released Chrome-devtools-mcp, which allows programmatic control of Chrome and access to DevTools data.
+This made it possible for AI to perform performance-related measurements.
+
+<LinkPreview src="https://github.com/ChromeDevTools/chrome-devtools-mcp" />
+
+Various AI tools that assist with development, such as Claude Code, have emerged. These AI tools run in the CLI and can write React code and even start development servers.
+They can also leverage tools like MCP.
+
+I wondered: could we combine all three of these things at once? If an AI can access Chrome DevTools via MCP, and Chrome DevTools Performance shows React rendering and scheduling information, couldn't the AI both write code and inspect detailed React performance metrics for the application? What would we need to connect all three?
+
+To give away the conclusion upfront: by extending chrome-devtools-mcp, we can expose React DevTools information to AI through MCP!
+
+Let's explore together what we need to understand in order to get there.
+
+## What Are Performance Tracks?

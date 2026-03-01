@@ -1,0 +1,83 @@
+---
+title: "ブログ"
+description: "[Astro 4.0](https://astro.build/blog/astro-4/)がリリースされたという知らせを聞いた。ブログもアップデートするついでに色々と更新した。アイランドアーキテクチャ…その他…などなど…Astroが持つ利点については深く把握して選んだわけではなかった。"
+author: "Yongseok"
+pubDate: "Jan 14 2024"
+date: "2024-01-14"
+categories: ["dev"]
+
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<thumbnail-element />
+
+# Astro 4.0
+
+[Astro 4.0](https://astro.build/blog/astro-4/)がリリースされたという知らせを聞いた。ブログもアップデートするついでに色々と更新した。
+アイランドアーキテクチャ…その他…などなど…Astroが持つ利点については深く把握して選んだわけではなかった。（後で調べようと、未来の自分への課題として残しておくことにした。）
+
+当時[Lit](https://lit.dev/)に対する好奇心があり、AstroがLitをサポートしているということが最も大きな理由だった。（Litは特にフレームワークに縛られずに使えるが、母体となる使いやすいフレームワークがあれば良いなと思っていた。）
+おそらく23年の秋頃…Litと3Dに大きな関心があり、新しいMacBookと一緒にBlenderも勉強するついでに、Blenderで作ったオブジェクトをLitでレンダリングすることを目標にしていた。
+
+その結果、一生懸命作ったのが回転するピクセル化されたドーナツだった。
+
+しかしブログのアップデートをしてみると、すべてが動かなくなっていた。おそらく一緒にアップグレードしたLit 3.0のせいだろう。原因を知りたいが、知りたくなくなってしまった。たぶん今年の秋頃になってやっと直す気になるかもしれない。
+この記事の上に、現在何も見えない空虚なスペースがあるなら、まだ直っていないということだ。
+
+2024.01.16 - 問題の原因はハードウェアアクセラレーションをオフにしていたためだった。
+
+
+
+# Lit
+
+愛憎のLit。小雨にもガタガタ震えている子犬のように感じられて、コンポーネントを一つ作って送った。
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" ></YouTube>
+冬らしくなく雨が降っていた日に一緒に聴いていた曲。<br/>
+世の中は本当に…技術の発展で家にいながらジム・レイナーの歌が聴けるなんて。体験の領域が広がっていくような気がする。
+
+## コード
+
+コンポーネントの使い方は以下の通り。
+
+```mdx
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" ></YouTube>
+```
+[コードはこちら](https://github.com/yongsk0066/yongsk0066.github.io/blob/main/src/components/lit/youtube/youtube-element.ts)
+
+```typescript
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+    // スタイルコードはお好みで入れてみよう
+  `;
+
+  @property()
+  src?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/; // 正規表現は面倒なのでChatGPTに一任
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <iframe
+        class="aspect-video"
+        src="https://www.youtube.com/embed/${this.videoId}"
+        title="YouTube Video Player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      ></iframe>
+    `;
+  }
+}
+```

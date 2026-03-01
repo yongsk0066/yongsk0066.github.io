@@ -1,0 +1,243 @@
+---
+title: "Understanding HTML Element Attributes in React"
+description: "A supplementary summary from a presentation covering React.HTMLAttributes<HTMLButtonElement>, React.HTMLProps<HTMLButtonElement>, JSX.IntrinsicElements['button'], React.ButtonHTMLAttributes<HTMLButtonElement>, and more."
+author: "Yongseok"
+pubDate: "2024-03-01"
+date: "2024-03-01"
+categories: ["react"]
+heroImage: "/blog-placeholder-3.jpg"
+---
+import YouTube from '@components/embeds/YouTube.astro';
+
+
+<YouTube src="https://youtu.be/z2q1Hs_Ok24?si=CGN522KjVXSTZhVS&t=172" />
+
+I put together this supplementary summary based on part of the above presentation.
+
+```ts
+React.HTMLAttributes<HTMLButtonElement>
+
+React.HTMLProps<HTMLButtonElement>
+
+JSX.IntrinsicElements['button']
+
+React.ButtonHTMLAttributes<HTMLButtonElement>
+
+React.ComponentProps<'button'>
+
+React.ComponentPropsWithRef<'button'>
+
+React.ComponentPropsWithoutRef<'button'>
+```
+
+
+All of the types above represent the type of a button element. \
+When working on a project, you sometimes need to extend these types -- but which one should you use?\
+Let's go through them one by one.
+
+
+## 1. `React.HTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+  // React-specific Attributes
+
+  // Standard HTML Attributes
+
+  // RDFa Attributes (I'll write about RDFa another time)
+}
+
+interface DOMAttributes<T> {
+  children?: ReactNode | undefined;
+  // ...
+  // event handlers...
+}
+```
+It takes a generic parameter and extends into `DOMAttributes`.\
+It covers a wide range of HTML attributes overall, but it cannot provide specific types for particular tags.
+
+```tsx
+interface ButtonProps extends React.HTMLAttributes<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌ Error: Property 'type' does not exist on HTMLButtonElement.
+  const isSubmit = props.type === 'submit';
+  // ...
+}
+```
+
+## 2. `React.HTMLProps<HTMLButtonElement>`
+
+https://github.com/DefinitelyTyped/DefinitelyTyped/blob/2bcc7e759889c24eff2891949c18dcabfc38d888/types/react/index.d.ts#L2302
+```ts
+interface HTMLProps<T> extends AllHTMLAttributes<T>, ClassAttributes<T> {
+}
+
+interface AllHTMLAttributes<T> extends HTMLAttributes<T> {
+  //...
+  type?: string | undefined;
+  // ...
+}
+interface ClassAttributes<T> extends RefAttributes<T> {
+}
+
+```
+
+This is essentially an alias for `AllHTMLAttributes`, and it includes all HTML attributes.\
+Because of that, there are a lot of types available, and you do get types for specific tags -- but they are less specific.
+
+```tsx
+interface ButtonProps extends React.HTMLProps<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌
+  // type?: 'button' | 'submit' | 'reset' | undefined;
+  //
+  // The 'type' property exists, but the type is not specific enough.
+  // type?: string | undefined;
+  const type = props.type;
+  // ...
+}
+```
+
+## 3. `JSX.IntrinsicElements['button']`
+
+```ts
+interface IntrinsicElements {
+  // HTML
+  // ...
+  button: React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>;
+}
+
+type DetailedHTMLProps<E extends HTMLAttributes<T>, T> = ClassAttributes<T> & E;
+```
+
+This is a type in TypeScript's global scope that provides types for all available native JSX elements.\
+That's why they are also referred to as "intrinsic elements."
+
+However, this type cannot be extended via interface extension.
+
+```tsx
+// ❌ Error: An index access type cannot be extended.
+interface ButtonProps extends JSX.IntrinsicElements['button'] {}
+```
+
+There is a workaround, though..
+
+```tsx
+interface ButtonProps extends NonNullable<JSX.IntrinsicElements['button'], {}> {}
+
+```
+
+## 4. `React.ButtonHTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface ButtonHTMLAttributes<T> extends HTMLAttributes<T> {
+    disabled?: boolean | undefined;
+    form?: string | undefined;
+    formAction?:
+        | string
+        | DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS[
+            keyof DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS
+        ]
+        | undefined;
+    formEncType?: string | undefined;
+    formMethod?: string | undefined;
+    formNoValidate?: boolean | undefined;
+    formTarget?: string | undefined;
+    name?: string | undefined;
+    type?: "submit" | "reset" | "button" | undefined;
+    value?: string | readonly string[] | number | undefined;
+}
+```
+
+This is the type we saw inside `JSX.IntrinsicElements['button']` above, and it provides everything we need. But there's an even more useful type.
+
+There's a really fun type name here:\
+[`DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS`](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/c76c419153bf70858ab82843483657ae1bf11f17/types/react/canary.d.ts#L90)\
+This is a type for supporting form actions in RSC (React Server Components).\
+It's currently only available in the Canary channel. As the type name suggests, you might get fired if you use it now.
+
+I won't dig into the details here, but the following resources provide more information:
+- https://react.dev/reference/react-dom/components/form
+- https://github.com/DefinitelyTyped/DefinitelyTyped/pull/66928
+- https://github.com/facebook/react/pull/27459
+- https://github.com/facebook/react/pull/27460
+
+<aside>
+React's extensions to the formAction prop are currently only available in React's Canary and experimental channels. In stable releases of React, formAction works only as a built-in browser HTML component. Learn more about React's release channels here.
+</aside>
+
+
+## 5. `React.ComponentProps<'button'>`
+https://react-typescript-cheatsheet.netlify.app/docs/react-types/componentprops/
+
+```ts
+type ComponentProps<T extends keyof JSX.IntrinsicElements | JSXElementConstructor<any>> = T extends
+    JSXElementConstructor<infer P> ? P
+    : T extends keyof JSX.IntrinsicElements ? JSX.IntrinsicElements[T]
+    : {};
+```
+
+To get straight to the point: this is essentially the same as `ButtonHTMLAttributes`, but shorter and more concise. There's no reason not to use it.
+
+The type is a bit complex, so let's walk through it step by step.
+
+- First condition: `T extends JSXElementConstructor<infer P>` -- Is `T` assignable to `JSXElementConstructor<infer P>`?\
+In other words, if `T` is a component constructor type, it returns the props type `P` that the constructor accepts.
+- Second condition: If the first condition is not met and `T extends keyof JSX.IntrinsicElements` -- if `T` is assignable to `JSX.IntrinsicElements`,\
+meaning `T` is one of the keys of `JSX.IntrinsicElements`, it returns `JSX.IntrinsicElements[T]`.
+
+`React.ComponentProps<'button'>` is not a function or class type that creates a JSX element, so it satisfies the second condition.
+Therefore, it returns `JSX.IntrinsicElements['button']`.
+
+`JSX.IntrinsicElements['button']` in turn returns `React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>`.
+Ultimately, it includes everything we need.
+
+Here's an example of when the first condition is met:
+
+```tsx
+type Props = { name: string; age: number; };
+type Component = (props: Props) => (<div>...</div>);
+type ComponentProps = React.ComponentProps<typeof Component>;
+// ComponentProps = { name: string; age: number; }
+```
+
+This structure allows it to be used flexibly.
+
+## 6. `React.ComponentPropsWithRef<'button'>`, `React.ComponentPropsWithoutRef<'button'>`
+
+
+```ts
+type ComponentPropsWithRef<T extends ElementType> = T extends (new(props: infer P) => Component<any, any>)
+    ? PropsWithoutRef<P> & RefAttributes<InstanceType<T>>
+    : PropsWithRef<ComponentProps<T>>;
+
+type ComponentPropsWithoutRef<T extends ElementType> = PropsWithoutRef<ComponentProps<T>>;
+
+type PropsWithoutRef<P> =
+    P extends any ? ("ref" extends keyof P ? Omit<P, "ref"> : P) : P;
+type PropsWithRef<P> =
+    "ref" extends keyof P
+        ? P extends { ref?: infer R | undefined }
+            ? string extends R ? PropsWithoutRef<P> & { ref?: Exclude<R, string> | undefined }
+            : P
+        : P
+        : P;
+```
+
+
+
+### `React.ComponentPropsWithRef<'button'>`
+
+This type is a bit complex too, so let's walk through it step by step.
+
+- First condition: `T extends (new(props: infer P) => Component<any, any>)` -- Is `T` assignable to `new(props: infer P) => Component<any, any>`?\
+If `T` is assignable to a class component constructor, it returns the props type without `ref`, combined with `RefAttributes<InstanceType<T>>`.
+- Otherwise, it returns `PropsWithRef<ComponentProps<T>>`.
+
+`PropsWithRef` is more complex, but to summarize briefly: if `ref` is not a string type, it maintains or adjusts the ref's type accordingly before returning.
+
+## Conclusion
+
+Use `React.ComponentProps<'button'>` for a concise and flexible approach.

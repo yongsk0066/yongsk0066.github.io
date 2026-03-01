@@ -1,0 +1,32 @@
+---
+title: "The Future of This Blog"
+description: "There's an overnight service maintenance scheduled for tomorrow (Saturday), so I'll be spending the early hours at the office. I'm debating whether to sleep now to adjust my rhythm. But I should sleep. Otherwise I won't be able to work tomorrow. I created this blog partly to share what I study, but also because..."
+author: "Yongseok"
+pubDate: "2024-01-26"
+date: "2024-01-26"
+categories: ["dev"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<YouTube src="https://youtu.be/rO6bLlYrBXE?si=_sNICtB3wGYpBpom" />
+
+## The Future of This Blog
+
+There's an overnight service maintenance scheduled for tomorrow (Saturday), so I'll be spending the early hours at the office. I'm debating whether to sleep now to adjust my rhythm.
+But I should sleep. Otherwise I won't be able to work tomorrow.
+
+I created this blog partly to share what I study, but also because I didn't have a proper channel to upload the photos and videos I've taken. I used to use Instagram for that purpose, but once everything gets compressed on upload, it's hard to really showcase them properly. So that was another reason I made this. It also serves as a sort of diary... and a place to move over the notes I'd been scribbling in Notion...
+
+So the blog itself is more or less built at this point, and I was about to start uploading images when I hit a wall. All this time I'd been relying on CDNs and storage services that the server folks and DevOps people had neatly set up for me, but when I tried to do it myself, I was completely lost.
+
+I mean, I could just build something, but it felt way too exhausting for what it was, so I kept putting it off.
+I went with GCP since I'm somewhat familiar with it, and at least created a bucket on Cloud Storage. It doesn't cost much, but the whole point of using GitHub Pages was to not have to worry about these things, and now I'm spending money and having to manage it all -- suddenly I'm tired.
+
+Just uploading images directly to the repo isn't great either, since the images are too large and it feels like a burden...
+
+For now I've just set things up and I'm looking for somewhere to piggyback off of.
+Below is an image tag I pulled from my portfolio site on Adobe Portfolio. It shows up fine for now, so I'll probably upload my photo work there.
+The real question is how to manage the images I'll be using for regular blog content.
+
+<img class="js-lazy e2e-site-project-module-image image-loaded" src="https://pro2-bar-s3-cdn-cf6.myportfolio.com/a1a06533406d2bda16f8eddd086fa92a/7b8aa398-1a8d-42d1-a40a-6b8e9ab9d010_rw_3840.jpg?h=52b13e45945efc3dd6b02426fc465bbb" width="3840" srcset="https://pro2-bar-s3-cdn-cf6.myportfolio.com/a1a06533406d2bda16f8eddd086fa92a/7b8aa398-1a8d-42d1-a40a-6b8e9ab9d010_rw_600.jpg?h=c8c4be87986bd9b167b2d9babede19aa 600w,https://pro2-bar-s3-cdn-cf6.myportfolio.com/a1a06533406d2bda16f8eddd086fa92a/7b8aa398-1a8d-42d1-a40a-6b8e9ab9d010_rw_1200.jpg?h=2c5cc4c354d113b8d6a74c9ef09c41b9 1200w,https://pro2-bar-s3-cdn-cf6.myportfolio.com/a1a06533406d2bda16f8eddd086fa92a/7b8aa398-1a8d-42d1-a40a-6b8e9ab9d010_rw_1920.jpg?h=35711a9cd2a25f72dd12fc2445023256 1920w,https://pro2-bar-s3-cdn-cf6.myportfolio.com/a1a06533406d2bda16f8eddd086fa92a/7b8aa398-1a8d-42d1-a40a-6b8e9ab9d010_rw_3840.jpg?h=52b13e45945efc3dd6b02426fc465bbb 3840w," sizes="(max-width: 3840px) 100vw, 3840px" />

@@ -1,0 +1,181 @@
+---
+title: "Top Layer アニメーション"
+description: "すべてのエレメントの上にレンダリングされるエレメント。対応エレメント：`<dialog>`、popover属性 `<div popover=auto>`。これらのエレメントをアニメーション可能にすることが目標"
+author: "Yongseok"
+pubDate: "Oct 22 2023"
+date: "2023-10-22"
+categories: ["css"]
+---
+
+# Top Layer Animation
+
+## 参考資料
+
+<aside>
+### メイン資料
+- [Lightning Talks - Session 1 [BlinkOn 18]](https://youtu.be/ycWhFbKSDEI?si=oHgPVwuUx9paC2oU&t=1728)
+
+### 追加資料
+
+- [Explainer: improved CSS-triggered entry and exit animations](https://github.com/chrishtr/rendering/blob/master/entry-exit-animations.md#example-code)
+
+- [Chrome Platform Status - @starting-style Rule](https://chromestatus.com/feature/4515377717968896)
+
+- [Chrome Platform Status - overlay property](https://chromestatus.com/feature/5138724910792704)
+
+- [Four new CSS features for smooth entry and exit animations - Chrome for Developers](https://developer.chrome.com/blog/entry-exit-animations/)
+
+</aside>
+
+## Top Layer
+
+- すべてのエレメントの上にレンダリングされるエレメント
+- 対応エレメント
+  - `<dialog>`
+  - popover属性 `<div popover=auto>`
+
+目標はこれらのエレメントをアニメーション可能にすること
+
+## エントリーアニメーション
+
+### 問題
+
+`display: none` から始まるアニメーションは動作しない。なぜなら、計算されるスタイルが存在しないため、以下の例のように0から1への補間ができないからだ。
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* 適用されない。:not([open])がdisplay:noneを適用中のため */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### 解決策
+
+`@starting-style` ルールを使って初期値を設定できるようにした。
+
+```css
+dialog {
+  transition: opacity 1s;
+}
+
+dialog[open] {
+  @starting-style {
+    opacity: 0;
+  }
+  opacity: 1;
+}
+```
+
+## クローズアニメーション
+
+### 問題
+
+- display プロパティにはアニメーションを適用できない
+- 離散的なプロパティにはトランジションを適用できない
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* 適用されない。上と同様の理由で、[open]が外れた瞬間にdisplay:noneになってしまうため */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### 解決策
+
+- `transition-behavior : allow-discrete;` が追加された
+- display プロパティや離散的なプロパティをアニメーション可能にする
+
+```css
+dialog {
+	/* transition-behavior : allow-discrete; */
+	transition: opacity 1s, **display 1s allow-discrete;**
+	opacity: 0;
+}
+
+dialog[open] {
+	opacity:1;
+}
+```
+
+### アニメーション中のレイヤー問題
+
+- アニメーション中は、エレメントがもはやトップレイヤーではなくなる
+  - 他のトップレイヤーや z-index がアニメーションを遮る
+- ユーザーエージェントスタイルが適用されなくなる
+  - 位置が突然移動したり、バックドロップが動作しなくなるケースが発生
+
+### 解決策
+
+- 新しい overlay プロパティの追加
+  - アニメーション中もトップレイヤーに留まれるようにする
+
+```css
+dialog {
+  transition:
+    opacity 1s,
+    * * overlay 1s allow-discrete * *,
+    display 1s allow-discrete;
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+## @starting-style
+
+[css-transition-2 - defining-before-change-style](https://drafts.csswg.org/css-transitions-2/#defining-before-change-style)
+
+### コアコンセプト
+
+- @starting-style はグルーピングルール。以前のスタイル変更前のスタイルが設定されていない要素のスタイルを計算する際に使用される。
+- @starting-style は一部の要素にのみ適用される。つまり、以前のスタイル変更イベント時にレンダリングされていなかった、またはDOMの一部ではなかった要素にのみ適用される。
+- 要素が特定のスタイル変更イベントに対する変更前スタイルを持っていない場合、スターティングスタイルが変更前スタイルの代わりに使用される。
+
+### 使用例
+
+初期レンダリング時に h1 の background-color を透明から green へトランジションさせる。
+
+```css
+h1 {
+  transition: background-color 1.5s;
+  background-color: green;
+}
+@starting-style {
+  h1 {
+    background-color: transparent;
+  }
+}
+```
+
+## overlay プロパティ
+
+[css-overflow-4 - overlay](https://drafts.csswg.org/css-position-4/#overlay)
+
+`overlay` プロパティは、要素がトップレイヤーにある場合に、実際にその要素がトップレイヤーでレンダリングされるかどうかを決定する。
+
+### プロパティ値
+
+none: 要素はトップレイヤーでレンダリングされない。
+auto: 要素がトップレイヤーにあれば、トップレイヤーでレンダリングされる。
+
+### 特徴
+
+- overlay はやや特殊なプロパティで、ユーザーエージェントのみが設定でき、作成者は設定できない。
+- transition を通じて overlay の値の変更タイミングを制御できる。
+- overlay の auto 値は連続的にアニメーションされず、離散的なステップ（即時変更）で動作する。
+  - アニメーションの進行率を表す p 値によって overlay の動作が決定される：
+    p 値が0と1の間のとき：要素はトップレイヤーでレンダリングされる（つまり、overlay の値は auto のまま維持される）。
+    p 値が0または1以外の値のとき：overlay の値はアニメーションの開始または終了時点に応じて決定される。
+    この動作方式のおかげで、要素はアニメーションの大部分の時間、トップレイヤーに留まることになる。

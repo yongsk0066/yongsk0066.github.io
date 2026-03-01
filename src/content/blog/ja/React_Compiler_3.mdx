@@ -1,0 +1,1094 @@
+---
+title: React Compiler、どう動くのか [3] - HIRへの変換（Lowering）
+description: "React CompilerのLoweringプロセスを見てみよう。ASTをHIRに変換する過程である。"
+author: "Yongseok"
+categories: ["react"]
+date: '2024-06-10T15:10:03.760Z'
+series: "React Compiler"
+heroImage: "/post/images/ReactCompiler3/thumb.png"
+---
+import LinkPreview from '@components/embeds/LinkPreview.astro'
+import YouTube from '@components/embeds/YouTube.astro'
+
+## これまでのあらすじ
+
+前回の2編を通して**コンパイラのエントリーポイント**とキャッシュ手法である**useMemoCache**について見てきた。
+今回からは、コンパイラがどのような過程を経て**構文解析**と**コンパイル**を行うのかを見ていこう。
+
+1編で見た、実質的にコンパイルを行う関数である`compileFn`をもう一度見てみよう。
+
+```ts
+export function compileFn(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): CodegenFunction {
+  let generator = run(
+    func,
+    config,
+    fnType,
+    useMemoCacheIdentifier,
+    logger,
+    filename,
+    code
+  );
+  while (true) {
+    const next = generator.next();
+    if (next.done) {
+      return next.value;
+    }
+  }
+}
+```
+
+`compileFn`関数は`run`関数を通じてコードを生成し、`generator.next()`でコード生成の過程を繰り返す。
+
+```ts
+// packages/babel-plugin-react-compiler/src/Entrypoint/Pipline.ts
+export type CompilerPipelineValue =
+  | { kind: "ast"; name: string; value: CodegenFunction }
+  | { kind: "hir"; name: string; value: HIRFunction }
+  | { kind: "reactive"; name: string; value: ReactiveFunction }
+  | { kind: "debug"; name: string; value: string };
+
+export function* run(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  config: EnvironmentConfig,
+  fnType: ReactFunctionType,
+  useMemoCacheIdentifier: string,
+  logger: Logger | null,
+  filename: string | null,
+  code: string | null
+): Generator<CompilerPipelineValue, CodegenFunction> {
+  const contextIdentifiers = findContextIdentifiers(func);
+  const env = new Environment(
+    fnType,
+    config,
+    contextIdentifiers,
+    logger,
+    filename,
+    code,
+    useMemoCacheIdentifier
+  );
+  yield {
+    kind: "debug",
+    name: "EnvironmentConfig",
+    value: prettyFormat(env.config),
+  };
+  const ast = yield* runWithEnvironment(func, env);
+  return ast;
+}
+
+```
+
+`run`関数は`Environment`を生成し、`runWithEnvironment`関数を通じてコードを生成する。\
+`Environment`はコンパイル過程でグローバルな状態と設定を管理するオブジェクトである。
+これについての詳細は次回に見ることにして、ひとまず先に進もう。
+
+では`runWithEnvironment`関数を見てみよう。\
+実質的にコードを生成する関数である。
+
+## runWithEnvironment
+
+```ts
+// packages/babel-plugin-react-compiler/src/Entrypoint/Pipline.ts
+function* runWithEnvironment(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  env: Environment
+): Generator<CompilerPipelineValue, CodegenFunction> {
+  const hir = lower(func, env).unwrap();
+  yield log({ kind: "hir", name: "HIR", value: hir });
+
+  pruneMaybeThrows(hir);
+  yield log({ kind: "hir", name: "PruneMaybeThrows", value: hir });
+
+  validateContextVariableLValues(hir);
+  validateUseMemo(hir);
+
+  dropManualMemoization(hir);
+  yield log({ kind: "hir", name: "DropManualMemoization", value: hir });
+
+  // ~~~~~~~~~~~~~~~~~~~~~
+  // --- 中間の各種過程 ---
+  // ~~~~~~~~~~~~~~~~~~~~~
+
+  const ast = codegenFunction(reactiveFunction, uniqueIdentifiers).unwrap();
+  yield log({ kind: "ast", name: "Codegen", value: ast });
+
+  /**
+   * This flag should be only set for unit / fixture tests to check
+   * that Forget correctly handles unexpected errors (e.g. exceptions
+   * thrown by babel functions or other unexpected exceptions).
+   */
+  if (env.config.throwUnknownException__testonly) {
+    throw new Error("unexpected error");
+  }
+
+  // 最終的に生成されたコードを返す
+  return ast;
+}
+```
+
+全体の過程は約40ほどのステップを経てコードを生成する。\
+各過程をまず大きく分類すると以下のようになる。
+
+1. <b>'Lowering'</b>: ASTをHIR（High-level Intermediate Representation）に変換
+2. <b>'Normalization, Optimization'</b>: HIRを正規化し最適化する過程
+3. <b>'Static Analysis, Type Inference'</b>: SSA形式に変換し型推論
+4. <b>'Reactive Optimization'</b>: リアクティブ最適化
+5. <b>'Code Generation'</b>: コード生成
+
+さらに詳細に展開すると以下のようになる。\
+まだ深く掘り下げずに、どのような過程があるのかだけ眺めてみよう。
+
+1. <b>'Lowering'</b>
+    - `lower`: ASTをHIRに変換
+2. <b>'最適化および正規化'</b>
+    - `pruneMaybeThrows`: HIRから`MaybeThrows`を除去
+    - `validateContextVariableLValues`: HIRのコンテキスト変数のLValueを検証
+    - `validateUseMemo`: HIRの`useMemo`を検証
+    - `dropManualMemoization`: 手動メモ化を除去
+    - `inlineImmediatelyInvokedFunctionExpressions`: 即時実行関数式（IIFE）のインライン化
+    - `mergeConsecutiveBlocks`: 連続するブロックの結合
+3. <b>'静的解析および型推論'</b>
+    - `enterSSA`: SSA（Static Single Assignment）形式に変換
+    - `eliminateRedundantPhi`: 冗長なPhiノードの除去
+    - `constantPropagation`: 定数伝播
+    - `inferTypes`: 型推論
+    - `validateHooksUsage`: フック使用の妥当性検査
+    - `validateNoCapitalizedCalls`: 大文字で始まる関数呼び出しの検査
+    - `analyseFunctions`: 関数分析
+    - `inferReferenceEffects`: 参照エフェクトの推論
+    - `deadCodeElimination`: デッドコードの除去
+    - `inferMutableRanges`: ミュータブル範囲の推論
+    - `inferReactivePlaces`: リアクティブプレースの推論
+    - `leaveSSA`: SSA形式から通常の形式に復帰
+4. <b>'リアクティブ最適化（HIR）'</b>
+    - `inferReactiveScopeVariables`: リアクティブスコープ変数の推論
+    - `alignMethodCallScopes`: メソッド呼び出しスコープの整列
+    - `alignObjectMethodScopes`: オブジェクトメソッドスコープの整列
+    - `memoizeFbtOperandsInSameScope`: 同一スコープ内のFbtオペランドのメモ化
+    - `pruneUnusedLabelsHIR`: 未使用ラベルの除去
+    - `alignReactiveScopesToBlockScopesHIR`: リアクティブスコープのブロックスコープへの整列
+    - `mergeOverlappingReactiveScopesHIR`: 重複するリアクティブスコープの結合
+    - `buildReactiveScopeTerminalsHIR`: リアクティブスコープターミナルの生成
+    - `buildReactiveFunction`: リアクティブ関数の生成
+5. <b>'リアクティブ最適化（Reactive function）'</b>
+    - `pruneUnusedLabels`: 未使用ラベルの除去
+    - `flattenReactiveLoops`: リアクティブループの平坦化
+    - `propagateScopeDependencies`: スコープ依存関係の伝播
+    - `pruneNonReactiveDependencies`: 非リアクティブ依存関係の除去
+    - `pruneUnusedScopes`: 未使用スコープの除去
+    - `mergeReactiveScopesThatInvalidateTogether`: 同時に無効化されるリアクティブスコープの結合
+    - `pruneAlwaysInvalidatingScopes`: 常に無効化されるスコープの除去
+    - `propagateEarlyReturns`: 早期リターンの伝播
+    - `promoteUsedTemporaries`: 使用済み一時変数のプロモーション
+    - `pruneUnusedLValues`: 未使用LValueの除去
+    - `extractScopeDeclarationsFromDestructuring`: 分割代入からのスコープ宣言の抽出
+    - `stabilizeBlockIds`: ブロックIDの安定化
+    - `renameVariables`: 変数のリネーム
+    - `pruneHoistedContexts`: ホイスティングされたコンテキストの除去
+5. <b>'Code Generation'</b>
+    - `codegenFunction`: 最終コード生成
+
+すべての過程を見ていくかは分からないが、まずは始めてみよう。
+
+## Lowering
+
+```ts
+const hir = lower(func, env).unwrap();
+```
+
+React Compilerの最初のステップである**Lowering**は、**AST**（Abstract Syntax Tree）を**HIR**（High-level Intermediate Representation）に変換する過程である。
+
+まず**コンパイル**について改めておさらいしよう。
+> to collect information from different places and arrange it in a book, report, or list \
+[\[Cambridge Dictionary\]](https://dictionary.cambridge.org/dictionary/english/compile)
+
+辞書的な意味では、さまざまな情報を収集して書籍、レポート、またはリストにまとめることを意味する。\
+**コンピュータサイエンス**においてコンパイルとは、**ソースコード**を**機械語**に変換する過程を意味する。
+
+機械語に変換する。簡単に言えば、**コンピュータが理解できる言語に変換する**ということだ。
+<figure><img src="/post/images/ReactCompiler3/Compiler.png" />
+<figcaption>コンパイラ</figcaption>
+</figure>
+
+<aside>
+<b>Compiler or Transpiler?</b>\
+React Conf 2024でReact Compilerが公開されて以降、多くの議論があった。React Compilerはコンパイラなのかトランスパイラなのかという議論だ。\
+コンパイラは上で見たように高水準から低水準への一方向の変換を行うものとして知られているが、React Compilerの出力は最適化されたReactコードであるため、コンパイラと呼ぶのは難しいのではないかという意見だった。この議論に興味があれば、さらに調べてみよう。
+</aside>
+
+**ソースコード**からBabelによって**AST**に変換され、このASTをもう一段階低くして**中間表現**（IR）に変換したため、**Lowering**と呼ばれる。
+
+それでは、HIRに変換する`lower`関数を見てみよう。
+
+```ts
+// packages/babel-plugin-react-compiler/src/HIR/BuildHIR.ts
+
+ /*
+  * 関数を制御フローグラフ（Control-Flow Graph, CFG）で表す高水準中間表現（HIR）に変換します。
+  * すべての正常な制御フローは正確にモデリングされ、正確な式レベル（expression-level）のメモ化を可能にします。
+  * 主な例外はtry/catch文と例外です。
+  * 現在、try/catchのためにコンパイルをスキップし、例外の制御フローをモデリングしようとしません。
+  * これはJavaScriptのどこでも発生しうる例外です。
+  * コンパイラは例外がランタイムによって処理されることを前提としており、
+  * つまりメモ化を無効化することで処理されることを前提としています。
+  */
+export function lower(
+  func: NodePath<t.Function>,
+  env: Environment,
+  bindings: Bindings | null = null,
+  capturedRefs: Array<t.Identifier> = [],
+  // 再帰的に呼び出される場合（ラムダ関数の場合）lower()を呼び出す最も外側の関数
+  parent: NodePath<t.Function> | null = null
+): Result<HIRFunction, CompilerError> {
+// ...
+}
+```
+関数の上のコメントを参考にすると、**AST**（Abstract Syntax Tree）を**CFG**（Control-Flow Graph、以下CFG）で表す**高水準中間表現**（HIR）に変換するとある。
+
+**AST**は**構文木**で、プログラムの構文を表すツリー形式のデータ構造であるのに対し、**CFG**は**制御フローグラフ**で、プログラムの制御フローを表すグラフ形式のデータ構造である。\
+グラフの各ノードは**基本ブロック**（Basic Block）と呼ばれるコードの連続的な部分を表し、**エッジ**（edge）は一つの基本ブロックから別の基本ブロックへの制御フローを表す。\
+制御フロー構造とは、if/else、switch、loopのような分岐と繰り返しを意味する。
+**CFG**はプログラムのすべての可能な実行パスを捉え、コードの最適化と分析に使用される。
+<figure><img src="/post/images/ReactCompiler3/ast_hir.png" />
+<figcaption>AST & HIR</figcaption>
+</figure>
+
+図はこのように描いたが、各ノードは互いにマッチしない。\
+理解を助けるために、まず出力結果を見てみよう。\
+以下は簡単なコードをASTとHIRに変換した結果である。
+
+```tsx
+function Component({ color }: { color: string }) {
+  if (color === "red") {
+    return (<div styles={{ color }}>hello red</div>)
+  } else {
+    return (<div styles={{ color }}>hello etc</div>)
+  }
+}
+```
+理解を助けるためのサンプルコードだ。`Component`関数は`color`が`red`の場合とそうでない場合で異なるJSXを返す。
+このコードをASTで表すと、以下のような構文のツリーとして表現される。
+```ts
+// Component 関数
+FunctionDeclaration
+  Identifier
+  Parameter
+    ObjectBindingPattern
+      BindingElement
+        Identifier
+    TypeLiteral
+  Block
+    IfStatement
+      BinaryExpression
+        Identifier
+        EqualsEqualsEqualsToken
+        StringLiteral
+      Block
+        ReturnStatement
+          ParenthesizedExpression
+            JsxElement
+              JsxOpeningElement
+                Identifier
+                //...
+//...
+```
+グラフで表すと以下のようになる。
+<figure><img src="/post/images/ReactCompiler3/ast.png" />
+<figcaption>ASTグラフ（簡略版）</figcaption>
+</figure>
+
+
+このASTをHIRに変換すると、以下のような結果が得られる。
+```plaintext
+function Component
+bb0 (block):
+  [1] <unknown> $2 = Destructure Let { color: <unknown> color$1 } = <unknown> $0
+  [2] <unknown> $11 = LoadLocal <unknown> color$1
+  [3] <unknown> $12 = "red"
+  [4] <unknown> $13 = Binary <unknown> $11 === <unknown> $12
+  [5] If (<unknown> $13) then:bb2 else:bb4 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [6] <unknown> $3 = LoadLocal <unknown> color$1
+  [7] <unknown> $4 = Object { color: <unknown> $3 }
+  [8] <unknown> $5 = JSXText "hello red"
+  [9] <unknown> $6 = JSX <div styles={<unknown> $4} >{<unknown> $5}</div>
+  [10] Return <unknown> $6
+bb4 (block):
+  predecessor blocks: bb0
+  [11] <unknown> $7 = LoadLocal <unknown> color$1
+  [12] <unknown> $8 = Object { color: <unknown> $7 }
+  [13] <unknown> $9 = JSXText "hello etc"
+  [14] <unknown> $10 = JSX <div styles={<unknown> $8} >{<unknown> $9}</div>
+  [15] Return <unknown> $10
+bb1 (block):
+  [16] Unreachable
+```
+ここでコードを理解しなくても大丈夫だ。ざっと眺めるだけでいい。\
+このサンプルコードにおける制御フローは`Component`関数内の`if`文である。それに応じて`Component`関数は**bb0**、**bb2**、**bb4**、そして**bb1**の4つの基本ブロックに分割された。
+```ts
+  [5] If (<unknown> $13) then:bb2 else:bb4 fallthrough=bb1
+```
+この部分を見ると、`If`文によって`bb2`に行く場合と`bb4`に行く場合、そして`fallthrough`で`bb1`に行くフローが表現されている。
+`fallthrough`は`if`文を通過した後のフローを表す。この場合は到達不可能なコードとして表示されている。\
+理解を助けるために図を描くと、以下のようになる。
+<figure><img src="/post/images/ReactCompiler3/cfg.png" />
+<figcaption>制御フローグラフ</figcaption>
+</figure>
+
+なるほど、どのような形に変換されるかイメージが掴めてきた。\
+**構文単位のツリー**をこのような形の**制御フローに基づくグラフ**で表現するための変換過程が**Lowering**なのだ。\
+そして、その変換された**表現形式**を**HIR**と呼ぶ。（React Compilerにおいて）
+
+## 途中下車地点
+
+ここまで見るだけでも、HIRがどのようなデータ構造を意味するか大まかに分かるので、コンパイル過程を理解する上では問題ないだろう。\
+なので、次の編にそのまま進んでも構わない。
+
+Detach!
+
+<YouTube src="https://youtu.be/_GdEsdEfZvc?t=154" />
+
+
+## 再びlower関数へ
+
+ここから先は純粋な知的好奇心からLoweringの過程を見ていくことにする。すべての構文に対するLowering処理が含まれているため、コード自体は約4,000行ほどある。\
+では、じっくり見ていこう。
+
+再び最初に戻って`lower`関数を見てみよう。
+
+
+```ts
+export function lower(
+  func: NodePath<t.Function>,
+  env: Environment,
+  bindings: Bindings | null = null,
+  capturedRefs: Array<t.Identifier> = [],
+  // the outermost function being compiled, in case lower() is called recursively (for lambdas)
+  parent: NodePath<t.Function> | null = null
+): Result<HIRFunction, CompilerError> {}
+```
+`lower`関数はBabelに由来する`NodePath<t.Function>`を入力として受け取り、`HIRFunction`を返す。（エラーが発生した場合は`CompilerError`を返す。）\
+その他の引数としては、`Environment`オブジェクト、`Bindings`、`capturedRefs`、`parent`などがある。
+
+このとき入力として渡されるfuncの単位は何か？\
+以前の1編で見た内容を思い出してみよう。
+
+programノードのtraverseメソッドで巡回しながら関数に対するノードを見つけ出し、そのノードを`compileFn`関数に渡していた。\
+そのため`func`はBabel ASTから渡される関数に対するノードになる。\
+`FunctionDeclaration`、`FunctionExpression`、`ArrowFunctionExpression`がそれに該当する。
+
+<aside>
+ちょっと待って... あれ？上の`compileFn`で`lower`関数を呼び出すときは引数が2つしかなかったのに、何か追加の引数を受け取っている！
+```ts
+const hir = lower(func, env).unwrap();
+```
+これは`lower`関数が`lower`関数を**再帰的**に呼び出すことがあるためだ。\
+`lower`は関数単位でHIRに変換する関数であるため、関数の内部に関数がある場合、その関数に対しても`lower`関数を呼び出す必要がある。\
+そのため、処理の途中で再帰的に呼び出す部分が必ずあるはずで、その際に`bindings`、`capturedRefs`、`parent`などの引数が必要になる。**間違いなく！**
+</aside>
+
+続いて...
+
+```ts
+const builder = new HIRBuilder(env, parent ?? func, bindings, capturedRefs);
+const context: Array<Place> = [];
+```
+`HIRBuilder`インスタンスを生成して変数に格納し、`context`配列を初期化する。関数のコンテキスト情報を格納する配列だ。
+
+```ts
+for (const ref of capturedRefs ?? []) {
+  context.push({
+    kind: "Identifier",
+    identifier: builder.resolveBinding(ref),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: ref.loc ?? GeneratedSource,
+  });
+}
+```
+`capturedRefs`配列を巡回しながら、`context`配列に`Place`オブジェクトを追加する。\
+この部分は再帰呼び出しの場合なので、後で改めて見ることにして、ひとまず先に進もう。
+
+### 関数名の抽出（識別子、Identifier）
+
+関数が`FunctionDeclaration`または`FunctionExpression`の場合、関数の`id`（Identifier）識別子を取得して`id`変数に代入する。
+
+```ts
+let id: string | null = null;
+if (func.isFunctionDeclaration() || func.isFunctionExpression()) {
+  const idNode = (
+    func as NodePath<t.FunctionDeclaration | t.FunctionExpression>
+  ).get("id");
+  if (hasNode(idNode)) {
+    id = idNode.node.name;
+  }
+}
+```
+[**FunctionDeclaration（関数宣言式）**](https://babeljs.io/docs/babel-types#functiondeclaration)ノードと[**FunctionExpression（関数式）**](https://babeljs.io/docs/babel-types#functionexpression)ノードは
+識別子を持つことができるが、[**ArrowFunctionExpression（アロー関数）**](https://babeljs.io/docs/babel-types#arrowfunctionexpression)ノードは識別子を持つことができない。
+
+```js
+// FunctionDeclaration
+function foo() {}
+// FunctionExpression
+const foo = function bar() {}
+// ArrowFunctionExpression
+const foo = () => {}
+```
+
+### 引数の抽出（Parameters）
+
+関数の引数を抽出し、`params`配列に`Place`オブジェクトを追加する。
+```ts
+params: Array<Identifier | Pattern | RestElement> (required)
+```
+`params`には`Identifier`、`Pattern`、`RestElement`が入る可能性がある。\
+`Identifier`は識別子、`Pattern`はオブジェクトや配列パターン、`RestElement`は残余要素を表す。
+
+```ts
+const params: Array<Place | SpreadPattern> = [];
+func.get("params").forEach((param) => {
+  if (param.isIdentifier()) {}
+  else if (param.isObjectPattern() || param.isArrayPattern() || param.isAssignmentPattern()) {}
+  else if (param.isRestElement()) {}
+  else {}
+  // ...
+});
+```
+
+**Identifier（単一変数名）**
+```ts
+// 例
+const greet = function(name) { // nameがIdentifier
+  console.log(`Hello, ${name}!`);
+};
+```
+引数が`Identifier`の場合、`Place`オブジェクトを生成して`params`配列に追加する。
+
+```ts
+if (param.isIdentifier()) {
+  const binding = builder.resolveIdentifier(param);
+  const place: Place = {
+    kind: "Identifier",
+    identifier: binding.identifier,
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push(place);
+}
+```
+今後頻繁に登場するが、`Place`オブジェクトは以下のように定義されている。
+```ts
+/*
+ * データの読み書きが可能な場所:
+ * - 変数（識別子）
+ * - 識別子へのパス
+ */
+export type Place = {
+  kind: "Identifier"; // 種類
+  identifier: Identifier; // 識別子
+  effect: Effect; // The effect with which a value is modified. (値が変更される際のエフェクト)
+  reactive: boolean;
+  loc: SourceLocation;
+};
+```
+
+
+
+**ObjectPattern（オブジェクトパターン）、ArrayPattern（配列パターン）、AssignmentPattern（代入パターン）**
+```ts
+// 例
+// ObjectPattern
+const greet = function({ name }) {
+  console.log(`Hello, ${name}!`);
+};
+
+// ArrayPattern
+const greet = function([name]) {
+  console.log(`Hello, ${name}!`);
+};
+
+// AssignmentPattern
+const greet = function(name = 'world') {
+  console.log(`Hello, ${name}!`);
+};
+
+```
+引数が`ObjectPattern`、`ArrayPattern`、`AssignmentPattern`の場合、一時変数を生成して`Place`オブジェクトを作成し、`params`配列に追加する。
+`lowerAssignment`関数を通じて代入を処理する。
+
+```ts
+else if (
+  param.isObjectPattern() ||
+  param.isArrayPattern() ||
+  param.isAssignmentPattern()
+) {
+  const place: Place = {
+    kind: "Identifier",
+    identifier: builder.makeTemporary(),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push(place);
+  lowerAssignment(
+    builder,
+    param.node.loc ?? GeneratedSource,
+    InstructionKind.Let,
+    param,
+    place,
+    "Assignment"
+  );
+}
+```
+
+**RestElement（残余要素）**
+```ts
+// 例
+const greet = function(...names) {
+  console.log(`Hello, ${names.join(', ')}!`);
+};
+```
+引数が`RestElement`の場合、一時変数を生成して`Spread`オブジェクトを作成し、`params`配列に追加する。
+
+```ts
+else if (param.isRestElement()) {
+  const place: Place = {
+    kind: "Identifier",
+    identifier: builder.makeTemporary(),
+    effect: Effect.Unknown,
+    reactive: false,
+    loc: param.node.loc ?? GeneratedSource,
+  };
+  params.push({
+    kind: "Spread",
+    place,
+  });
+  lowerAssignment(
+    builder,
+    param.node.loc ?? GeneratedSource,
+    InstructionKind.Let,
+    param.get("argument"),
+    place,
+    "Assignment"
+  );
+}
+```
+
+このようにして関数の引数を抽出し、`params`配列に`Place`オブジェクトを追加する過程を経る。
+
+では、関数の本体を抽出して`body`配列に`Instruction`オブジェクトを追加する過程を見てみよう。
+
+### 関数本体の抽出（Body）
+
+```ts
+let directives: Array<string> = [];
+const body = func.get("body");
+```
+
+関数の本体を抽出し、`directives`配列を初期化する。
+
+**Expression（式）**
+
+
+```ts
+if (body.isExpression()) {
+  const fallthrough = builder.reserve("block");
+  const terminal: ReturnTerminal = {
+    kind: "return",
+    loc: GeneratedSource,
+    value: lowerExpressionToTemporary(builder, body),
+    id: makeInstructionId(0),
+  };
+  builder.terminateWithContinuation(terminal, fallthrough);
+}
+```
+
+**BlockStatement（ブロック文）**
+
+ブロック文の場合、`lowerStatement`関数を通じて`body`を処理する。
+
+```ts
+else if (body.isBlockStatement()) {
+  lowerStatement(builder, body);
+  directives = body.get("directives").map((d) => d.node.value.value);
+}
+```
+
+この部分が実質的にコアな部分と言える。\
+`lowerStatement`関数を見てみよう。
+
+```ts
+function lowerStatement(
+  builder: HIRBuilder,
+  stmtPath: NodePath<t.Statement>,
+  label: string | null = null
+): void {
+  const stmtNode = stmtPath.node;
+  switch (stmtNode.type) {
+    case "ThrowStatement":
+    case "ReturnStatement":
+    case "IfStatement":
+    case "BlockStatement":
+    case "BreakStatement":
+    case "ContinueStatement":
+    case "ForStatement":
+    case "WhileStatement":
+    case "LabeledStatement":
+    case "SwitchStatement":
+    case "VariableDeclaration":
+    case "ExpressionStatement":
+    case "DoWhileStatement":
+    case "FunctionDeclaration":
+    case "ForOfStatement":
+    case "ForInStatement":
+    case "DebuggerStatement":
+    case "EmptyStatement":
+    case "TryStatement":
+    // ------- skip -------
+    case "TypeAlias":
+    case "TSTypeAliasDeclaration":
+
+    // --- unsupported ---
+    case "ClassDeclaration":
+    // ~
+    case "WithStatement":
+    default:
+```
+`stmtPath`（Statement Path）のノードタイプに応じてさまざまな処理を行う。\
+`lower`関数から呼び出される際、`stmtPath`には`BlockStatement`が渡される。では、例を通じて見てみよう。
+
+```tsx
+// 例
+function complexExample(x) {
+  let result = 0;
+  if (x > 0) {
+    result = x * 2;
+  } else {
+    result = x * 3;
+  }
+  return result;
+}
+```
+関数`complexExample`のbodyは`BlockStatement`だ。この`BlockStatement`を`lowerStatement`関数に渡してみよう。
+
+```ts
+case "BlockStatement": {
+  const stmt = stmtPath as NodePath<t.BlockStatement>;
+  const statements = stmt.get("body");
+```
+`stmtPath`を`BlockStatement`にキャストし、`body`を抽出する。\
+`body`は`NodePath<t.Statement>[]`型で、ブロック文内の各文を表す。
+
+```ts
+for (const s of statements) {
+  lowerStatement(builder, s);
+}
+```
+**statements**を巡回しながら、`lowerStatement`関数を再帰的に呼び出す。
+
+BlockStatementの処理中の再帰的な処理以外にも、もう一つの過程がある。
+
+#### 'const'変数宣言のホイスティング処理
+
+まず、あるバインディングが宣言される前に参照された場合にホイスティング可能かどうかを確認し、\
+該当する宣言を参照される最も早い地点（つまり、直前の最上位の文）にコンテキスト変数としてホイスティングする。
+
+
+```ts
+const hoistableIdentifiers: Set<t.Identifier> = new Set();
+
+for (const [, binding] of Object.entries(stmt.scope.bindings)) {
+  // refs to params are always valid / never need to be hoisted
+  if (binding.kind !== "param") {
+    hoistableIdentifiers.add(binding.identifier);
+  }
+}
+```
+`hoistableIdentifiers`という`Set`を生成し、`stmt.scope.bindings`を巡回しながら
+identifierを`hoistableIdentifiers`に追加する。\
+stmt.scope.bindingsは現在のブロックのバインディング情報を保持している。\
+親や子ブロックのバインディング情報は含まれない。\
+このとき、`const`、`let`、`var`が`hoistableIdentifiers`に追加される。
+
+<aside>
+**[実際に実行してみる]**\
+playgroundを通じて実行してみることもできるが、現在のplaygroundのコード自体もコンパイラが動作するため、playgroundのコンパイル結果も混ざって出力される。そのため明確に確認するのは難しい。\
+したがって、ローカルで直接実行してみよう。
+```js
+const babel = require('@babel/core');
+const parser = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
+
+const code = `
+function complexExample(x) {
+  let result = 0;
+  const a = 1;
+  var b = 10;
+  function foo() {
+    return a;
+  }
+  if (x > 0) {
+    const c = 100;
+    result = x * 2;
+  } else {
+   function bar() {
+     return a;
+    }
+    result = x * 3;
+  }
+  return result;
+}
+`;
+
+const ast = parser.parse(code);
+
+traverse(ast, {
+  BlockStatement(path) {
+    console.log("--- Block ---")
+    const bindings = path.scope.bindings;
+    for(const [, binding] of Object.entries(bindings)) {
+      if (binding.kind !== "param") {
+        console.log(binding.identifier);
+      }
+    }
+    console.log("--- End Block ---")
+  }
+});
+```
+実行すると、メインブロックで現在のブロックにのみ存在する`result`、`a`、`foo`がコンソールに出力される（`hoistableIdentifiers`に追加される）ことが確認できる。
+```js
+Node {
+  type: "Identifier",
+  name: "result",
+  //...
+}
+Node {
+  type: "Identifier",
+  name: "a",
+  //...
+}
+Node {
+  type: "Identifier",
+  name: "foo",
+  //...
+}
+```
+</aside>
+
+各文を巡回する際に、ホイスティングが必要な要素を格納する`willHoist`という`Set`を生成する。
+
+```ts
+for (const s of statements) {
+  const willHoist = new Set<NodePath<t.Identifier>>();
+  // ...
+}
+```
+
+関数コンテキストの深さを追跡する。識別子の参照が内部関数で発生しているかを追跡するためだ。\
+`traverse`で探索しながら`FunctionExpression`、`FunctionDeclaration`、`ArrowFunctionExpression`、`ObjectMethod`ノードに遭遇すると関数の深さを増加させ、ノードを抜ける際に関数の深さを減少させる。
+```ts
+let fnDepth = s.isFunctionDeclaration() ? 1 : 0;
+const withFunctionContext = {
+  enter: (): void => {
+    fnDepth++; // 関数の深さを増加
+  },
+  exit: (): void => {
+    fnDepth--; // 関数の深さを減少
+  },
+};
+s.traverse({
+  FunctionExpression: withFunctionContext, // 関数式
+  FunctionDeclaration: withFunctionContext, // 関数宣言式
+  ArrowFunctionExpression: withFunctionContext,  // アロー関数
+  ObjectMethod: withFunctionContext, // オブジェクトメソッド
+  // ...
+});
+```
+
+文を巡回しながら識別子を探す。\
+識別子が参照されていないか、親が代入式でない場合はスキップする。\
+識別子が参照されており`hoistableIdentifiers`に存在し、関数の深さが0より大きいかバインディングが`hoisted`の場合、`willHoist`に追加する。
+
+```ts
+s.traverse({
+  // ...
+  Identifier(id: NodePath<t.Identifier>) {
+    const id2 = id;
+    if (
+      !id2.isReferencedIdentifier() &&
+      // isReferencedIdentifier is broken and returns false for reassignments
+      id.parent.type !== "AssignmentExpression"
+    ) {
+      return;
+    }
+    const binding = id.scope.getBinding(id.node.name);
+    /*
+    * 識別子の宣言をホイスティングできるケースは以下の通りです。
+    * 1. 参照が内部関数内で発生する場合
+    * または
+    * 2. 宣言自体がホイスティング可能な場合
+    */
+    if (
+      binding != null &&
+      hoistableIdentifiers.has(binding.identifier) &&
+      (fnDepth > 0 || binding.kind === "hoisted")
+    ) {
+      willHoist.add(id);
+    }
+  },
+});
+```
+その後、再びノードを巡回しながら`hoistableIdentifiers`にある識別子を削除する。
+
+```ts
+s.traverse({
+  Identifier(path: NodePath<t.Identifier>) {
+    if (hoistableIdentifiers.has(path.node)) {
+      hoistableIdentifiers.delete(path.node);
+    }
+  },
+});
+```
+
+`willHoist`を巡回しながら、`identifier`を`resolveIdentifier`を通じてユニークな識別子に変換し、
+`lowerValueToTemporary`関数を通じて一時変数に`DeclareContext`を生成して**builderにpush**する。\
+その後、グローバル環境の`#contextIdentifiers`、`#hoistedIdentifiers`に追加する。
+
+
+```ts
+// Hoist declarations that need it to the earliest point where they are needed
+for (const id of willHoist) {
+  const binding = stmt.scope.getBinding(id.node.name);
+  if (builder.environment.isHoistedIdentifier(binding.identifier)) {
+    // Already hoisted
+    continue;
+  }
+  const identifier = builder.resolveIdentifier(id);
+  const place: Place = {
+    effect: Effect.Unknown,
+    identifier: identifier.identifier,
+    kind: "Identifier",
+    reactive: false,
+    loc: id.node.loc ?? GeneratedSource,
+  };
+  lowerValueToTemporary(builder, {
+    kind: "DeclareContext",
+    lvalue: {
+      kind: InstructionKind.HoistedConst,
+      place,
+    },
+    loc: id.node.loc ?? GeneratedSource,
+  });
+  builder.environment.addHoistedIdentifier(binding.identifier);
+```
+後にコード生成前に`DeclareContext`を除去し、関連する`StoreContext`を再変換して元のソースコードを復元する。\
+他の種類の宣言に対するホイスティングは今後実装予定である。
+
+#### ホイスティング（Hoisting）をする理由は？
+
+<aside>
+**JavaScriptのホイスティング**\
+JavaScriptにおけるホイスティングとは、変数の宣言を有効スコープの最上部に引き上げることを意味する。\
+JavaScriptはコードを実行する前に関数宣言文と変数宣言文をメモリに格納するため、関数宣言文と変数宣言文が引き上げられる。\
+**const**の場合はホイスティングされるが、TDZ（Temporal Dead Zone）に入る。
+
+ここまでが私たちが知っている一般的なJavaScriptのホイスティングだ。
+</aside>
+
+しかし、今回見たのはコンパイラが行うホイスティングだ。\
+<aside>ここからは推測になる。</aside>
+**constのホイスティング**をする理由は何だろうか？例とともに見てみよう。テストコードを通じて見ると良質な例が得られる。`/src/__tests__/fixtures/compiler`に移動してみよう。\
+簡潔に見えるコードを一つ拾ってきた。"hoisting-simple-const-declaration.expected.md"ファイルを開いてみよう。
+
+```js
+function hoisting() {
+  const foo = () => {
+    return bar + baz;
+  };
+  const bar = 3;
+  const baz = 2;
+  return foo(); // OK: called outside of TDZ for bar/baz
+}
+```
+シンプルなホイスティングの例だ。これを**HIRに変換**すると以下のようになる。
+
+```js
+function hoisting
+bb0 (block):
+  [1] <unknown> $1 = DeclareContext HoistedConst <unknown> bar$0
+  [2] <unknown> $3 = DeclareContext HoistedConst <unknown> baz$2
+  [3] <unknown> $4 = LoadContext <unknown> bar$0
+  [4] <unknown> $5 = LoadContext <unknown> baz$2
+  [5] <unknown> $10 = Function  @deps[<unknown> $4,<unknown> $5] @context[<unknown> bar$0,<unknown> baz$2] @effects[]:
+      bb1 (block):
+        [1] <unknown> $6 = LoadContext <unknown> bar$0
+        [2] <unknown> $7 = LoadContext <unknown> baz$2
+        [3] <unknown> $8 = Binary <unknown> $6 + <unknown> $7
+        [4] Return <unknown> $8
+  [6] <unknown> $12 = StoreLocal Const <unknown> foo$11 = <unknown> $10
+  [7] <unknown> $13 = 3
+  [8] <unknown> $14 = StoreContext Reassign <unknown> bar$0 = <unknown> $13
+  [9] <unknown> $15 = 2
+  [10] <unknown> $16 = StoreContext Reassign <unknown> baz$2 = <unknown> $15
+  [11] <unknown> $17 = LoadLocal <unknown> foo$11
+  [12] <unknown> $18 = Call <unknown> $17()
+  [13] Return <unknown> $18
+```
+冒頭の`DeclareContext HoistedConst`によって`bar`、`baz`がホイスティングされたことが分かる。\
+うーん、ここまで見ても特にピンとくるものがない。
+
+それでは、**ホイスティングをすべてオフにして**生成してみよう。全部コメントアウトしてコンパイラを再実行した。
+
+```ts
+// 😴
+case "BlockStatement": {
+  const stmt = stmtPath as NodePath<t.BlockStatement>;
+  const statements = stmt.get("body");
+  // const hoistableIdentifiers: Set<t.Identifier> = new Set();
+  // for (const [, binding] of Object.entries(stmt.scope.bindings)) {
+  //   // refs to params are always valid / never need to be hoisted
+  //   if (binding.kind !== "param") {
+  //     hoistableIdentifiers.add(binding.identifier);
+  //   }
+  // }
+
+  for (const s of statements) {
+    // const willHoist = new Set<NodePath<t.Identifier>>();
+    // /*
+    //  * If we see a hoistable identifier before its declaration, it should be hoisted just
+    //  * before the statement that references it.
+    //  */
+    // let fnDepth = s.isFunctionDeclaration() ? 1 : 0;
+    // const withFunctionContext = {
+    //   enter: (): void => {
+    //     fnDepth++;
+    //   },
+    //   exit: (): void => {
+    //     fnDepth--;
+    //   },
+    // ...
+    lowerStatement(builder, s);
+  }
+```
+まず、このようなエラーが発生した。
+```plaintext
+Todo: [hoisting] EnterSSA: Expected identifier to be defined before being used. \
+Identifier bar$0 is undefined (5:5)
+```
+何かが変わった。`bar$0`が定義される前に使用されたというエラーが発生した。\
+**HIR**コードも見てみよう。**どんな違い**が生じたのだろうか？
+
+```js
+function hoisting
+bb0 (block):
+  [1] <unknown> $1 = LoadLocal <unknown> bar$0
+  [2] <unknown> $3 = LoadLocal <unknown> baz$2
+  [3] <unknown> $8 = Function  @deps[<unknown> $1,<unknown> $3] @context[<unknown> bar$0,<unknown> baz$2] @effects[]:
+      bb1 (block):
+        [1] <unknown> $4 = LoadLocal <unknown> bar$0
+        [2] <unknown> $5 = LoadLocal <unknown> baz$2
+        [3] <unknown> $6 = Binary <unknown> $4 + <unknown> $5
+        [4] Return <unknown> $6
+  [4] <unknown> $10 = StoreLocal Const <unknown> foo$9 = <unknown> $8
+  [5] <unknown> $11 = 3
+  [6] <unknown> $12 = StoreLocal Const <unknown> bar$0 = <unknown> $11
+  [7] <unknown> $13 = 2
+  [8] <unknown> $14 = StoreLocal Const <unknown> baz$2 = <unknown> $13
+  [9] <unknown> $15 = LoadLocal <unknown> foo$9
+  [10] <unknown> $16 = Call <unknown> $15()
+  [11] Return <unknown> $16
+```
+おお... `DeclareContext HoistedConst`が消えた。これは当然のことだ。**ホイスティング**をしなかったのだから。\
+そのため**[1]**で定義される前に`LoadLocal`が発生してエラーになったのだ。遅れて**[6]**、**[8]**で`StoreLocal Const`として定義されたが、すでに使用された後なのでエラーが発生した。
+
+JavaScriptが実行される環境ではエンジンがホイスティングを行うが、HIRに変換された後は別の言語に変換されたのと変わらない。
+そのため、できる限りJavaScriptをモデリングする必要があったのではないかと思う。
+それ以外にも、これによってDCEやConst Propagationなど他の最適化過程でも後に活用できるのではないかという考えを残しておく。
+
+そこで気になってCompilerの開発者であるlaurenに聞いてみた。質問を投げかけた後になって気まずくなりながらサンプルコードを探してみることになり、実装が必然的だったことを知った。\
+（質問の前半が少し切れているが）
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">it's more because it's a todo 🤣 const hoisting was the most straightforward to support, and at the moment it's not used in any other passes</p>&mdash; lauren 나은 (@potetotes) <a href="https://twitter.com/potetotes/status/1799899243395604762?ref_src=twsrc%5Etfw">June 9, 2024</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+このような親切な回答をいただいた。気になったときにすぐ質問できる勇気が（？）少しついた気がする。\
+**constのホイスティング**が最もシンプルにサポートできる形だったため先に実装され、まだ他の最適化過程では使用されていないとのことだった。
+
+それでは、再び`lowerStatement`関数に戻って、他の部分を見ていこう。
+再帰的に回りながら各ケースに応じたLoweringを実行していくことになる。これをすべて書き連ねていると、読む人も退屈だろうから、次回に手短にいくつかだけ見るか、この記事に後で追記しておくことにする。
+とにかく、再帰的にbody部分をLoweringし終えると、以下の部分に抜けてくることになる。
+
+```ts
+builder.terminate(
+  {
+    kind: "return",
+    loc: GeneratedSource,
+    value: lowerValueToTemporary(builder, {
+      kind: "Primitive",
+      value: undefined,
+      loc: GeneratedSource,
+    }),
+    id: makeInstructionId(0),
+  },
+  null
+);
+
+return Ok({
+  id,
+  params,
+  fnType: parent == null ? env.fnType : "Other",
+  returnType: null, // TODO: extract the actual return type node if present
+  body: builder.build(),
+  context,
+  generator: func.node.generator === true,
+  async: func.node.async === true,
+  loc: func.node.loc ?? GeneratedSource,
+  env,
+  effects: null,
+  directives,
+});
+```
+
+`builder.terminate`を通じて`return`を生成し、`builder.build()`で生成して返す。\
+こうして`HIRFunction`が返される。
+```ts
+const hir = lower(func, env).unwrap();
+```
+**HIR**に変換する過程でbuilderが多くの役割を担っているが、これについては深く見ることができなかった。次回さらに具体的に見ていくことにしよう。
+
+## まとめ
+
+今回の記事では`lower`関数を見てきた。
+- `lower`関数はBabel ASTから`HIRFunction`を返す関数である。
+- 関数の引数、識別子、本体を抽出し、`HIRBuilder`を通じて`Instruction`オブジェクトを生成する。
+- `const`変数宣言のホイスティングを処理する。
+- `lowerStatement`関数を通じて各種文を処理する。
+- `lower`関数は再帰的に呼び出され、関数の本体を処理して`HIRFunction`を返す。
+
+それでは、さようなら！
+
+
+使用したツール
+- [AST Explorer](https://astexplorer.net/)
+- [Babel](https://babel.dev/)
+
+
+参考資料
+- https://groups.seas.harvard.edu/courses/cs153/2018fa/lectures/Lec17-CFG-dataflow.pdf
+- https://rustc-dev-guide.rust-lang.org/hir.htmlimport
+
+

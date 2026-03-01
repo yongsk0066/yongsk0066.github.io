@@ -1,0 +1,416 @@
+---
+title: "Let's Cancel an Axios Request [1]"
+description: "How to cancel an Axios request. You can cancel a request by passing a cancelToken when making an axios call. But where does that cancelToken actually flow to?"
+author: "Yongseok"
+pubDate: "Jan 30 2024"
+date: "2024-01-30"
+categories: ["javascript"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<YouTube src="https://youtu.be/K1pBEpFMDuY?si=m3eoY_QgiaANQGd5" />
+
+## Let's Cancel an Axios Request
+
+
+```js
+import axios from 'axios';
+
+const source = axios.CancelToken.source();
+
+axios.get('https://example.com', {
+  cancelToken: source.token
+});
+
+source.cancel('Operation canceled by the user.');
+```
+
+You can cancel an axios request by passing a cancelToken. \
+But where does that cancelToken actually flow to?
+
+Let's trace it down to where axios constructs the request...
+
+```js
+// lib/core/Axios.js
+class Axios {
+  constructor(instanceConfig) {
+    this.defaults = instanceConfig;
+    this.interceptors = {
+      request: new InterceptorManager(),
+      response: new InterceptorManager()
+    };
+  }
+
+  /**
+   * Dispatch a request
+   *
+   * @param {String|Object} configOrUrl The config specific for this request (merged with this.defaults)
+   * @param {?Object} config
+   *
+   * @returns {Promise} The Promise to be fulfilled
+   */
+  async request(configOrUrl, config) {
+    try {
+      return await this._request(configOrUrl, config);
+    } catch (err) {
+      if (err instanceof Error){
+      ...
+
+```
+The request method takes `configOrUrl` and `config` as arguments.
+It then calls `this._request`.
+Let's look at `_request`.
+
+---
+
+## The _request Method
+
+```js
+_request(configOrUrl, config) {
+  ...
+  // Merge default config with user config...
+  config = mergeConfig(this.defaults, config);
+  ...
+  // Set the method in config... defaults to 'get' if not specified...
+  config.method = (config.method || this.defaults.method || 'get').toLowerCase();
+  ...
+```
+### Setting Up Interceptors
+It also sets up the interceptors.
+```js
+// Setting up interceptors...
+const requestInterceptorChain = []; // Create the interceptor chain
+let synchronousRequestInterceptors = true; // Set whether to run synchronously
+this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) { // Iterate through interceptors
+  if (typeof interceptor.runWhen === 'function' && interceptor.runWhen(config) === false) { // If runWhen is set, execute it
+    return; // If false, skip it
+  }
+
+  synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor.synchronous; // Determine synchronous execution
+
+  requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected); // Add fulfilled and rejected to the interceptor chain
+});
+
+const responseInterceptorChain = []; // Create the response interceptor chain
+this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) { // Iterate through interceptors
+  responseInterceptorChain.push(interceptor.fulfilled, interceptor.rejected); // Add fulfilled and rejected to the interceptor chain
+});
+```
+### Executing the requestInterceptorChain
+
+```js
+// Execute the requestInterceptorChain
+len = requestInterceptorChain.length; // Get the length of the interceptor chain
+
+let newConfig = config; // Assign config to newConfig
+
+i = 0; // Set index to 0
+
+while (i < len) { // While index is less than the length
+  const onFulfilled = requestInterceptorChain[i++]; // Assign requestInterceptorChain[i++] to onFulfilled
+  const onRejected = requestInterceptorChain[i++]; // Assign requestInterceptorChain[i++] to onRejected
+  try {
+    newConfig = onFulfilled(newConfig); // Execute onFulfilled and assign the result to newConfig
+  } catch (error) {
+    onRejected.call(this, error); // Execute onRejected
+    break;
+  }
+}
+```
+
+### Executing dispatchRequest (the method that actually sends the request)
+
+```js
+// Execute dispatchRequest, which actually sends the request.
+// Pass the final composed newConfig to dispatchRequest.
+try {
+  promise = dispatchRequest.call(this, newConfig);
+} catch (error) {
+  return Promise.reject(error);
+}
+```
+### Executing the responseInterceptorChain
+```js
+// Execute the responseInterceptorChain
+i = 0; // Set index to 0
+len = responseInterceptorChain.length; // Get the length of the interceptor chain
+
+while (i < len) { // While index is less than the length
+// Chain the response interceptors onto the promise
+  promise = promise.then(responseInterceptorChain[i++], responseInterceptorChain[i++]);
+}
+
+return promise; // Return the promise
+}
+```
+Interesting... it's actually quite straightforward.
+You can see that the two interceptors run before and after the request.
+
+Now let's take a look at dispatchRequest.
+
+---
+
+## dispatchRequest
+
+There's a method declared at the top of this function. \
+`throwIfCancellationRequested` is called at the very beginning of dispatchRequest. \
+This method throws a `CanceledError` if cancellation has been requested.
+The implementation of `throwIfRequested` is shown below.
+
+```js
+// lib/core/dispatchRequest.js
+/**
+ * Throws a `CanceledError` if cancellation has been requested.
+ *
+ * @param {Object} config  The config for the request
+ *
+ * @returns {void}
+ */
+function throwIfCancellationRequested(config) { // Throws a `CanceledError` if cancellation has been requested.
+  if (config.cancelToken) { // If config has a cancelToken
+    config.cancelToken.throwIfRequested(); // Call throwIfRequested
+  }
+
+  if (config.signal && config.signal.aborted) { // If config has a signal and it's aborted
+    throw new CanceledError(null, config); // Throw CanceledError
+  }
+}
+
+/**
+ * Dispatch a request to the server using the configured adapter.
+ *
+ * @param {object} config The config for the request
+ *
+ * @returns {Promise} The Promise to be fulfilled
+ */
+export default function dispatchRequest(config) {
+  throwIfCancellationRequested(config); // Throw CanceledError if cancellation was requested
+
+```
+Let's dig deeper.
+
+### Preparing the Request
+
+```js
+export default function dispatchRequest(config) {
+  throwIfCancellationRequested(config); // Throw CanceledError if cancellation was requested
+
+  // Convert request headers to an AxiosHeaders object.
+  config.headers = AxiosHeaders.from(config.headers);
+
+  // Transform the request data.
+  config.data = transformData.call(
+    config,
+    config.transformRequest
+  );
+
+  // Set headers for specific methods...
+  if (['post', 'put', 'patch'].indexOf(config.method) !== -1) {
+    config.headers.setContentType('application/x-www-form-urlencoded', false);
+  }
+  ...
+```
+
+It handles various settings needed for the request.
+
+### The Adapter
+
+The adapter is where the actual HTTP request is sent based on the config object.
+In the browser, it uses XMLHttpRequest or fetch, while in Node.js it would use something like the http module.
+
+It retrieves the appropriate adapter via `getAdapter`.
+
+
+```js
+const adapter = adapters.getAdapter(config.adapter || defaults.adapter);
+return adapter(config).then(function onAdapterResolution(response) {
+  ...
+}, function onAdapterRejection(reason) {
+  ...
+});
+```
+The request is executed through the adapter. \
+If it succeeds, `onAdapterResolution` runs; if it fails, `onAdapterRejection` runs.
+
+#### onAdapterResolution
+
+
+
+```js
+throwIfCancellationRequested(config);
+response.data = transformData.call(config, config.transformResponse, response);
+response.headers = AxiosHeaders.from(response.headers);
+return response;
+```
+First, it checks whether the request has been cancelled, \
+then transforms the response data, \
+and converts the response headers to an AxiosHeaders object.
+Finally, it returns the response.
+
+#### onAdapterRejection
+
+```js
+function onAdapterRejection(reason) {
+  if (!isCancel(reason)) {
+    throwIfCancellationRequested(config);
+
+    // Transform response data
+    if (reason && reason.response) {
+      reason.response.data = transformData.call(
+        config,
+        config.transformResponse,
+        reason.response
+      );
+      reason.response.headers = AxiosHeaders.from(reason.response.headers);
+    }
+  }
+
+  return Promise.reject(reason);
+}
+```
+If the request failed, it receives the reason and handles it. \
+If the error is not a cancellation, it checks whether cancellation was requested, \
+then transforms the response data (note that it passes `reason.response` here, since the request failed and there is no direct response). \
+It also converts the response headers to an AxiosHeaders object.
+Then it returns `Promise.reject(reason)`.
+
+By this point, we have a good understanding of where the request resolves and rejects.
+
+Now let's look at the adapter.
+
+---
+
+## Adapter
+
+```js
+// lib/adapters/adapters.js
+const knownAdapters = {
+  http: httpAdapter,
+  xhr: xhrAdapter
+}
+```
+It maps the adapters...
+
+```js
+export default {
+  getAdapter: (adapters) => {
+    // ...
+    return adapter;
+  },
+  adapters: knownAdapters
+}
+
+```
+It finds and returns the appropriate adapter, or throws an AxiosError if none is found. \
+Assuming we're in a browser, let's head into `xhrAdapter`.
+
+---
+
+## xhrAdapter
+
+```js
+// lib/adapters/xhr.js
+const isXHRAdapterSupported = typeof XMLHttpRequest !== 'undefined';
+
+export default isXHRAdapterSupported && function (config) {
+    return new Promise(function dispatchXhrRequest(resolve, reject) {
+      ...
+```
+It checks whether XMLHttpRequest is available, and if so, returns the function.
+
+```js
+  ...
+  // Create an XMLHttpRequest instance.
+  let request = new XMLHttpRequest();
+  ...
+```
+
+Let's keep going. (In between, there are various setup steps for the request.)
+Let's see where the cancelToken we've been tracking ends up.
+
+```js
+    ...
+    if (config.cancelToken || config.signal) {
+      // Handle cancellation
+      onCanceled = cancel => {
+        if (!request) {
+          return;
+        }
+        reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+        request.abort();
+        request = null;
+      };
+
+      config.cancelToken && config.cancelToken.subscribe(onCanceled);
+      if (config.signal) {
+        config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+      }
+    }
+    ...
+
+    request.send(requestData || null);
+  });
+}
+```
+
+There it is! The cancelToken we passed in the config is being used right here. \
+Let's break it down in detail.
+
+If the request has a `cancelToken` or `signal`, the cancellation logic is set up.
+```js
+  if (config.cancelToken || config.signal) {
+    //...
+  }
+```
+`onCanceled` is the function that runs when the request is cancelled. \
+It checks the request, then calls reject. \
+If cancel is falsy or has a `type` property, it throws a CanceledError; otherwise, it throws cancel directly. \
+Then it aborts the request and sets request to null.
+
+```js
+  onCanceled = cancel => {
+    if (!request) {
+      return;
+    }
+    reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+    request.abort();
+    request = null;
+  };
+```
+
+If there's a cancelToken, it subscribes to onCanceled, \
+and if there's a signal, it registers an abort event listener on it.
+
+```js
+  config.cancelToken && config.cancelToken.subscribe(onCanceled);
+  if (config.signal) {
+    config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+  }
+```
+
+There's a part we skipped over -- the unsubscribe logic.
+```js
+  function done() {
+    if (config.cancelToken) {
+      config.cancelToken.unsubscribe(onCanceled);
+    }
+
+    if (config.signal) {
+      config.signal.removeEventListener('abort', onCanceled);
+    }
+  }
+```
+When the request completes, it unsubscribes.
+
+
+Through all of this, we've traced how the cancelToken's token enters the request config, how far down it travels, \
+and how the cancel subscription is set up.
+
+There's something that almost always accompanies cancel...! \
+It's the `signal`. \
+I plan to explain signal in a future post.
+
+I'm running low on energy, so my writing is getting a bit rough toward the end... \
+In Part 2, we'll explore CancelToken in detail, \
+and in Part 3, we'll dive into signal.

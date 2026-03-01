@@ -1,0 +1,65 @@
+---
+title: "Leisure Activity"
+description: "I loved the Midjourney landing page so much that I looked into what library they used. That led me to a cloning video. Since the code wasn't that complex, I decided to clone it myself. I extracted the transform logic into a pipeline-style architecture, then wrapped it all up as a Lit element."
+author: "Yongseok"
+pubDate: "2024-02-17"
+date: "2024-02-17"
+categories: ["dev"]
+---
+
+
+import YouTube from '@components/embeds/YouTube.astro';
+import AsciiElement from '../../../components/article/AsciiElement.astro';
+
+
+I loved the [Midjourney landing page](https://www.midjourney.com/home) so much that I looked into what library they used, and that led me to a cloning video.
+
+<YouTube src="https://youtu.be/YCJgQI71jEE?si=KOp-YtU2n-yCZR8z" />
+
+Looking at their work, the amount of code wasn't that much, so I decided to try cloning it myself.
+
+I extracted just the transform logic and made it pluggable in a pipeline style.
+Then I wrapped it all up nicely as a Lit element.
+
+Here's what it can do.
+
+### Basic
+
+<AsciiElement
+  transforms={[]}
+  />
+
+### Midjourney-style spiral
+
+```tsx
+<AsciiElement
+  transforms={['spiral']} />
+```
+
+<AsciiElement
+  transforms={['spiral']}
+  />
+
+### spiral -> zoom -> wave
+
+```tsx
+<AsciiElement
+  transforms={['spiral', 'zoom', 'wave']}/>
+```
+
+<AsciiElement
+  transforms={['spiral', 'zoom', 'wave']}
+  />
+
+
+### Wait long enough and it forms a galaxy shape
+
+<AsciiElement
+  transforms={['hurricane', 'spiral']}
+  />
+
+
+
+~I was going to attach a few more, but adding more almost crashed the browser... so I'll stop here.~ \
+After reducing the DOM count, it runs fine now. \
+With proper management, this could be pretty fun to use.

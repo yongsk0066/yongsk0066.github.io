@@ -1,0 +1,424 @@
+---
+title: "Applying moveBefore: Fixing Toasts Hidden Behind Modal Dialogs"
+description: "How I solved the problem of Toast notifications being hidden behind Modal Dialogs using the moveBefore API. We also explore how Top Layer works and how moveBefore preserves element state during DOM moves."
+author: "Yongseok"
+categories: ["web"]
+date: "2026-01-17T12:00:00.000Z"
+heroImage: "/post/images/moveBefore/thumb.png"
+draft: true
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import Sandpack from "../../../components/article/Sandpack";
+
+import problemExample from "../_examples/moveBefore/problem";
+import solutionExample from "../_examples/moveBefore/solution";
+
+You open a Modal Dialog, and your Toast notification disappears.
+
+You already set `z-index: 9999999`. So why?
+
+## The Problem
+
+Let's see it in action. Click "Show Toast" and then "Open Modal."
+
+<Sandpack client:visible files={problemExample} />
+
+The Toast is hidden behind the Modal. No matter how high you crank the `z-index`, it makes no difference.
+
+Why? Because of the **Top Layer**.
+
+## What Is the Top Layer?
+
+Browsers have a special layer that renders above the normal DOM tree. This is the **Top Layer**.
+
+The following elements are placed in the Top Layer:
+- A `<dialog>` element opened via `showModal()`
+- An element in fullscreen mode via the Fullscreen API
+- An element with the Popover attribute
+
+```
+┌─────────────────────────────────────┐
+│           Top Layer                 │  ← Modal Dialog renders here
+│  ┌───────────────────────────────┐  │
+│  │      Modal Dialog             │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│         Normal DOM Layer            │  ← Toast stuck here gets hidden
+│                                     │
+│  ┌─────────┐                        │
+│  │ Toast   │  ← Invisible to the user!
+│  └─────────┘                        │
+└─────────────────────────────────────┘
+```
+
+The Top Layer is **completely separate** from CSS stacking contexts. That's why `z-index: 999999999` does nothing. The Top Layer exists in a world of its own.
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Glossary/Top_layer" />
+
+## The Idea
+
+So what's the fix?
+
+Simple. **Move the Toast inside the Dialog.**
+
+```
+┌─────────────────────────────────────┐
+│           Top Layer                 │
+│  ┌───────────────────────────────┐  │
+│  │      Modal Dialog             │  │
+│  │                               │  │
+│  │  ┌─────────┐                  │  │
+│  │  │ Toast   │  ← Now visible!  │  │
+│  │  └─────────┘                  │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+If the Toast becomes a child of the Dialog, it renders within the Top Layer alongside the Dialog and becomes naturally visible.
+
+The question is **how** to move it.
+
+## The Problem with appendChild
+
+The most common way to move a DOM element to a different parent is `appendChild`.
+
+```javascript
+dialog.appendChild(toastContainer);
+```
+
+But this approach has a critical flaw.
+
+Internally, `appendChild` operates in two steps: **remove then insert**. The node is temporarily detached from the DOM tree and then reinserted.
+
+During this process:
+- **CSS animations are reset** 🚨
+- iframes reload
+- Focus is lost
+- Video playback stops
+- Custom Element `connectedCallback` fires again
+
+If the Toast has a fade-in animation, moving it with `appendChild` restarts the animation from the beginning. To the user, it looks like a flash or glitch.
+
+## Enter moveBefore
+
+Chrome 133 (February 2025) introduced a new API called `moveBefore`.
+
+```javascript
+newParent.moveBefore(node, referenceChild);
+```
+
+`moveBefore` moves a node **atomically while preserving its state**. Instead of remove then insert, it moves in a single operation.
+
+| Characteristic | appendChild | moveBefore |
+|------|-------------|------------|
+| How it works | Remove → Insert (2 steps) | Atomic Move (1 step) |
+| CSS Animation | ❌ Reset | ✅ Preserved |
+| iframe state | ❌ Reloaded | ✅ Preserved |
+| Focus | ❌ Lost | ✅ Preserved |
+| Video playback | ❌ Stopped | ✅ Preserved |
+
+The Toast's animation continues seamlessly during the move!
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Web/API/Node/moveBefore" />
+
+## How Does moveBefore Work Under the Hood?
+
+A natural question arises: how can `moveBefore` preserve state?
+
+Looking at the Chromium source code reveals a fascinating implementation.
+
+### The Key: Flag-Based Behavior
+
+The core of `moveBefore` is a **flag**.
+
+```cpp
+// Chromium - node.cc
+void Node::moveBefore(Node* new_child, Node* ref_child, ...) {
+  // Set the flag
+  GetDocument().SetStatePreservingAtomicMoveInProgress(true);
+
+  // Reuse existing insertBefore logic!
+  insertBefore(new_child, ref_child, exception_state);
+
+  GetDocument().SetStatePreservingAtomicMoveInProgress(false);
+}
+```
+
+Surprisingly, `moveBefore` uses `insertBefore` internally -- the exact same logic. The difference is that it runs with the `StatePreservingAtomicMoveInProgress` flag turned on.
+
+Throughout the `insertBefore` code path, this flag is checked, and side effects that would modify state are **skipped**.
+
+```cpp
+// Skip focus removal
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  GetDocument().RemoveFocusedElementOfSubtree(*child);
+}
+
+// Skip layout tree detachment
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  old_child.DetachLayoutTree();
+}
+
+// Skip CSS animation cancellation
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  element_animations->CssAnimations().Cancel();
+}
+```
+
+### Affected Subsystems
+
+Here's a summary of where the flag is checked:
+
+| Subsystem | Skipped Operation |
+|-----------|-------------------|
+| Focus | Focus removal |
+| Layout | Layout tree detach/reattach |
+| CSS Animation | Animation cancellation |
+| iframe | Subframe disconnection |
+| Top Layer | Removal from Top Layer |
+| Popover | Popover hiding |
+| Stylesheet | Clearing in-flight resources |
+
+On the other hand, some things **always execute**:
+- DOM pointer manipulation (updating parent/sibling references)
+- MutationObserver records (the move is still recorded)
+- slotchange events
+
+### Top Layer Preservation
+
+For our use case, the most important part is **Top Layer state preservation**.
+
+```cpp
+// element.cc
+void Element::RemovedFrom(ContainerNode& insertion_point) {
+  // During moveBefore, don't remove from Top Layer
+  if (IsInTopLayer() && !document.StatePreservingAtomicMoveInProgress()) {
+    document.RemoveFromTopLayerImmediately(this);  // ← Skipped!
+  }
+}
+```
+
+In a normal DOM move, the element would be removed from the Top Layer, but with `moveBefore`, it is not. The Dialog stays open as if nothing happened.
+
+<aside>
+**Note**: For a deeper dive into `moveBefore`'s internal implementation, you can explore the Chromium source files `node.cc`, `container_node.cc`, `element.cc`, and related modules.
+</aside>
+
+## Implementation
+
+Now let's build it. The implementation breaks down into three parts:
+
+1. **topLayerObserver** - Detecting Modal Dialog state
+2. **moveElement** - Moving DOM elements (using moveBefore)
+3. **useToastContainerMover** - Wiring it up as a React Hook
+
+### 1. Detecting Modal Dialog State
+
+We need to track which Modal Dialogs are currently open.
+
+```typescript
+// topLayerObserver.ts
+const modalDialogs = new Set<HTMLDialogElement>();
+const listeners = new Set<() => void>();
+
+function handleToggle(event: Event): void {
+  const dialog = event.target as HTMLDialogElement;
+
+  // Check if it's in :modal state (opened via showModal)
+  if (dialog.matches(':modal')) {
+    modalDialogs.add(dialog);
+  }
+  notifyListeners();
+}
+
+function handleBeforeToggle(event: Event): void {
+  const toggleEvent = event as ToggleEvent;
+  if (toggleEvent.newState === 'closed') {
+    modalDialogs.delete(event.target as HTMLDialogElement);
+    notifyListeners();
+  }
+}
+
+export const topLayerStore = {
+  getSnapshot: () => {
+    // Return the most recently opened Dialog
+    return Array.from(modalDialogs).pop() || null;
+  },
+  subscribe: (listener: () => void) => {
+    listeners.add(listener);
+    if (listeners.size === 1) {
+      document.addEventListener('toggle', handleToggle, true);
+      document.addEventListener('beforetoggle', handleBeforeToggle, true);
+    }
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        document.removeEventListener('toggle', handleToggle, true);
+        document.removeEventListener('beforetoggle', handleBeforeToggle, true);
+      }
+    };
+  },
+};
+```
+
+We use `toggle` and `beforetoggle` events. The reason for `beforetoggle` is that we need to move the Toast back to its original position **before** the Dialog closes.
+
+### 2. Moving DOM Elements
+
+We use `moveBefore` when available, and do nothing when it's not supported.
+
+```typescript
+// domElementMover.ts
+export function moveElement(element: Element, parent: Element): void {
+  if (element.parentElement === parent) {
+    return;  // Already in the same parent, skip
+  }
+
+  if ('moveBefore' in parent && typeof parent.moveBefore === 'function') {
+    try {
+      parent.moveBefore(element, null);  // null = append at the end
+    } catch {
+      // Ignore errors (e.g., cross-document moves)
+    }
+  }
+  // No fallback when moveBefore is unsupported (intentional)
+}
+```
+
+Why no `appendChild` fallback? Because using `appendChild` would break animations. Having the Toast hidden behind the Dialog is a better UX than having animations glitch out.
+
+### 3. React Hook
+
+We manage the Toast container's position based on Modal Dialog state.
+
+```tsx
+// useToastContainerMover.ts
+export function useToastContainerMover(
+  containerRef: React.RefObject<HTMLElement | null>
+) {
+  const originalParentRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Save original parent (once)
+    if (!originalParentRef.current) {
+      originalParentRef.current = container.parentElement;
+    }
+
+    return topLayerStore.subscribe(() => {
+      const topmostDialog = topLayerStore.getSnapshot();
+
+      // If a Dialog is open, move into it; otherwise, move back to original position
+      const targetParent = topmostDialog || originalParentRef.current;
+
+      if (targetParent) {
+        moveElement(container, targetParent);
+      }
+    });
+  }, [containerRef]);
+}
+```
+
+### Usage
+
+```tsx
+const ToastContainer = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useToastContainerMover(containerRef);
+
+  return (
+    <div ref={containerRef} className="toast-container">
+      {/* Toast rendering */}
+    </div>
+  );
+};
+```
+
+## Result
+
+Let's see the fixed version in action.
+
+<Sandpack client:visible files={solutionExample} />
+
+The Toast stays visible even when the Modal is open!
+
+Animations continue smoothly without interruption. (Note: `moveBefore` only works in Chrome 133+. Other browsers will fall back gracefully.)
+
+## End-to-End Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Browser Events                           │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    topLayerObserver.ts                          │
+│  Detects toggle / beforetoggle events                          │
+│  → Updates modalDialogs Set                                    │
+│  → Calls notifyListeners()                                     │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                useToastContainerMover.ts                        │
+│  topLayerStore.subscribe() callback fires                      │
+│  → Queries topmost Dialog via getSnapshot()                    │
+│  → Determines targetParent (Dialog or original parent)         │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    domElementMover.ts                           │
+│  moveElement(toast, targetParent)                               │
+│  → parent.moveBefore(element, null)                             │
+│  → Toast moves to new location (state preserved!)              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Design Decisions
+
+### Why DOM Movement Instead of Portal?
+
+React Portal was considered, but:
+- Portals can create mismatches between React's virtual DOM and the actual DOM
+- Using `moveBefore` preserves animation state
+- No major changes to the existing component structure are needed
+
+### Why No Fallback?
+
+In browsers that don't support `moveBefore`, the Toast remains hidden behind the Dialog. This is an intentional choice.
+
+- Using `appendChild` as a fallback would break animations
+- We prioritized UX on modern browsers over legacy browser support
+- This follows a Progressive Enhancement strategy
+
+### Browser Support
+
+- Chrome 133+ (February 2025)
+- Other browsers are working on implementations
+
+<LinkPreview src="https://chromestatus.com/feature/5135990159835136" />
+
+## Wrapping Up
+
+The problem of Toasts being hidden by the Top Layer -- solved with `moveBefore`.
+
+Key takeaways:
+1. **Top Layer** is a separate layer, independent of CSS stacking contexts
+2. **moveBefore** moves DOM nodes while preserving their state
+3. Internally, it uses a **flag-based approach** to skip side effects
+
+It's a shame that `moveBefore` is still Chrome-only for now, but other browsers will catch up soon. Until then, a Progressive Enhancement strategy works well.
+
+## References
+
+- [MDN - Top Layer](https://developer.mozilla.org/en-US/docs/Glossary/Top_layer)
+- [MDN - moveBefore](https://developer.mozilla.org/en-US/docs/Web/API/Node/moveBefore)
+- [DOM Standard - moveBefore](https://dom.spec.whatwg.org/#dom-parentnode-movebefore)
+- [Chrome Platform Status - moveBefore](https://chromestatus.com/feature/5135990159835136)

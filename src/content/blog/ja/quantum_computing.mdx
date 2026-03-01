@@ -1,0 +1,65 @@
+---
+title: '量子コンピュータを使ってみよう'
+description: "a"
+author: "Yongseok"
+categories: ["math"]
+date: '2024-08-17T22:00:00.000Z'
+heroImage: "/post/images/proxy_reflect_case/thumb.png"
+draft: true
+---
+import LinkPreview from '@components/embeds/LinkPreview.astro'
+import YouTube from '@components/embeds/YouTube.astro'
+
+
+## 量子コンピューティング
+
+必ず知っておくべきことではないが、新しい技術を学ぶのはいつだって楽しいものだ。
+
+量子コンピュータ。
+
+SF映画の中だけに登場するとんでもない未来技術のように思えるが、意外と身近な存在だ。\
+私たちも利用できるほど身近にある。（物理的にも）
+
+<figure><img src="/post/images/quantum_computing/qc.jpg" /><figcaption>量子コンピュータ from google ai</figcaption></figure>
+
+
+量子コンピューティングについては、わかりやすくまとめられたドキュメントがある。
+以下のドキュメントを参考にしてほしい。
+
+<LinkPreview src="https://aws.amazon.com/ko/what-is/quantum-computing/" />
+
+研究も活発に進められているが、いくつかのクラウドサービスを通じて量子コンピュータを利用することができる。
+
+<LinkPreview src="https://aws.amazon.com/ko/braket/" />
+
+<LinkPreview src="https://www.ibm.com/quantum" />
+
+<LinkPreview src="https://learn.microsoft.com/ko-kr/azure/quantum/overview-azure-quantum"/>
+
+量子コンピューティングを行うには、量子サーキットを作成する必要がある。\
+その際に使うツールとして、IBMのQiskit、MicrosoftのQ#などがある。\
+QiskitはIBMのPythonベースのオープンソースSDKで、IBMクラウド上で量子コンピューティングを利用できる。\
+Q#はC#ベースのMicrosoftのQDK（Quantum Development Kit）で、Azure Quantumを通じて量子コンピューティングを利用できる。
+
+<LinkPreview src="https://github.com/microsoft/qsharp"/>
+
+<LinkPreview src="https://github.com/qiskit/qiskit"/>
+
+Q#に関する資料も多いが、IBMは量子コンピューティングやQiskit関連の資料が本当に膨大で、最新の情報を多く提供している。\
+そこで今日はQiskitを使って量子コンピュータを触ってみよう。
+
+## Qiskit
+
+<LinkPreview src="https://www.ibm.com/quantum/qiskit"/>
+
+<LinkPreview src="https://docs.quantum.ibm.com/"/>
+
+<LinkPreview src="https://www.ibm.com/quantum/blog/qiskit-summer-school-2024"/>
+
+
+
+
+<YouTube src="https://youtu.be/Qndz54SGCAs?si=fkfGZjSjistMuP08"/>
+
+
+

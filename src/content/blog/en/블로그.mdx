@@ -1,0 +1,83 @@
+---
+title: "Blog"
+description: "I heard that [Astro 4.0](https://astro.build/blog/astro-4/) had been released. I figured it was a good excuse to update my blog while I was at it. Island architecture, among other things... I hadn't deeply evaluated Astro's strengths before choosing it."
+author: "Yongseok"
+pubDate: "Jan 14 2024"
+date: "2024-01-14"
+categories: ["dev"]
+
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<thumbnail-element />
+
+# Astro 4.0
+
+I heard that [Astro 4.0](https://astro.build/blog/astro-4/) had been released. I figured it was a good excuse to update my blog while I was at it.
+Island architecture, among other things... I hadn't deeply evaluated Astro's strengths before choosing it. (I'm leaving that as homework for my future self to look into later.)
+
+At the time, I was curious about [Lit](https://lit.dev/), and the fact that Astro supported Lit was the biggest reason I chose it. (Lit isn't really tied to any particular framework, but I thought it would be nice to have a comfortable host framework to work with.)
+It was around Chuseok (Korean Thanksgiving) in 2023... I had a strong interest in Lit and 3D, and with a new MacBook in hand, I planned to learn Blender and render Blender-made objects using Lit.
+
+The result of all that effort was a rotating pixelated donut.
+
+But after updating the blog, none of it worked anymore. It was probably due to the Lit 3.0 upgrade I deployed at the same time. I want to find the cause, but I've lost the will to do so. Maybe I'll feel like fixing it again around next Chuseok.
+If you see an empty, hollow space above this post, that means it still hasn't been fixed.
+
+2024.01.16 - The cause turned out to be hardware acceleration being turned off.
+
+
+
+# Lit
+
+Lit, my love-hate relationship. It felt like a little puppy shivering in the drizzle, so I built a component and sent it over.
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" ></YouTube>
+A song I was listening to on an unusually rainy winter day. <br/>
+What a world... thanks to advances in technology, I can listen to Jim Reeves from home. It feels like the realm of experience keeps expanding.
+
+## Code
+
+Here's how to use the component:
+
+```mdx
+<YouTube src="https://youtu.be/Yis6ZXu-9pY" ></YouTube>
+```
+[Code is here](https://github.com/yongsk0066/yongsk0066.github.io/blob/main/src/components/lit/youtube/youtube-element.ts)
+
+```typescript
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+    // style it to your liking
+  `;
+
+  @property()
+  src?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/; // regex is tedious so I delegated it to ChatGPT
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <iframe
+        class="aspect-video"
+        src="https://www.youtube.com/embed/${this.videoId}"
+        title="YouTube Video Player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      ></iframe>
+    `;
+  }
+}
+```

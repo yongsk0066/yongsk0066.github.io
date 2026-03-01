@@ -1,0 +1,155 @@
+---
+title: "たい焼き"
+description: "家の前にたい焼きの屋台があって、一匹1,000ウォンだ。一昨日作ったコンポーネントを整理してみよう。最初はYouTubeの埋め込みのために適当にラップして使うLitコンポーネントを作っていた。YouTubeリンクを受け取るsrcとキャプションを受け取るcaption、この2つのプロパティを受け取る。"
+author: "Yongseok"
+pubDate: "Jan 17 2024"
+date: "2024-01-17"
+categories: ["dev"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+# 家の前にたい焼きの屋台があるんだけど
+
+一匹1,000ウォンだ。
+
+# 一昨日作ったコンポーネントを整理してみよう
+
+最初はYouTubeの埋め込みのために適当にラップして使うLitコンポーネントを作っていた。
+YouTubeリンクを受け取る`src`とキャプションを受け取る`caption`、この2つのプロパティを受け取る。
+
+```typescript
+// src/components/lit/youtube-element.ts
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+      // ... 省略
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src="https://www.youtube.com/embed/${this.videoId}"
+            title="YouTube Video Player"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+別の記事を書いているうちに、似たような形のGoogleMapを埋め込むためのコンポーネントも必要になった。
+そこで今回は、YouTubeコンポーネントをもう少し汎用化して抽象クラスにしてみた。
+
+同じく`src`と`caption`を受け取る。そしてiframeの属性を受け取るために`iframeAttributes`を受け取る。
+
+
+```typescript
+// src/components/lit/figure-element.ts
+import { LitElement, css, html } from "lit";
+import { property } from "lit/decorators.js";
+
+export abstract class FigureElement extends LitElement {
+  static styles = css`
+    // ... 省略
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  abstract get iframeSrc(): string;
+
+  abstract get iframeAttributes(): Partial<HTMLIFrameElement>;
+
+  render() {
+    const attrs = this.iframeAttributes;
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src=${this.iframeSrc}
+            .title=${attrs.title || ""}
+            .allow=${attrs.allow || ""}
+            .allowfullscreen=${attrs.allowFullscreen || ""}
+            .loading=${attrs.loading || ""}
+            .referrerpolicy=${attrs.referrerPolicy || ""}
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+こうして作った抽象クラスを使って、以下のようにYouTubeコンポーネントを作り直してみた。
+
+```typescript
+import { customElement } from "lit/decorators.js";
+import { FigureElement } from "./common/figure-element";
+
+@customElement("youtube-element")
+export class YouTube extends FigureElement {
+  get iframeSrc() {
+    return `https://www.youtube.com/embed/${this.extractVideoId(this.src)}`;
+  }
+
+  get iframeAttributes(): Partial<HTMLIFrameElement> {
+    return {
+      title: "YouTube Video Player",
+      allow:
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+      loading: "lazy",
+      referrerPolicy: "no-referrer-when-downgrade",
+    };
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+}
+```
+
+コード自体は簡潔になった気がするが、このコンポーネントだけ見てもどんな機能を持っているのかが分かりにくい。
+レンダリングの主体が隠れているからなおさらだ。Reactの場合はJSXの形でレンダリングしているという感覚を与えてくれるが、
+こういう形でLitコンポーネントを作ると、レンダリングの主体が不明瞭になるという印象を受ける。
+
+どうすればもっときれいなLitコンポーネントになるだろうか..
+
+
+
+
+<YouTube src="https://youtu.be/-om5KeRqfq4?si=H-PkLgafhbh2wIgC"
+  caption="Creep - Radiohead"
+/>

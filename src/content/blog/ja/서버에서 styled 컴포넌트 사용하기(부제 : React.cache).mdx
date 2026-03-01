@@ -1,0 +1,511 @@
+---
+title: "サーバーでstyled コンポーネントを使う（副題：React.cache）"
+description: "タイトルはこうなっているが、実は本物のstyled-componentsを使う話ではない。dream-css-toolという試みをしている方を見つけた。styledのような書き方でサーバーコンポーネントでも動作するようにする取り組みだ。まずは使い方から見てみよう。"
+author: "Yongseok"
+pubDate: "2024-01-20"
+date: "2024-01-20"
+categories: ["react"]
+---
+
+import YouTube from '../../../components/embeds/YouTube.astro';
+
+> タイトルはこうなっているが、実は本物のstyled-componentsを使う話ではない。
+
+
+<YouTube src="https://youtu.be/eF7mP_Qq9ck?si=Cv1wQ70glhd0IT1v" />
+
+## dream-css-tool
+[dream-css-tool](https://github.com/joshwcomeau/dream-css-tool)という試みをしている方を見つけた。
+styledのような書き方でサーバーコンポーネントでも動作するようにする取り組みだった。
+
+まずは使い方から見てみよう。以下のように使うことができる。
+
+1. まず、StyleRegistryをルートにラップする。（ここではNext.jsのApp Directoryなのでlayoutにラップしている）
+
+```js
+import type { Metadata } from 'next';
+
+import StyleRegistry from '@/components/StyleRegistry';
+
+export const metadata: Metadata = {
+  title: 'Dream CSS tool',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <StyleRegistry>
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    </StyleRegistry>
+  );
+}
+```
+
+2. styledを使う。
+従来のstyledの使い方と同じようにコンポーネントを作成する。
+
+```js
+import React from 'react';
+import styled from '../styled.js';
+
+export default function StaticButton() {
+  return <Button>Static Button</Button>;
+}
+
+const Button = styled('button')`
+  display: block;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 4px;
+  background: hsl(270deg 100% 30%);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+`;
+```
+
+コード全体がまだ数行しかないので、
+簡単にコードを見てみよう。以下は主要部分のコード原文だ。（コメントもそのまま持ってきた）
+
+
+```javascript
+// styled.js
+import React from 'react';
+
+import { cache } from './components/StyleRegistry';
+
+// TODO: Ideally, this API would use dot notation (styled.div) in
+// addition to function calls (styled('div')). We should be able to
+// use Proxies for this, like Framer Motion does.
+export default function styled(Tag) {
+  return (css) => {
+    return function StyledComponent(props) {
+      let collectedStyles =  cache();
+
+      // Instead of using the filename, I'm using the `useId` hook to
+      // generate a unique ID for each styled-component.
+      const id = React.useId().replace(/:/g, '');
+      const generatedClassName = `styled-${id}`;
+
+      const styleContent = `.${generatedClassName} { ${css} }`;
+
+      collectedStyles.push(styleContent);
+      return <Tag className={generatedClassName} {...props} />;
+    };
+  };
+}
+```
+
+
+```javascript
+// StyleRegistry.js
+import React from 'react';
+
+import StyleInserter from './StyleInserter';
+
+export const cache = React.cache(() => {
+  return [];
+});
+
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+
+  return (
+    <>
+      <StyleInserter styles={collectedStyles} />
+      {children}
+    </>
+  );
+}
+
+export default StyleRegistry;
+```
+```javascript
+// StyleInserter.js
+'use client';
+
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+function StyleInserter({ styles }) {
+  useServerInsertedHTML(() => {
+    return <style>{styles.join('\n')}</style>;
+  });
+
+  return null;
+}
+
+export default StyleInserter;
+```
+
+
+部分ごとに分解して見てみよう。
+
+```javascript
+// StyledRegistry.js
+export const cache = React.cache(() => {
+  return [];
+});
+```
+```js
+// styled.js
+// ...
+let collectedStyles =  cache();
+// ...
+```
+styledの最初の部分を見ると、StyleRegistryでReact.cacheを使って作られたcacheをインポートしている。
+
+```javascript
+// styled.js
+// ...
+const id = React.useId().replace(/:/g, '');
+const generatedClassName = `styled-${id}`;
+
+const styleContent = `.${generatedClassName} { ${css} }`;
+
+collectedStyles.push(styleContent);
+return <Tag className={generatedClassName} {...props} />;
+```
+
+このとき、一意なidを生成してclassNameを作り、CSSを作成してcacheに入れる。
+そして、そのclassNameを持つコンポーネントを返す。
+
+
+```javascript
+// StyleRegistry.js (server)
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+
+  return (
+    <>
+      <StyleInserter styles={collectedStyles} />
+      {children}
+    </>
+  );
+}
+```
+StyleRegistryではcacheを取得し、集められたCSSをStyleInserterに渡す。
+
+```javascript
+// StyleInserter.js
+'use client';
+
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+function StyleInserter({ styles }) {
+
+  useServerInsertedHTML(() => {
+    return <style>{styles.join('\n')}</style>;
+  });
+
+  return null;
+}
+
+export default StyleInserter;
+```
+ランタイムではuseServerInsertedHTMLを使って、受け取ったCSSをstyleタグとして挿入する。
+こうすることで、サーバーコンポーネントでも動作するstyledコンポーネントを作ることができる。
+
+しかし、大きな問題がある。
+
+```jsx
+// src/components/CountButton.js
+'use client';
+
+import React from 'react';
+import styled from '../styled.js';
+
+export default function CountButton() {
+  const [count, setCount] = React.useState(0);
+  return (
+    <Button onClick={() => setCount(count + 1)}>
+      Clicks: {count}
+    </Button>
+  );
+}
+
+// Currently, this doesn't work, because `cache()` can't be used in
+// Client Components. It throws an error, and none of the styles get
+// created.
+const Button = styled('button', 'client')`
+  padding: 1rem 2rem;
+  color: red;
+  font-size: 1rem;
+`;
+```
+
+クライアントコンポーネントではcacheを使うことができない。
+しかし、cacheが使えないだけで、cacheの役割を省略したり代替したりすればいけそうだ。
+
+
+## クライアントコンポーネントでも動作するように修正する
+
+> パフォーマンス上の問題がある可能性があるので、実際に使う際は注意が必要だ。
+
+cacheを使わずに、直接CSSを挿入する方式に修正してみよう。
+
+```js
+// clientStyled.js
+import React from 'react';
+import { useServerInsertedHTML } from 'next/navigation';
+
+export default function styled(Tag) {
+  return (css) => {
+    return function StyledComponent(props) {
+      const id = React.useId().replace(/:/g, '');
+      const generatedClassName = `styled-${id}`;
+
+      const styleContent = `.${generatedClassName} { ${css} }`;
+      useServerInsertedHTML(() => {
+        return <style>{styleContent}</style>;
+      });
+      return <Tag className={generatedClassName} {...props} />;
+    };
+  };
+}
+```
+その後、引数をもう一つ受け取って分岐させた。
+発生元をチェックする方法がありそうだが...とりあえずこうしよう。
+
+
+```js
+// styled.js
+import React from 'react';
+
+import serverStyled from './serverStyled';
+import clientStyled from './clientStyled';
+
+
+export default function styled(Tag, from = 'server') {
+  if (from === 'client'){
+    return clientStyled(Tag);
+  }
+  return serverStyled(Tag);
+}
+```
+
+こうすると、クライアントで実行時に'client'を渡せば動作する。
+作ってみると結局'use client'と同じ形になってしまったのではないかという心残りがある。
+
+
+## React.cache
+
+https://react.dev/reference/react/cache
+
+https://github.com/facebook/react/blob/main/packages/react/src/ReactCacheServer.js
+
+簡単にcacheの動作の仕組みを見てみよう。
+関数を渡すとcacheレイヤーでラップされた関数が返される。
+その後、返された関数をapplyする前にキャッシュレイヤーを挟み、キャッシュレイヤーからキャッシュされた結果を返す仕組みだと考えればいい。
+
+
+
+```ts
+import ReactCurrentCache from './ReactCurrentCache';
+
+const UNTERMINATED = 0; // 未完了状態を表す定数
+const TERMINATED = 1; // 完了状態を表す定数
+const ERRORED = 2; // エラー状態を表す定数
+
+type UnterminatedCacheNode<T> = {
+  s: 0, // 状態（未完了）
+  v: void, // 値（未完了状態では値なし）
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // オブジェクトキャッシュ（WeakMap使用）
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // プリミティブ型キャッシュ（Map使用）
+};
+
+type TerminatedCacheNode<T> = {
+  s: 1, // 状態（完了）
+  v: T, // 値（キャッシュされた結果）
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // オブジェクトキャッシュ
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // プリミティブ型キャッシュ
+};
+
+type ErroredCacheNode<T> = {
+  s: 2, // 状態（エラー）
+  v: mixed, // 値（エラーオブジェクト）
+  o: null | WeakMap<Function | Object, CacheNode<T>>, // オブジェクトキャッシュ
+  p: null | Map<string | number | null | void | symbol | boolean, CacheNode<T>>, // プリミティブ型キャッシュ
+};
+
+type CacheNode<T> =
+  | TerminatedCacheNode<T>
+  | UnterminatedCacheNode<T>
+  | ErroredCacheNode<T>;
+
+function createCacheRoot<T>(): WeakMap<Function | Object, CacheNode<T>> {
+  return new WeakMap(); // 新しいWeakMapでキャッシュルートを生成
+}
+
+function createCacheNode<T>(): CacheNode<T> {
+  return {
+    s: UNTERMINATED, // デフォルト状態は未完了
+    v: undefined, // 初期値はundefined
+    o: null, // オブジェクトキャッシュの初期化
+    p: null, // プリミティブ型キャッシュの初期化
+  };
+}
+
+/*
+  * キャッシュノードを生成し、キャッシュルートにキャッシュノードを保存する関数
+  *
+  * @param fn キャッシュノードを生成する関数
+  * @returns キャッシュノード
+  * @example
+  * const styleCache = cache(() => []);
+  */
+export function cache<A: Iterable<mixed>, T>(fn: (...A) => T): (...A) => T {
+  return function () {
+    const dispatcher = ReactCurrentCache.current; // 現在のキャッシュディスパッチャーを取得
+    if (!dispatcher) {
+      // ディスパッチャーがなければキャッシュなしで関数を実行（クライアントコンポーネントで実行される場合）
+      return fn.apply(null, arguments);
+    }
+    // キャッシュルートを取得
+    const fnMap: WeakMap<any, CacheNode<T>> = dispatcher.getCacheForType(
+      createCacheRoot,
+    ); // キャッシュルートがなければ新規作成
+
+    const fnNode = fnMap.get(fn); // 関数に対するキャッシュノードを取得
+    let cacheNode: CacheNode<T>; // キャッシュノード
+    if (fnNode === undefined) {
+      cacheNode = createCacheNode(); // キャッシュノードがなければ新規作成
+      fnMap.set(fn, cacheNode); // 関数にキャッシュノードを設定
+    } else {
+      cacheNode = fnNode; // 既存のキャッシュノードを使用
+    }
+    for (let i = 0, l = arguments.length; i < l; i++) { // 関数が受け取ったすべての引数に対してループ
+      const arg = arguments[i]; // 現在処理中の引数
+
+      if (
+        typeof arg === 'function' ||
+        (typeof arg === 'object' && arg !== null)
+        // 現在の引数がオブジェクトまたは関数の場合
+        let objectCache = cacheNode.o; // オブジェクト用のキャッシュマップ（WeakMap）
+        if (objectCache === null) {
+          cacheNode.o = objectCache = new WeakMap(); // オブジェクトキャッシュマップがなければ新規作成
+        }
+        const objectNode = objectCache.get(arg); // 現在のオブジェクト引数に対するキャッシュノードを取得
+        if (objectNode === undefined) {
+          cacheNode = createCacheNode(); // キャッシュノードがなければ新規作成
+          objectCache.set(arg, cacheNode); // 新しいキャッシュノードをオブジェクトキャッシュマップに追加
+        } else {
+          cacheNode = objectNode; // 既存のキャッシュノードを使用
+        }
+      } else {
+        // 現在の引数がプリミティブ型の場合
+        let primitiveCache = cacheNode.p; // プリミティブ型用のキャッシュマップ（Map）
+        if (primitiveCache === null) {
+          cacheNode.p = primitiveCache = new Map(); // プリミティブ型キャッシュマップがなければ新規作成
+        }
+        const primitiveNode = primitiveCache.get(arg); // 現在のプリミティブ型引数に対するキャッシュノードを取得
+        if (primitiveNode === undefined) {
+          cacheNode = createCacheNode(); // キャッシュノードがなければ新規作成
+          primitiveCache.set(arg, cacheNode); // 新しいキャッシュノードをプリミティブ型キャッシュマップに追加
+        } else {
+          cacheNode = primitiveNode; // 既存のキャッシュノードを使用
+        }
+      }
+    }
+
+    if (cacheNode.s === TERMINATED) { // キャッシュされた結果があれば
+      return cacheNode.v; // キャッシュされた結果を返す
+    }
+    if (cacheNode.s === ERRORED) { // キャッシュされたエラーがあれば
+      throw cacheNode.v; // キャッシュされたエラーを再スロー
+    }
+    try {
+      // キャッシュされた結果がなければ関数を実行し結果をキャッシュ
+      const result = fn.apply(null, arguments); // 関数を実行
+      const terminatedNode: TerminatedCacheNode<T> = (cacheNode: any); // キャッシュノードを完了状態に変更
+      terminatedNode.s = TERMINATED; // 完了状態に変更
+      terminatedNode.v = result; // キャッシュされた結果を設定
+      return result; // 結果を返す
+    } catch (error) {
+      // エラー発生時にエラーをキャッシュ
+      const erroredNode: ErroredCacheNode<T> = (cacheNode: any);
+      erroredNode.s = ERRORED;
+      erroredNode.v = error;
+      throw error;
+    }
+  };
+}
+```
+
+簡単な例を挙げると以下のようになる。
+
+```js
+import { cache } from 'react';
+
+// 例として使う計算関数
+function expensiveCalculation(x, y) {
+  console.log('Calculating result...');
+  return x + y;
+}
+
+// cache関数を使って計算関数をラップ
+const cachedCalculation = cache(expensiveCalculation);
+
+// 最初の呼び出し - 計算関数が実行される
+const result1 = cachedCalculation(2, 3); // ログ: "Calculating result..."
+
+// 2回目の呼び出し - 同じ引数で呼ばれるのでキャッシュされた結果を返す
+const result2 = cachedCalculation(2, 3); // 結果は5でログは表示されない
+
+// 異なる引数で呼び出し - 再び計算関数が実行される
+const result3 = cachedCalculation(4, 5); // ログ: "Calculating result..."
+
+console.log(result1); // 5
+console.log(result2); // 5
+console.log(result3); // 9
+```
+
+この例だとキャッシュの役割はすぐに理解できるが、dream-css-toolでの用途は少し異なる。
+毎回の計算を節約するというよりも、cacheを利用して参照値を維持する方法として使っている。
+
+```js
+// StyledRegistry.js
+export const cache = React.cache(() => {
+  return [];
+});
+// ...
+function StyleRegistry({ children }) {
+  const collectedStyles = cache();
+...
+```
+
+```js
+// styled.js
+import { cache } from './components/StyleRegistry';
+
+...
+let collectedStyles =  cache();
+
+collectedStyles.push(styleContent);
+...
+```
+
+簡単に言うと、以下のような仕組みで動作していると考えればいい。
+
+```js
+const arr1 = [1, 2, 3];
+
+const arr2 = arr1;
+
+// arr1とarr2が同じ配列を参照しているか確認
+console.log(arr1 === arr2); // true
+
+// arr1に要素を追加すると、arr2にも同じ変更が反映される
+arr1.push(4);
+console.log(arr2); // [1, 2, 3, 4]
+```
+
+## 結論
+
+執筆中だ。

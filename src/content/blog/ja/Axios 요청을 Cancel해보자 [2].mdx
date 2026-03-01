@@ -1,0 +1,25 @@
+---
+title: "Axiosリクエストをキャンセルしてみよう [2]"
+description: "cancelTokenがリクエストのconfigに渡される際、どのようにsubscribeされるかを確認した。今回はCancelTokenの実装とともに、どのように直接的にキャンセルされるのかを見ていこう。まずCancelTokenの実装体を見てみよう。"
+author: "Yongseok"
+pubDate:  "2024-01-31"
+date: "2024-01-31"
+categories: ["javascript"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<YouTube src="https://youtu.be/AKflm82wVLk?si=i0Gx3DLVGIUpIS5b" />
+
+## Axiosリクエストをキャンセルしてみよう [2]
+
+[Axiosリクエストをキャンセルしてみよう [1]](http://localhost:4321/blog/axios-%EC%9A%94%EC%B2%AD%EC%9D%84-cancel%ED%95%B4%EB%B3%B4%EC%9E%90-1/) では、
+cancelTokenがリクエストのconfigに渡される際、どのようにsubscribeされるかを確認した。
+
+今回はCancelTokenの実装とともに、どのように直接的にキャンセルされるのかを見ていこう。
+
+まずCancelTokenの実装体を見てみよう。
+https://github.com/axios/axios/blob/a52e4d9af51205959ef924f87bcf90c605e08a1e/lib/cancel/CancelToken.js#L12
+```js
+// lib/cancel/CancelToken.js
+```https://chat.openai.com/c/b52fef78-f0c7-4150-bf54-1837254253f8

@@ -1,0 +1,1394 @@
+---
+title: React Compiler、どう動くのか [4] - SSA変換（理論と実装）
+description: "React CompilerのSSA変換について見ていきましょう。SSAはStatic Single Assignment（静的単一代入）の略で、最適化のために使用される中間表現の一つです。SSAは変数が一度だけ代入されるように制限する特徴を持っています。SSA変換アルゴリズムの核心はphi関数をどこに配置するかを決めることです。React Compilerではどのようなアルゴリズムを使用しているのでしょうか？"
+author: "Yongseok"
+categories: ["react"]
+date: '2024-07-14T07:57:08.825Z'
+series: "React Compiler"
+heroImage: "/post/images/ReactCompiler4/thumb.png"
+---
+import LinkPreview from '@components/embeds/LinkPreview.astro'
+import YouTube from '@components/embeds/YouTube.astro'
+
+<YouTube src="https://youtu.be/HwRcz-Yu29I" />
+
+
+## 前回のおさらい
+
+
+前回の記事では、React Compilerが**AST**を**HIR**に変換するプロセスを見てきました。
+<b>HIR（High-level Intermediate Representation）</b>は、<b>CFG（Control Flow Graph）</b>を使用して**AST**を変換した中間表現でした。
+<figure><img src="/post/images/ReactCompiler3/ast_hir.png" /><figcaption>AST & HIR</figcaption></figure>
+より文脈に基づいた最適化のために、単なるコードの表現形式だった**AST**をもう少しコード全体の流れを示せるように変換したわけです。\
+そのため**HIR**は**ブロック**と**制御フロー**を通じてコード全体の流れを示すことができます。
+
+
+
+## その次は？
+
+しかし、より詳細な最適化を行うには、基本的な**HIR**の形だけでは不十分です。\
+何がさらに必要なのでしょうか？\
+最適化プロセスの一つである、**定数伝播**（constant propagation）を例に見ていきましょう。
+
+**定数伝播**とは、**変数**に**定数**が代入されている場合、その**変数**を**定数**に置き換える最適化手法です。\
+簡単に説明すると、**事前に代入できるものを代入しておく**ということです。
+
+例を挙げてみましょう。
+
+```js
+x = 5
+y = x + 2
+x = 10
+z = x + y
+```
+このようなコードがあると仮定しましょう。（実際には**HIR**形式に変換されたコードでしょう？）\
+ここで**def-useチェーン**という概念を使います。\
+**def-useチェーン**は**変数の代入**（def）と**使用**（use）の関係を意味します。
+
+`x`の最初の代入（def）`x = 5`は`y = x + 2`で使用（use）されますが、`z = x + y`には影響しません。\
+そして`x`の2番目の代入`x = 10`は`z = x + y`で使用されます。\
+`y = x + 2`で使用された`x`の値と`z = x + y`で使用された`x`の値は異なることがわかります。
+
+このような**複雑な関係**を追跡するには、より詳細な**データフロー分析**が必要です。\
+そのため**HIR**を**SSA**に変換するプロセスが必要なのです。
+
+変換すると以下のようになります。
+
+```js
+x1 = 5
+y1 = x1 + 2
+x2 = 10
+z1 = x2 + y1
+```
+>おお！変数にインデックスが付きました。xがx1、x2に分かれています。
+
+このように変換すると、**def-useチェーン**を追跡するのがはるかに簡単になります。自分が使っている`x`がどの`x`なのかわかるようになります。\
+これで、もっと自信を持って**y**は`7`で、**z**は`17`だと言えますよね？\
+このように置き換え可能な変数を置き換えておくのが**定数伝播**最適化です。\
+そして**SSA**形式を通じてこのような作業が簡単にできることも素早く確認できました。
+
+今回の記事では**HIR**を**SSA**に変換するプロセスを見ていきます。
+
+まず**SSA**が何かを知っておく必要がありますよね？
+
+> ちょっと待って！定数伝播はSSA変換をしなくても求めることができます。この場合**到達定義分析**という方法を使うことができます。\
+興味のある方だけ読んでいただき、すぐ下に進んでいただいても構いません。
+
+<aside>
+#### 💡**到達定義分析**（Reaching Definition Analysis）
+**到達定義分析**は**制御フローグラフ**の各**ノードの流れ**をたどりながら、何が**生成**（GEN）され、何が**上書き**（KILL）され、何が**入って来て**（IN）**出ていくか**（OUT）を**集合**として計算します。
+
+$$IN[n] = \bigcup_{p \in pred[n]}{OUT[p]}$$
+
+$$OUT[n] = GEN[n] \cup (IN[n] - KILL[n])$$
+
+IN、OUTの方程式を通じて、各ノードでどの定義が到達するかを知ることができます。
+
+方程式が少し複雑に見えますよね？\
+<b>nステップ（ノード）</b>での<b>IN集合</b>は<b>前のノードのOUT集合の和集合</b>で、\
+<b>OUT集合</b>はここで<b>生成されたもの</b>と<b>入ってきたもの</b>から<b>上書きされたものを除いた</b>ものの<b>和集合</b>です。
+
+先ほどの例を**到達定義分析**で見てみると以下のようになります。一段階ずつ一緒に見ていきましょう。
+
+```js
+ノード 1 : `x = 5`
+GEN[1] = {x1} // x1が生成される
+KILL[1] = {} // 上書きされるものがない
+IN[1] = {} // 入ってくるものがない
+OUT[1] = {x1} // x1が出ていく
+
+/*
+* ノード1ではx1が生成され（GEN）外の世界に出ていきます。（OUT）
+* 上書きされたり使用されたりするものがないため、KILLやINはありません。
+*/
+
+ノード 2 : `y = x + 2`
+GEN[2] = {y2} // y2が生成される
+KILL[2] = {} // 上書きされるものがない
+IN[2] = OUT[1] = {x1} // 前のノードから出てきたx1が入ってくる
+OUT[2] = (IN[2] - KILL[2]) ∪ GEN[2] = {x1, y2}
+// 入ってきたx1から上書きされるものを除いて生成されたものとの和集合
+// つまり上書きされたものを引いて入ってきたものと生成されたものを合わせる
+
+/*
+* ノード2ではy2が生成されます。（GEN）
+* 上書きされるものはなく、ノード1から入ってきた（IN）x1と生成されたy2が出ていきます。（OUT）
+*/
+
+ノード 3 : `x = 10`
+GEN[3] = {x3} // x3が生成される
+KILL[3] = {x1} // x1が上書きされる
+IN[3] = OUT[2] = {x1, y2} // 前のノードから出てきたx1、y2が入ってくる
+OUT[3] = (IN[3] - KILL[3]) ∪ GEN[3] = {y2, x3}
+// 入ってきた{x1, y2}から上書きされるもの{x1}を除いて生成されたものとの和集合
+
+/*
+* ノード3ではx3が生成されます。（GEN）
+* xが再定義されたためx1が上書きされます。（KILL）
+* 入ってきた（IN）x1は上書きされた（KILL）ため、ノード2から入ってきた（IN）y2と新しく生成されたx3が出ていきます。（OUT）
+*/
+
+ノード 4 : `z = x + y`
+GEN[4] = {z4} // z4が生成される
+KILL[4] = {} // 上書きされるものがない
+IN[4] = OUT[3] = {y2, x3} // 前のノードから出てきたy2、x3が入ってくる
+OUT[4] = (IN[4] - KILL[4]) ∪ GEN[4] = {y2, x3, z4}
+
+/*
+* ノード4ではz4が生成されます。（GEN）
+* 上書きされるものがなく、ノード3から入ってきた（IN）y2、x3と生成されたz4が出ていきます。（OUT）
+*/
+
+```
+各プロセス（ノード）ごとにどの変数が生き残り、どの値で置き換えられるか、\
+実行段階ごとにどの定義が到達するかを知ることができます。\
+しかし**到達定義**方式は各地点で到達可能なすべての定義を保持する必要があるという負担があります。これはメモリを多く使用することも意味します。
+
+さらに詳しく知りたい方は以下の記事を参考にしてください！
+<LinkPreview
+title="Introduction to Compilers -[Reaching definitions and SSA]"
+description="Cornell University CS4120 2023sp"
+src="https://www.cs.cornell.edu/courses/cs4120/2023sp/notes.html?id=reachdef"/>
+<LinkPreview src="https://en.wikipedia.org/wiki/Reaching_definition"/>
+</aside>
+
+
+
+
+## SSA（静的単一代入、Static Single Assignment）
+
+**SSA**は**静的単一代入**という意味で、**最適化**のために使用される中間表現の一つです。\
+**SSA**は**変数**が**一度だけ代入**されるように制限する特徴があります。\
+これは上で簡単な例を示したように**def-useチェーン**を追跡しやすくする助けとなります。
+
+先ほどの例をもう一度見てみましょう。
+```js
+x = 5
+y = x + 2
+x = 10
+z = x + y
+```
+何度も定義され代入されるこのx、y、z変数を以下のように変換しました。
+```js
+x1 = 5
+y1 = x1 + 2
+x2 = 10
+z1 = x2 + y1
+```
+各変数に**一つの定義のみ**を与えるように変換して**def-useチェーン**をシンプルにしたわけです。
+これにより各変数の負担を軽減し、データの流れの把握がより容易になります。
+
+思ったより簡単ですよね？
+
+それでは、こういうケースはどのように変換できるでしょうか？
+
+```js
+if(condition){
+  x = 5
+} else {
+  x = 10
+}
+y = x + 2
+```
+数行しかないコードですが、すぐに変換してみましょう。
+
+```js
+if(condition){
+  x1 = 5
+} else {
+  x2 = 10
+}
+// ...
+```
+新しいxに出会うたびに新しい変数にうまく置き換えました。\
+ここまではスムーズに変換できましたが、次の行で壁にぶつかります。
+```js
+y1 = x + 2 // yはy1に変えればいいけど... xは何に変えればいい？
+```
+**condition**によって**x**が決まるはずなのに、どのxが入るのか表す方法がまだわかりません。
+
+上のケースは`x`が**if-else**文の条件によって異なる値を持つ可能性がある場合です。\
+`y = x + 2`で使用された`x`がどの`x`なのかわかりません。条件文に出会うと以前の例のように簡単に`x`を入れることができません。
+
+我慢できず先に答えを見てみましょう。\
+**SSA**に変換すると以下のようになります。
+
+```js
+if(condition){
+  x1 = 5
+} else {
+  x2 = 10
+}
+x3 = φ(x1, x2)
+y1 = x3 + 2
+```
+
+>φ（以下「phi」）という関数が登場しました。
+
+`phi`は**if-else**文のような分岐によって異なる値を持つ可能性のある変数を結合する関数です。\
+これにより**x3**を新しい変数として作り、φ関数を通じて**if-else**文の条件に応じて**x1**と**x2**のどちらかを選択することになります。\
+φ関数の役割を別の言い方で表現すると、**分岐を合流**させる関数とも言えるでしょう。
+
+タイムトラベル映画のように、選択によって分岐した二つのパラレルワールドのxを再び一つに合わせるように見えます。
+
+<figure><img src="/post/images/ReactCompiler4/tardis.gif" /><figcaption>ドラマ「ドクター・フー」に登場するターディス</figcaption></figure>
+
+
+SSAの主要な概念をまとめると以下のようになります。
+1.	**各変数の単一定義**：
+- SSA形式では各変数はプログラム内で**一度だけ**定義されます。つまり、同じ変数名が複数回定義されることはありません。そのため、変数を定義するたびに新しい名前（例：x1、x2、x3）を付与します。
+2.	**φ（phi）関数**：
+- **制御フローが合流するポイント**では複数の定義を一つにまとめるφ（phi）関数を使用します。φ関数は制御フローのどの経路を通って到達したかに応じて異なる値を選択します。
+
+これで意味的には**phi関数**をどこに置くべきかは簡単に理解できます。\
+_**「適切な分岐の合流地点に置く。」**_ このようにまとめることができるでしょう。\
+しかしこれを**論理的に**表現するには、どうすればよいでしょうか？
+
+
+## SSA変換アルゴリズム
+
+**SSA変換アルゴリズム**の**核心**は**phi関数をどこに置くか**を決定することです。\
+**React Compiler**の場合、コミットを見ると<b>以下の論文（Simple and Efficient Construction of Static Single Assignment Form）</b>のアルゴリズムを使用しています。
+<LinkPreview src="https://github.com/facebook/react/commit/379251c65f39039ace1d2e5a80bdb5938cf3427c" />
+```markdown
+// commit message
+The algorithm is described in detail here:
+
+https://pp.info.uni-karlsruhe.de/uploads/publikationen/braun13cc.pdf
+// リンクが間違っていたため差し替えました。
+
+Note that the SSA form generated is not minimal. A follow on
+RedundantPhiElimination pass
+
+is required to prune the graph.
+```
+<LinkPreview src="https://pp.ipd.kit.edu/uploads/publikationen/braun13cc.pdf"
+  title="Simple and Efficient Construction of Static Single Assignment Form"
+  description="Matthias Braun1, Sebastian Buchwald1, Sebastian Hack2, Roland Leißa2, Christoph Mallon2, and Andreas Zwinkau"
+/>
+
+この論文では**Cytron et al.のアルゴリズム**に対する**改良版**を提案しています。\
+既存のアルゴリズムと比べて**よりシンプル**で**効率的**だとされています。\
+それではこの**利点**を実感するために、**Cytronのアルゴリズム**をまず見てみるのがよいでしょう。（次のチャプターにそのまま進んでいただいても構いません。）
+
+### Cytronのアルゴリズム
+
+<LinkPreview src="https://research.ibm.com/publications/efficiently-computing-static-single-assignment-form-and-the-control-dependence-graph"/>
+
+この論文は1991年に**IBM Research**で発表されたもので、**SSA**を生成するアルゴリズムの一つです。
+
+主要な概念は**ドミネーターツリー**と**ドミナンスフロンティア**です。
+1. <b>ドミネーターツリー（Dominator Tree）の構築</b>：
+  プログラムの**制御フローグラフ**（CFG）における各ノード間の**支配関係**を表す**ツリー**を構築します。
+2. <b>ドミナンスフロンティア（Dominance Frontier）の計算</b>：
+  各ノードに対して**ドミナンスフロンティアを計算**します。ドミナンスフロンティアはノードが**直接支配しない最も近い子孫ノードの集合**です。
+
+私たちが知りたかったのは**phi関数をどこに置くべきか**ということなので、それを目的に論文を探っていきましょう。\
+このアルゴリズムではまず**ツリー全体に対する分析**が行われます。これにより**ドミネーターツリー**を構築し**ドミナンスフロンティア**を計算します。\
+そしてこれを通じて**phi関数をどこに置くべきか**を決定します。
+
+#### ドミネーターツリー（Dominator Tree）
+
+まず**ドミネーターツリー（Dominator Tree）**とは何でしょうか？\
+ここで<b>支配（Dominance）</b>、**ノードAがノードBを支配する**とは、**Bへのすべての経路**が**Aを通過**しなければならないことを意味します。\
+またすべてのノードは自分自身を支配すると仮定します。
+<figure><img src="/post/images/ReactCompiler4/cfg_1.png" style={{maxHeight: "500px"}}/>
+<figcaption>図1. CFGの例</figcaption>
+</figure>
+
+この**CFG**（私たちの場合はHIRになりますね？）があると仮定して**支配関係**を見てみましょう。
+- **2番**と**5番**は必ず1番を通らなければなりません。したがって**1番が2番と5番を支配**します。
+- **3番**と**4番**は**必ず1番、2番**を通らなければなりません。しかし支配関係では**最も近い支配者**のみを考慮します。したがって**2番が3番を支配**します。
+- **6番**の場合は**3番、4番が親**ですが、**必ず通過しなければならないわけではありません**。そこで一段上に上がってみると2番は必ず通らなければなりません。したがって**2番が6番を支配**します。
+- **7番**の場合も同様に**6番と5番**を通って来ることができます。したがって各ルートをたどっていくと**1番を必ず通らなければならない**ことがわかります。したがって**1番が7番を支配**します。
+
+この関係を再び**ツリー**（ドミネーターツリー）で表現すると以下のようになります。
+<figure><img src="/post/images/ReactCompiler4/dt.png" />
+<figcaption>図2. Dominator Tree</figcaption>
+</figure>
+
+上で見てきた**支配関係**どおりに表現されていますよね？\
+元のCFGと一見似て見えますが、少し違う姿を見せています。\
+必ず通らなければならないため、大きな分岐を持つものは分岐前のノードが支配していることが見て取れます。（7が代表的ですね）
+
+#### ドミナンスフロンティア（Dominance Frontier）
+
+次に**ドミナンスフロンティア**（Dominance Frontier）を計算します。\
+**ノードN**の**ドミナンスフロンティア**（DF）は次のように定義されます：
+- Nが**直接支配しないが**、Nが直接**支配するノードが支配するCFGのノードの集合**\
+直感的には、DF(N)は**Nの支配力が終わるポイント**と考えることができます。
+
+これはどういう意味でしょうか？ 一度ではなかなか理解しづらいですね。\
+図を使って**2と5のドミナンスフロンティアDFを求めるプロセス**を一緒に見ていきましょう。
+
+<figure><img src="/post/images/ReactCompiler4/df_1.png" /><figcaption>図3. 2のDF</figcaption></figure>
+
+**2**の場合、**3、4、6そして2**（自分自身）を支配します。\
+それでは支配している**2、3、4、6**の子の中で**2が支配しないノード**を探すと、6の子である**7**を見つけることができます。\
+したがって**DF(2)は7**になります。
+
+<figure><img src="/post/images/ReactCompiler4/df_2.png" /><figcaption>図4. 5のDF</figcaption></figure>
+
+**5**の場合、ドミネーターツリーを見ると自分自身しかいません。\
+CFGで**5が支配しないノード**は子の**7**になります。\
+したがって**DF(5)は7**になります。
+
+このようにして**ドミナンスフロンティア**を計算します。各場合をすべて見てみると以下のようになります。
+```js
+DF(1) = {} // 1はすべてのノードを支配するのでDFがない
+DF(2) = {7}
+DF(3) = {6}
+DF(4) = {6}
+DF(5) = {7}
+DF(6) = {7}
+DF(7) = {}
+```
+
+完全に理解できなくても、大体どのように**DF**を見つけることができるかわかるようになりました。\
+**DF**にあるノードに**phi関数**を置きます。
+
+まだすっきりしない部分があるかもしれません。グラフで遊んでいるように見えますよね。
+
+それでは**ドミナンスフロンティアの定義**から意味を分析してみましょう。\
+`DF(X) = Y`、XのドミナンスフロンティアはYという意味を見てみましょう。YはXの支配力が終わるポイントと見ることができます。
+1. DFの定義により**YはXが支配するノードの子ノード**です。\
+つまり**Xを通ってYへ行く経路がある**ことを意味します。
+2. DFの定義により**YはXの直接支配関係ではない**。\
+つまり**Yへ行く経路が必ずしもXを通るわけではない**ことを意味します。
+
+総合すると**YはXを通っても行ける**し、**別の経路でも行ける**ノードです。\
+つまり少なくとも二つの経路でYに向かうことができるということになりますね。\
+それはつまり**分岐が合流するポイント**であることを意味します。
+
+<figure><img src="/post/images/ReactCompiler4/y_route.png"  style={{maxHeight: "400px"}} /><figcaption>図5. ドミナンスフロンティアの意味</figcaption></figure>
+
+
+したがって**phi関数**を**分岐が合流するポイント**、つまり**ドミナンスフロンティアDF**に置きます。\
+大体理解できたので、コードで見ていきましょう。
+
+先ほどの例のコードもグラフで表現してみましょうか？
+```js
+if(condition){
+  x = 5
+} else {
+  x = 10
+}
+y = x + 2
+```
+
+まずHIR形式で簡単に表現してみましょう。
+```js
+bb0:
+  if (condition) goto bb2 else goto bb3
+bb2:
+  x = 5
+  goto bb1
+bb3:
+  x = 10
+  goto bb1
+bb1:
+  y = x + 2
+```
+bb0、bb1、bb2、bb3の4つのブロックに分かれ、CFGとDTグラフを描くと以下のように描かれます。
+
+<figure><img src="/post/images/ReactCompiler4/real_cfg_dt.png"  /><figcaption>図6. 例のコードのグラフ</figcaption></figure>
+
+それでは各DFを求めてみましょう。
+```js
+DF(bb0) = {}
+DF(bb2) = {bb1}
+DF(bb3) = {bb1}
+DF(bb1) = {}
+```
+DFを見るとbb1一つだけ存在していますね！\
+それでは**phi関数**は**bb1**に置くことになります。\
+上で変換してみたように`y = x + 2`があるブロックに**phi関数**が置かれるわけです。
+
+とても簡単ですよね？
+
+**Cytronアルゴリズム**はこのような方法で**ドミネーターツリーとドミナンスフロンティア**を通じて**phi関数**を配置します。\
+しかし、このアルゴリズムを実行するにはドミネーターツリーを先に作成し、DFを計算するといったプロセスが必要です。\
+リソースが多くかかると感じませんか？
+
+時が流れて2013年、**Braunはこのアルゴリズムを改良した論文**を発表します。
+
+### Braunのアルゴリズム
+
+<LinkPreview src="https://pp.ipd.kit.edu/uploads/publikationen/braun13cc.pdf"
+  title="Simple and Efficient Construction of Static Single Assignment Form"
+  description="Matthias Braun1, Sebastian Buchwald1, Sebastian Hack2, Roland Leißa2, Christoph Mallon2, and Andreas Zwinkau"
+/>
+
+
+この論文は2013年に**Karlsruhe Institute of Technology**の**Matthias Braun**らが発表した論文です。\
+先ほどのコミットで見たように**React Compiler**で使用されているアルゴリズムです。
+<LinkPreview src="https://github.com/facebook/react/commit/379251c65f39039ace1d2e5a80bdb5938cf3427c" />
+
+**React Conf 2024**でのQ&Aセッションで、**コンパイラ開発**のために**Meta**が**コンパイラの専門家**を多く採用したという話がありましたが、\
+この論文の著者**Braun**も現在**Meta**で2018年から**コンパイラエンジニア**として働いていることがLinkedInで確認できます。
+<LinkPreview src="https://www.linkedin.com/in/matthias-braun-6b5" title="Matthias Braun"/>
+
+Braunのアルゴリズムは、Cytronのアルゴリズムと比較していくつかの重要な改善点を持っています：
+
+1. Cytronのアルゴリズムとは異なり、ドミネーターツリーやドミナンスフロンティアを事前に計算する必要がありません。
+2. 抽象構文木（AST）やバイトコードから直接SSA形式に変換できます。
+3. コードを修正するたびにSSA形式を再計算する必要がありません。
+
+Braunのアルゴリズムの主要なステップは以下の通りです：
+
+1. <b>ローカル変数番号付け（Local Variable Numbering）</b>：単一の基本ブロック内で変数の定義と使用を追跡するプロセスです。主な目的は重複計算を除去しローカルな最適化を実行することです。
+2. <b>グローバル変数番号付け（Global Variable Numbering）</b>：単一の基本ブロックを超えて制御フローグラフ（CFG）全体で変数の定義と使用を追跡するプロセスです。
+
+#### ローカル変数番号付け（Local Variable Numbering）
+
+```js
+function foo() {
+  let x = 0;
+  if (x > 3) {
+    x = 5;
+  } else {
+    x = 10;
+  }
+  let y = x + 2;
+}
+```
+
+この例のコードを使って進行過程を見ていきましょう。\
+途中に条件文があるため、このコードは中間が二つのブロックに分かれます。\
+そのため**HIR**に変換すると以下のように変換されます。（今回はコンパイラの中間結果物HIRで見ていきましょう）
+
+```
+function foo
+bb0 (block):
+  [1] $0 = 0
+  [2] $2 = StoreLocal Let x$1 = $0
+  [3] $7 = LoadLocal x$1
+  [4] $8 = 3
+  [5] $9 = Binary $7 > $8
+  [6] If ($9) then:bb2 else:bb3 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [7] $3 = 5
+  [8] $4 = StoreLocal Reassign x$1 = $3
+  [9] Goto bb1
+bb3 (block):
+  predecessor blocks: bb0
+  [10] $5 = 10
+  [11] $6 = StoreLocal Reassign x$1 = $5
+  [12] Goto bb1
+bb1 (block):
+  predecessor blocks: bb2 bb3
+  [13] $10 = LoadLocal x$1
+  [14] $11 = 2
+  [15] $12 = Binary $10 + $11
+  [16] $14 = StoreLocal Let y$13 = $12
+  [17] $15 = <undefined>
+  [18] Return $15
+```
+
+分岐前の**bb0**、ifのthenブロックである**bb2**、elseブロックである**bb3**、そして分岐後の**bb1**に分かれていることがわかります。\
+まず各ブロックに対して**ローカル変数番号付け**を行います。
+
+既存の**HIR**では共通して`x$1`という変数を使用しています。\
+これを各ブロックに対して新しい変数に変換する必要があります。この時、各変数の**定義（def）**と**使用（use）**を追跡します。\
+**定義と使用**が同じブロックにある場合、新しい**ローカル値**を番号付けします。
+
+**bb0**では**定義であるStoreLocal**と**使用であるLoadLocal**が**同じブロック**にあるため、新しい**ローカル値**`x_1`を番号付けします。\
+**bb2**では**StoreLocalとReassign**が同じブロックにあるため、ローカル値`x_2`を番号付けします。\
+**bb3**でも同様にローカル値`x_3`を番号付けします。
+
+**bb0**のxは`x_1`、**bb2**のxは`x_2`、**bb3**のxは`x_3`に変換されます。
+
+```
+function foo
+bb0 (block):
+  [1] $0 = 0
+  [2] $2 = StoreLocal Let x$1 = $0 // x$1 -> x$1
+  [3] $7 = LoadLocal x$1
+  [4] $8 = 3
+  [5] $9 = Binary $7 > $8
+  [6] If ($9) then:bb2 else:bb3 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [7] $3 = 5
+  [8] $4 = StoreLocal Reassign x$2 = $3 // x$1 -> x$2
+  [9] Goto bb1
+bb3 (block):
+  predecessor blocks: bb0
+  [10] $5 = 10
+  [11] $6 = StoreLocal Reassign x$3 = $5 // x$1 -> x$3
+  [12] Goto bb1
+bb1 (block):
+  predecessor blocks: bb2 bb3
+  [13] $10 = LoadLocal x$1 // x$1 -> ??
+  [14] $11 = 2
+  [15] $12 = Binary $10 + $11
+  [16] $14 = StoreLocal Let y$13 = $12
+  [17] $15 = <undefined>
+  [18] Return $15
+```
+
+しかし**bb1**では**定義と使用**が同じブロックにありません。\
+**定義**（def）部分は見当たらず、すぐに**LoadLocal**（use）があります。\
+この場合はローカル値を番号付けすることができません。そこで次のステップである**グローバル変数番号付け**に進みます。
+
+#### グローバル変数番号付け（Global Variable Numbering）
+
+**グローバル変数番号付け**は**ローカル変数番号付け**でのローカルな範囲を超えて、**制御フローグラフ**（CFG）全体で変数の定義と使用を追跡するプロセスです。\
+このプロセスを通じて**phi関数**を置く位置を見つけます。
+
+**bb1**での`y = x + 2`を処理するには、`x`の値を見つけなければなりません。しかし**bb1**では**定義**部分が見当たらないため、以前に遡って`x`の値を探す必要があります。\
+ここからは再帰的にxの定義をたどっていきます。\
+ブロックの上部を見ると
+```
+bb1 (block):
+  predecessor blocks: bb2 bb3
+```
+このようなものが見えますね。\
+この**predecessor**（先行者）を通じて前のブロックに遡ります。
+
+**predecessor**はどうやって見つけることができるでしょうか？
+
+<figure><img src="/post/images/ReactCompiler4/b_cfg.png"  /><figcaption>図7. 例のコードのグラフ</figcaption></figure>
+
+上のグラフで見てわかるように**前のブロック**が**predecessor**になります。
+
+**predecessor**が一つだけなら、xの定義を前のブロックから簡単に見つけられたでしょう。
+
+しかし**bb1**の場合は**bb2**と**bb3**の二つの**predecessor**を持っています。この二つのブロックからxの定義を見つけなければなりません。\
+それでは各ブロックを見てみましょう。\
+**bb2**には`x_2`の定義があり、**bb3**には`x_3`の定義があります。\
+これは**bb1**が分岐の合流ポイントでもあると見ることができますね！
+
+それでは自信を持って**phi関数**を**bb1**に置いてみましょう。
+
+```
+bb1 (block):
+  predecessor blocks: bb2 bb3
+  x$4: phi(bb2: x$2, bb3: x$3) // phi関数を追加
+  [14] $10 = LoadLocal x$4 // x$1 -> x$4
+  [15] $11 = 2
+  [16] $12 = Binary $10 + $11
+  [17] $14 = StoreLocal Let y$13 = $12
+  [18] $15 = <undefined>
+  [19] Return $15
+```
+このように**phi関数**を追加することで、SSA変換の難関の一つだった**分岐が合流するポイント**に**phi関数**を置くことに成功しました。\
+思ったより簡単ですよね？
+
+
+
+このプロセス以外にもphi関数の最適化のためのプロセスがまだありますが、ここまで理解できればBraunのアルゴリズムによるSSA変換の核心を理解したことになります。
+
+
+二つの論文を見ながら、実質的にSSA変換の核心はすべて把握しました。\
+それではいよいよ**React Compiler**のSSA変換を見に行きましょう！
+
+## React CompilerのSSA変換
+
+前回の記事で見始めたPipeline.tsの`runWithEnvironment`関数を再び取り出してみましょう。
+```ts
+// packages/babel-plugin-react-compiler/src/Entrypoint/Pipline.ts
+function* runWithEnvironment(
+  func: NodePath<
+    t.FunctionDeclaration | t.ArrowFunctionExpression | t.FunctionExpression
+  >,
+  env: Environment
+): Generator<CompilerPipelineValue, CodegenFunction> {
+  const hir = lower(func, env).unwrap();
+  // ...
+  enterSSA(hir);
+  // ...
+}
+```
+**lower**の後いくつかの最適化プロセスを経て、`enterSSA`関数を通じてHIRをSSAに変換し始めます。
+
+それでは`enterSSA`関数を通じてSSA変換プロセスを見ていきましょう！
+
+```ts
+export default function enterSSA(func: HIRFunction): void {
+  const builder = new SSABuilder(func.env, func.body.blocks);
+  enterSSAImpl(func, builder, func.body.entry);
+}
+```
+前のプロセスで作られた**HIRFunction**を使って**SSABuilder**を作り、**enterSSAImpl**関数でSSA変換を開始します。\
+**SSABuilder**はさまざまな**SSA**変換を支援するメソッドを持っています。\
+詳細なメソッドは変換プロセスを通じて紹介していきましょう。
+
+```ts
+function enterSSAImpl(
+  func: HIRFunction,
+  builder: SSABuilder,
+  rootEntry: BlockId
+): void {
+  const visitedBlocks: Set<BasicBlock> = new Set();
+  for (const [blockId, block] of func.body.blocks) {
+    // ... SSA変換プロセス
+  }
+}
+```
+**enterSSAImpl**関数は**rootEntry**から開始してすべてのブロックを訪問します。\
+**for**ループでブロックを一つずつ訪問し、その際に**SSA変換**が行われます。\
+**visitedBlocks** Setで始まっていることから、再訪問に対する検証が必要な部分がありそうです。
+
+```ts
+for (const [blockId, block] of func.body.blocks) {
+  CompilerError.invariant(!visitedBlocks.has(block), {
+    reason: `found a cycle! visiting bb${block.id} again`,
+    description: null,
+    loc: null,
+    suggestions: null,
+  });
+
+  visitedBlocks.add(block);
+  // ...
+}
+```
+
+すでに訪問したブロックを再度訪問する場合はループが存在する場合なので、エラーとともに終了します。\
+そうでなければ**visitedBlocks**に追加して**SSA変換**を開始します。
+
+### 初期化
+
+```ts
+for (const [blockId, block] of func.body.blocks) {
+  // ...
+  builder.startBlock(block);
+}
+
+// SSABuilder
+class SSABuilder {
+  #states: Map<BasicBlock, State> = new Map();
+  #current: BasicBlock | null = null;
+  // ...
+
+  startBlock(block: BasicBlock): void {
+    this.#current = block;
+    this.#states.set(block, {
+      defs: new Map(),
+      incompletePhis: [],
+    });
+  }
+}
+```
+**startBlock**メソッドを通じて現在のブロックとブロックに対するステートをbuilderを通じて初期化します。
+
+### パラメータ処理
+
+コンパイラのコンパイル単位は以前見たように関数単位で行われます。\
+それでは関数の開始部分であるパラメータに対する処理が必要ですよね？
+
+```ts
+for (const [blockId, block] of func.body.blocks) {
+  // ...
+  if (blockId === rootEntry) { // rootEntryの場合
+    func.params = func.params.map((param) => {
+      // 一般的なパラメータの場合、foo(a, b, c)のa, b, c
+      if (param.kind === "Identifier") {
+        return builder.definePlace(param);
+      } else {
+        // Spreadパラメータの場合、foo(...rest)の...rest
+        return {
+          kind: "Spread",
+          place: builder.definePlace(param.place),
+        };
+      }
+    });
+  }
+  // ...
+}
+```
+まず**rootEntry**の場合は**関数パラメータ**を**builderのdefinePlace**を通じて再度**定義**します。
+
+```ts
+class SSABuilder {
+  // ...
+  definePlace(oldPlace: Place): Place {
+    const oldId = oldPlace.identifier;
+    const newId = this.makeId(oldId);
+    this.state().defs.set(oldId, newId);
+    return {
+      ...oldPlace,
+      identifier: newId,
+    };
+  }
+  // ...
+  makeId(oldId: Identifier): Identifier {
+    return {
+      id: this.nextSsaId,
+      name: oldId.name,
+      mutableRange: {
+        start: makeInstructionId(0),
+        end: makeInstructionId(0),
+      },
+      scope: null, // reset along w the mutable range
+      type: makeType(),
+      loc: oldId.loc,
+    };
+  }
+  get nextSsaId(): IdentifierId {
+    return this.#env.nextIdentifierId;
+  }
+}
+```
+この時、既存の**identifier**を**makeId**メソッドを通じて**新しいidentifier**に変換します。\
+idの場合は**nextSsaId**というgetterを通じて新しく取得しますが、\
+グローバル単位で管理される**Environment**の**nextIdentifierId**を通じて新しいidを取得します。\
+つまりSSA単位の新しいidを指定するのではなく、グローバルに新しいidが割り当てられるということです。\
+これまで（loweringプロセスで）10まで使用していたなら、SSA変換を通じて11から新しいidが割り当てられます。
+
+```ts
+// Environment.ts
+makeIdentifierId(id: number): IdentifierId {
+  return id as IdentifierId;
+}
+
+class Environment {
+  get nextIdentifierId(): IdentifierId {
+    return makeIdentifierId(this.#nextIdentifer++);
+  }
+}
+```
+個人的に興味深いテクニックがありました。新しいidをgetterでreturnし、後置インクリメント演算子でidを一つ上げる方式でした。
+> このようなid管理方法はモーダル管理にも使えそうです。
+
+### インストラクション変換
+
+次のプロセスでは**インストラクション**に対する変換を行います。\
+ここでは例のコードと一緒に変換プロセスを見ていきましょう。
+```ts
+function foo() {
+  let y = 333;
+
+  if (y > 1) {
+    y = 111;
+  } else {
+    y = 222;
+  }
+
+  let x = y;
+}
+```
+このコードをHIR形式に変換すると以下のようになります。
+```
+function foo
+bb0 (block):
+  [1] $0 = 333
+  [2] $2 = StoreLocal Let y$1 = $0
+  [3] $7 = LoadLocal y$1
+  [4] $8 = 1
+  [5] $9 = Binary $7 > $8
+  [6] If  $9) then:bb2 else:bb3 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [7] $3 = 111
+  [8] $4 = StoreLocal Reassign y$1 = $3
+  [9] Goto bb1
+bb3 (block):
+  predecessor blocks: bb0
+  [10] $5 = 222
+  [11] $6 = StoreLocal Reassign y$1 = $5
+  [12] Goto bb1
+bb1 (block):
+  predecessor blocks: bb2 bb3
+  [13] $10 = LoadLocal y$1
+  [14] $12 = StoreLocal Let x$11 = $10
+  [15] $13 = <undefined>
+  [16] Return $13
+```
+bb0~3の**block**という単位に分かれ、各ブロックは**instruction**と**terminal**で構成されます。\
+**bb0**の場合は以下のように合計5つのInstructionと1つのTerminalで構成されます。
+```
+// Instruction
+[1] $0 = 333
+[2] $2 = StoreLocal Let y$1 = $0
+[3] $7 = LoadLocal y$1
+[4] $8 = 1
+[5] $9 = Binary $7 > $8
+
+// Terminal
+[6] If  $9) then:bb2 else:bb3 fallthrough=bb1
+```
+型で見てみるとこのように表現しています。
+```ts
+// HIR.ts
+export type BasicBlock = {
+  kind: BlockKind;
+  id: BlockId;
+  instructions: Array<Instruction>; // 命令列
+  terminal: Terminal;  // 終結
+  preds: Set<BlockId>;
+  phis: Set<Phi>;
+};
+```
+
+各命令は以下のような型を持っています。\
+命令は`左辺値（lvalue）= 右辺値（value）`の形で構成されています。
+
+```ts
+export type Instruction = {
+  id: InstructionId;    // 命令の一意識別子
+  lvalue: Place;        // 結果値が格納される位置
+  value: InstructionValue; // 命令の実際の値/演算
+  loc: SourceLocation;  // 元のソースコードでの位置
+};
+```
+いくつかの命令で確認すると以下のようになります。
+```ts
+// [1] $0 = 333
+{
+  id: 1,
+  lvalue: {
+    kind: "Identifier",
+    identifier: { id: 0, ... }, ...
+  },
+  value: { kind: "Primitive", value: 333, ... },
+  loc,
+}
+// [2] $2 = StoreLocal Let y$1 = $0
+{
+  id: 2,
+  lvalue: {
+    kind: "Identifier",
+    identifier: { id: 2, ... }, ...
+  },
+  value: {
+    kind: "StoreLocal",
+    lvalue: {
+      kind: "Let",
+      place: {
+        kind: "Identifier",
+        identifier: { id: 1, name: { value: "y"}, ... }, ...
+      },
+    },
+    value: {
+      kind: "Identifier",
+      identifier: { id: 0, ... }, ...
+    },
+  },
+}
+```
+**[1]**番の命令は最も単純な形で、左辺には**identifier**が、右辺には**Primitive**が入ります。\
+**[2]**番の場合は少し複雑で、左辺には**identifier**が、右辺には**StoreLocal**が入ります。\
+この時、**StoreLocal**も左辺と右辺で構成されています。\
+左辺には**Let y$1**が入り、右辺には**identifier**が入ります。
+
+それでは変換プロセスを見ていきましょう！
+
+**block**の**instruction**を一つずつ訪問します。
+
+```ts
+for (const instr of block.instructions) {
+  mapInstructionOperands(instr, (place) => builder.getPlace(place));
+  mapInstructionLValues(instr, (lvalue) => builder.definePlace(lvalue));
+  // ...
+}
+```
+各**instruction**に対して`mapInstructionOperands`と`mapInstructionLValues`を通じて**operand**と**lvalue**を変換します。\
+**operand**は**instruction**の右辺に該当し、**lvalue**は**instruction**の左辺に該当します。
+<b>左辺（LValue）</b>の場合は**値が書き込まれる位置**なので、上で見た新しいidを割り当てる`definePlace`を通じて変換します。\
+<b>右辺（Operands）</b>の場合は**値を参照する位置**なので、`getPlace`を通じて変換します。
+
+どのようなプロセスで値を取得するのか`getPlace`を見てみましょう。\
+`getIdAt`を通じて**id**を取得していますね。それでは`getIdAt`を見てみましょう。
+
+```ts
+class SSABuilder {
+  getPlace(oldPlace: Place): Place {
+    const newId = this.getIdAt(oldPlace.identifier, this.#current!.id);
+    return {
+      ...oldPlace,
+      identifier: newId,
+    };
+  }
+  getIdAt(oldId: Identifier, blockId: BlockId): Identifier {
+    // check if Place is defined locally
+    const block = this.#blocks.get(blockId)!;
+    const state = this.#states.get(block)!;
+
+    if (state.defs.has(oldId)) {
+      return state.defs.get(oldId)!;
+    }
+
+    if (block.preds.size == 0) {
+      /*
+       * We're at the entry block and haven't found our defintion yet.
+       * console.log(
+       *   `Unable to find "${printIdentifier(
+       *     oldId
+       *   )}" in bb${blockId}, assuming it's a global`
+       * );
+       */
+      this.#unknown.add(oldId);
+      return oldId;
+    }
+
+    if (this.unsealedPreds.get(block)! > 0) {
+      /*
+       * We haven't visited all our predecessors, let's place an incomplete phi
+       * for now.
+       */
+      const newId = this.makeId(oldId);
+      state.incompletePhis.push({ oldId, newId });
+      state.defs.set(oldId, newId);
+      return newId;
+    }
+
+    // Only one predecessor, let's check there
+    if (block.preds.size == 1) {
+      const [pred] = block.preds;
+      const newId = this.getIdAt(oldId, pred);
+      state.defs.set(oldId, newId);
+      return newId;
+    }
+    // There are multiple predecessors, we may need a phi.
+    const newId = this.makeId(oldId);
+    /*
+     * Adding a phi may loop back to our block if there is a loop in the CFG.  We
+     * update our defs before adding the phi to terminate the recursion rather than
+     * looping infinitely.
+     */
+    state.defs.set(oldId, newId);
+    return this.addPhi(block, oldId, newId);
+  }
+}
+```
+`getIdAt`はいくつかのケースに対して**id**を取得します。\
+一つずつ見ていきましょう。
+
+1. 現在のブロックで**oldId**が定義されている場合、その**id**を返します。
+```ts
+if (state.defs.has(oldId)) {
+  return state.defs.get(oldId)!;
+}
+```
+以前`definePlace`で新しいidを発行した後、**state**の**defs**にidのペアを保存していました。\
+この時**oldId**が定義されている場合、その**id**を返します。
+```ts
+definePlace(oldPlace: Place): Place {
+  const oldId = oldPlace.identifier;
+  const newId = this.makeId(oldId);
+  this.state().defs.set(oldId, newId); // 新しいidとともに保存
+  return {
+    ...oldPlace,
+    identifier: newId,
+  };
+}
+```
+
+2. **エントリーブロック**の場合、**id**が見つからなければ**グローバル**とみなして返します。
+```ts
+if (block.preds.size == 0) {
+  this.#unknown.add(oldId);
+  return oldId;
+}
+```
+**エントリーブロック**の場合は**preds**がないため**グローバル**とみなして返します。
+
+**preds**は**predecessor**（先行者）を意味します。どこかで聞いたことがありませんか？\
+先ほど**Braunのアルゴリズム**で**predecessor**を通じて前のブロックに遡ることを見ましたよね。
+
+3. **predecessor**が残っている場合、**incomplete phi**を追加します。
+```ts
+if (this.unsealedPreds.get(block)! > 0) {
+  const newId = this.makeId(oldId);
+  state.incompletePhis.push({ oldId, newId });
+  state.defs.set(oldId, newId);
+  return newId;
+}
+```
+まだunsealedの概念については見ていないので、一旦スキップします。
+
+4. **predecessor**が一つの場合、**predecessor**に移動して**id**を見つけて返します。
+```ts
+if (block.preds.size == 1) {
+  const [pred] = block.preds;
+  const newId = this.getIdAt(oldId, pred);
+  state.defs.set(oldId, newId);
+  return newId;
+}
+```
+**predecessor**が一つなら迷う必要なく前のブロックを探索する必要があり、この時**再帰的に**探索します。
+
+5. **predecessor**が複数の場合、**phi関数**を追加します。
+```ts
+const newId = this.makeId(oldId);
+state.defs.set(oldId, newId);
+return this.addPhi(block, oldId, newId);
+```
+以前見た**Braunのアルゴリズム**で**predecessor**が複数の場合、そのブロックで**phi関数**を追加することを見ました。\
+このケースがまさにその実装部分です！\
+論文で見てきた通りに実装されていますね。
+
+それでは続けて`addPhi`関数がどのように**phi関数**を追加するか見ていきましょう。
+
+```ts
+addPhi(block: BasicBlock, oldId: Identifier, newId: Identifier): Identifier {
+  const predDefs: Map<BlockId, Identifier> = new Map();
+  for (const predBlockId of block.preds) {
+    const predId = this.getIdAt(oldId, predBlockId);
+    predDefs.set(predBlockId, predId);
+  }
+
+  const phi: Phi = {
+    kind: "Phi",
+    id: newId,
+    operands: predDefs,
+    type: makeType(),
+  };
+
+  block.phis.add(phi);
+  return newId;
+}
+```
+以前に定義されたものを格納する`predDefs`を**blockIdとidentifier**で構成された**Map**として作成します。
+
+現在のブロックの先行者`block.preds`を巡回しながら再帰的に`getIdAt`を通じて**id**を見つけて**predDefs**に保存します。\
+そうして得られた`predDefs`を通じて**phi**を作成し、`block.phis`に追加します。
+
+### 関数式、オブジェクトメソッドの処理
+
+```ts
+if (
+  instr.value.kind === "FunctionExpression" ||
+  instr.value.kind === "ObjectMethod"
+) {
+  const loweredFunc = instr.value.loweredFunc.func;
+  const entry = loweredFunc.body.blocks.get(loweredFunc.body.entry)!;
+  builder.defineFunction(loweredFunc);
+  builder.enter(() => {
+    loweredFunc.context = loweredFunc.context.map((p) =>
+      builder.getPlace(p)
+    );
+    loweredFunc.params = loweredFunc.params.map((param) => {
+      if (param.kind === "Identifier") {
+        return builder.definePlace(param);
+      } else {
+        return {
+          kind: "Spread",
+          place: builder.definePlace(param.place),
+        };
+      }
+    });
+    enterSSAImpl(loweredFunc, builder, rootEntry);
+  });
+}
+```
+**FunctionExpression**と**ObjectMethod**の場合は**ネスト**された関数であるため、再帰的に`enterSSAImpl`を通じて再度**SSA変換**を行います。
+
+### ターミナル処理
+
+```ts
+mapTerminalOperands(block.terminal, (place) => builder.getPlace(place));
+```
+**terminal**の場合は以下のようなケースです。
+```
+[6] If  $9) then:bb2 else:bb3 fallthrough=bb1 // $9
+[9] Goto bb1
+[12] Goto bb1
+[16] Return $13  // $13
+```
+このケースで他の要素（$9、$13）を参照する場合があるため、idを見つけて変換します。
+
+### 最終比較
+
+ここまでくるとHIRを構成するすべての要素に対して静的単一代入（SSA）を行ったことになります。
+先ほどの例のコードはこのような形に変換されるでしょう。
+
+https://playground.react.dev/#N4Igzg9grgTgxgUxALhAMygOzgFwJYSYAEaEEAFAJRHAA6xRANgjkQJ5EC8RAzHwNz16RInjRFyHAHxEAjNToMRHbrLWCGAXyIJGYBDWEj2XIgCYLGkZqENmrAB6m2GzSE1A
+
+```
+function foo
+bb0 (block):
+  [1] $14 = 333
+  [2] $16 = StoreLocal Let y$15 = $14
+  [3] $17 = LoadLocal y$15
+  [4] $18 = 1
+  [5] $19 = Binary $17 > $18
+  [6] If  $19) then:bb2 else:bb3 fallthrough=bb1
+bb2 (block):
+  predecessor blocks: bb0
+  [7] $20 = 111
+  [8] $22 = StoreLocal Reassign y$21 = $20
+  [9] Goto bb1
+bb3 (block):
+  predecessor blocks: bb0
+  [10] $23 = 222
+  [11] $25 = StoreLocal Reassign y$24 = $23
+  [12] Goto bb1
+bb1 (block):
+  predecessor blocks: bb2 bb3
+  y$26: phi(bb2: y$21, bb3: y$24)
+  [13] $27 = LoadLocal y$26
+  [14] $29 = StoreLocal Let x$28 = $27
+  [15] $30 = <undefined>
+  [16] Return $30
+```
+目では比較が難しいので**diff**で比較してみましょう！
+
+<figure><img src="/post/images/ReactCompiler4/ssa_diff.png"  /><figcaption>図8. SSA変換前後</figcaption></figure>
+
+yの値を見ると、すべて個別の値に変換されており、phi関数が追加されていることがわかります。
+
+### ループ処理（応用編）
+
+上のプロセスまで見ればSSA変換プロセスがどのようなものか十分理解できるので、スキップしても大丈夫です。\
+しかしより深く入ってみると**ループ**に対する処理が必要になります。
+
+```js
+function foo() {
+  let x = 1;
+  for (let i = 0; i < 10; i++) {
+    x += 1;
+  }
+  return x;
+}
+```
+https://playground.react.dev/#N4Igzg9grgTgxgUxALhAMygOzgFwJYSYAEaEEAFAJRHAA6xRANgjkQB5EC8RAjANz0iJCDCLlmrPFyIAGPkSkAeXnIUBqNdToMhHNd36CiAXyMwWsYmwGZjIY0A
+
+
+このようなforループがあるコードを見てみましょう。\
+今まで見てきた条件文のような場合は比較的直感的に上から下への流れでした。\
+上のブロックからの分岐が下で合流するケースがほとんどでした。
+
+しかしループの場合は再び上に戻るケース（バックエッジ）が生じます。\
+このような場合はどう処理すればよいでしょうか？
+
+まずHIRに変換してみましょう。
+```
+function foo
+bb0 (block):
+  [1] $0 = 1
+  [2] $2 = StoreLocal Let x$1 = $0
+  [3] For init=bb3 test=bb1 loop=bb5 update=bb4 fallthrough=bb2
+bb3 (loop):
+  predecessor blocks: bb0
+  [4] $3 = 0
+  [5] $5 = StoreLocal Let i$4 = $3
+  [6] Goto bb1
+bb1 (loop):
+  predecessor blocks: bb3 bb4
+  [7] $12 = LoadLocal i$4
+  [8] $13 = 10
+  [9] $14 = Binary $12 < $13
+  [10] Branch (<unknown> $14) then:bb5 else:bb2
+bb5 (block):
+  predecessor blocks: bb1
+  [11] $7 = LoadLocal x$1
+  [12] $8 = 1
+  [13] $9 = Binary $7 + $8
+  [14] $10 = StoreLocal Reassign x$1 = $9
+  [15] $11 = LoadLocal x$1
+  [16] Goto(Continue) bb4
+bb4 (loop):
+  predecessor blocks: bb5
+  [17] $6 = PostfixUpdate i$4 = i$4 ++
+  [18] Goto bb1
+bb2 (block):
+  predecessor blocks: bb1
+  [19] $15 = LoadLocal x$1
+  [20] Return $15
+```
+理解しやすいように**CFG**を描いてみましょう。
+
+<figure><img src="/post/images/ReactCompiler4/loop.png"  /><figcaption>図9. ループのCFG</figcaption></figure>
+
+phi関数は分岐が合流するポイントに置けばよかったですよね。\
+それではbb3、bb4から合流するbb1にphi関数を置けばよさそうです。
+
+ちょうどbb1ブロックを見ると**predecessor**も与えられていますね。それでは以前見た再帰的な方法で前のブロックをたどっていけばいいのでしょうか？\
+しかしこのケースは異なります。
+
+私たちが**terminal**の処理後にスキップしたプロセスが一つあります。\
+**ターミナルサクセサー**に対する処理があります。ターミナル後続ブロックに対する処理です。\
+ターミナル後続ブロックとは、**terminal**に**If、Goto、for**のような命令がある場合、その命令に対する後続ブロックを意味します。\
+if文の場合はthen（consequent）、else（alternate）に分かれ、for文の場合はinit、test、loop、updateのような後続ブロックが定義されています。
+
+```ts
+mapTerminalOperands(block.terminal, (place) => builder.getPlace(place));
+for (const outputId of eachTerminalSuccessor(block.terminal)) {
+    const output = func.body.blocks.get(outputId)!;
+
+    let count;
+    if (builder.unsealedPreds.has(output)) {
+      count = builder.unsealedPreds.get(output)! - 1;
+    } else {
+      count = output.preds.size - 1;
+    }
+    builder.unsealedPreds.set(output, count);
+
+    if (count === 0 && visitedBlocks.has(output)) {
+      builder.fixIncompletePhis(output);
+    }
+  }
+```
+後続ブロックに対して、そのブロックの先行者（preds）の数をカウントします。
+初めて見るブロックなら先行者の数を`count`に入れて`unsealedPreds`に保存します。
+```ts
+count = output.preds.size - 1;
+builder.unsealedPreds.set(output, count);
+```
+すでに見た後続ブロックなら、先ほどsetしておいた`count`からカウントを一つ減らします。
+```ts
+count = builder.unsealedPreds.get(output)! - 1;
+```
+その`count`が0になり、すでに訪問したブロックなら、すべての先行者を訪問したことを意味します。\
+この時、`fixIncompletePhis`を通じて**phi関数**を追加します。
+
+理解を助けるため、上の例を使ってブロックの順序通りにどのように処理されるか見ていきましょう。
+
+#### 1. bb0
+```
+[3] For init=bb3 test=bb1 loop=bb5 update=bb4 fallthrough=bb2
+```
+bb0の場合、**For**文の後続ブロックはinitであるbb3になります。\
+最初のforループが始まる部分なので**init**ブロックになります。
+```ts
+export function* eachTerminalSuccessor(terminal: Terminal): Iterable<BlockId> {
+  switch(terminal.kind){
+    case "for": {
+      yield terminal.init;
+      break;
+    }
+    // ...
+  }
+}
+```
+この時`output`、後続ブロックであるbb3になり、**bb3**の**preds**は**bb0**の1つだけなので`count`は0になります。\
+`unsealedPreds`に`{bb3: 0}`が保存されます。\
+この時`visitedBlocks`には**bb3**がないため`fixIncompletePhis`は実行されません。
+
+
+#### 2. bb3
+```
+[6] Goto bb1
+```
+bb3の場合、**Goto**文の後続ブロックはbb1になります。\
+**bb1**の**preds**は**bb3、bb4**なので`count`は1になります。\
+`unsealedPreds`を`{bb3: 0, bb1: 1}`に更新しましょう。
+
+#### 3. bb1
+**bb1**のターミナルを処理する前に、**instruction**処理のプロセスで分岐に遭遇します。\
+上で見た`getIdAt`を通じて**id**を処理するプロセスで、先ほどスキップしたこの条件文に遭遇します。
+```ts
+getIdAt(oldId: Identifier, blockId: BlockId): Identifier {
+  // ...
+  if (this.unsealedPreds.get(block)! > 0) {
+    /*
+      * We haven't visited all our predecessors, let's place an incomplete phi
+      * for now.
+      */
+    const newId = this.makeId(oldId);
+    state.incompletePhis.push({ oldId, newId });
+    state.defs.set(oldId, newId);
+    return newId;
+  }
+  // ...
+}
+```
+この時`unsealedPreds`での**bb1**の`count`は1なので、この条件文が**真**になります。\
+`unsealed`な**先行ブロック**が残っているという意味なので、すぐに**phi関数**を追加せず、**incompletePhis**に必要な情報を追加します。
+
+続けてターミナルを処理してみましょう。
+
+```
+[10] Branch (<unknown> $14) then:bb5 else:bb2
+```
+bb1の場合、**Branch**文の後続ブロックは**then（consequent）：bb5、else（alternate）：bb2**になります。
+```ts
+case "branch": {
+  yield terminal.consequent;
+  yield terminal.alternate;
+  break;
+}
+```
+順番に処理すると`unsealedPreds`は`{bb3: 0, bb1: 1, bb5: 0, bb2: 0}`になります。\
+両方とも0になりましたが、`visitedBlocks`には**bb5、bb2**がないため`fixIncompletePhis`は実行されません。
+
+#### 4. bb5
+```
+[16] Goto(Continue) bb4
+```
+bb5の場合、**Goto**文の後続ブロックは**bb4**になります。\
+`unsealedPreds`は`{bb3: 0, bb1: 1, bb5: 0, bb2: 0, bb4: 0}`になります。
+
+#### 5. bb4
+```
+[18] Goto bb1
+```
+bb4の場合、**Goto**文の後続ブロックは**bb1**になります。\
+**bb1**はすでに`unsealedPreds`にあるため、以前の`count`を取得して1を引きます。\
+`unsealedPreds`は`{bb3: 0, bb1: 0, bb5: 0, bb2: 0, bb4: 0}`になります。
+
+この時`visitedBlocks`に**bb1**があるため`fixIncompletePhis`が実行されます。
+```ts
+fixIncompletePhis(block: BasicBlock): void {
+  const state = this.#states.get(block)!;
+  for (const phi of state.incompletePhis) {
+    this.addPhi(block, phi.oldId, phi.newId);
+  }
+}
+```
+先ほど**bb1**で**incompletePhis**に追加しておいた**phi関数**を追加します。\
+これによりループに対するphi関数処理まで完了できるようになります。
+
+最後に結果を確認してみましょうか？
+```plaintext
+function foo
+bb0 (block):
+  [1] $17 = 1
+  [2] $19 = StoreLocal Let x$18 = $17
+  [3] For init=bb3 test=bb1 loop=bb5 update=bb4 fallthrough=bb2
+bb3 (loop):
+  predecessor blocks: bb0
+  [4] $20 = 0
+  [5] $22 = StoreLocal Let i$21 = $20
+  [6] Goto bb1
+bb1 (loop):
+  predecessor blocks: bb3 bb4
+  i$23: phi(bb3: i$21, bb4: i$34) // phi関数が追加された
+  x$27: phi(bb3: x$18, bb4: x$31) // phi関数が追加された
+  [7] $24 = LoadLocal i$23
+  [8] $25 = 10
+  [9] $26 = Binary $24 < $25
+  [10] Branch (<unknown> $26) then:bb5 else:bb2
+bb5 (block):
+  predecessor blocks: bb1
+  [11] $28 = LoadLocal x$27
+  [12] $29 = 1
+  [13] $30 = Binary $28 + $29
+  [14] $32 = StoreLocal Reassign x$31 = $30
+  [15] $33 = LoadLocal x$31
+  [16] Goto(Continue) bb4
+bb4 (loop):
+  predecessor blocks: bb5
+  [17] $35 = PostfixUpdate i$34 = i$23 ++
+  [18] Goto bb1
+bb2 (block):
+  predecessor blocks: bb1
+  [19] $36 = LoadLocal x$27
+  [20] Return $36
+```
+
+適切な位置に**phi関数**が追加されていることが確認できます。
+
+
+## まとめ
+
+今回の記事では**React Compiler**の**SSA変換**プロセスについて見てきました。\
+**SSA変換**は**静的単一代入**という概念で、**変数**に対する**代入**が一度だけ行われることを意味します。\
+そのプロセスで分岐に対する処理のために**phi関数**という概念を導入し、どのように**phi関数**を追加するかを見てきました。\
+これにより**変数**に対する**代入**がどこで行われたかを追跡できるようになり、**最適化**にも役立ちます。
+
+そのプロセスで二つの論文を見てきましたが、\
+**Cytronアルゴリズム**と**Braunアルゴリズム**の処理プロセスとそれぞれの長所・短所も見てきました。\
+そして元々の目的であった**React Compiler**の**SSA変換**プロセスを見てきました。
+
+次回の記事ではこのように変換した**SSA形式**を通じてどのような**最適化**を行うのか見ていきます。
+
+## 参考
+
+- https://www.cs.cornell.edu/courses/cs4120/2023sp/notes.html?id=reachdef
+- https://groups.seas.harvard.edu/courses/cs252/2011sp/slides/Lec04-SSA.pdf
+- https://pages.cs.wisc.edu/~fischer/cs701.f05/lectures/Lecture22.pdf
+- https://www.cs.princeton.edu/courses/archive/spring22/cos320/lectures/ssa.pdf

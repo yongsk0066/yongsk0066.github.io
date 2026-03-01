@@ -1,0 +1,424 @@
+---
+title: "moveBefore 適用記: Modalに隠れるToast問題を解決する"
+description: "Modal Dialogを開くとToastが隠れてしまう問題を、moveBefore APIで解決した過程をまとめます。Top Layerの動作原理と、moveBeforeがどのように状態を保持するかについても解説します。"
+author: "Yongseok"
+categories: ["web"]
+date: "2026-01-17T12:00:00.000Z"
+heroImage: "/post/images/moveBefore/thumb.png"
+draft: true
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import Sandpack from "../../../components/article/Sandpack";
+
+import problemExample from "../_examples/moveBefore/problem";
+import solutionExample from "../_examples/moveBefore/solution";
+
+Modal Dialogを開いたのに、Toastの通知が見えない。
+
+明らかに `z-index: 9999999` を設定したのに。なぜだろうか？
+
+## 問題の状況
+
+まず実際に体験してみよう。「Toastを表示」をクリックしてから「Modalを開く」を押してみよう。
+
+<Sandpack client:visible files={problemExample} />
+
+ToastがModalの背後に隠れて見えない。`z-index` をいくら高くしても意味がない。
+
+なぜだろうか？その理由は **Top Layer** にある。
+
+## Top Layerとは？
+
+ブラウザには通常のDOMツリーの上にレンダリングされる特殊なレイヤーがある。これが **Top Layer** だ。
+
+以下の要素がTop Layerに配置される：
+- `<dialog>` 要素が `showModal()` で開かれた場合
+- Fullscreen APIで全画面化された要素
+- Popover属性を持つ要素
+
+```
+┌─────────────────────────────────────┐
+│           Top Layer                 │  ← Modal Dialogがここにレンダリング
+│  ┌───────────────────────────────┐  │
+│  │      Modal Dialog             │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│         Normal DOM Layer            │  ← Toastがここにあると隠される
+│                                     │
+│  ┌─────────┐                        │
+│  │ Toast   │  ← ユーザーには見えない！
+│  └─────────┘                        │
+└─────────────────────────────────────┘
+```
+
+Top LayerはCSSのスタッキングコンテキストと**完全に分離**されている。そのため `z-index: 999999999` を設定しても意味がない。Top Layerは別の世界に存在しているからだ。
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Glossary/Top_layer" />
+
+## 解決のアイデア
+
+では、解決策は何だろうか？
+
+簡単だ。**ToastをDialogの中に入れればいい。**
+
+```
+┌─────────────────────────────────────┐
+│           Top Layer                 │
+│  ┌───────────────────────────────┐  │
+│  │      Modal Dialog             │  │
+│  │                               │  │
+│  │  ┌─────────┐                  │  │
+│  │  │ Toast   │  ← これで見える！ │  │
+│  │  └─────────┘                  │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+```
+
+ToastがDialogの子要素になれば、Dialogと一緒にTop Layerにレンダリングされ、自然に表示されるようになる。
+
+問題は**どうやって**移動させるかだ。
+
+## appendChildの問題点
+
+DOM要素を別の親に移動させる最も一般的な方法は `appendChild` だ。
+
+```javascript
+dialog.appendChild(toastContainer);
+```
+
+しかし、この方法には致命的な問題がある。
+
+`appendChild` は内部的に **remove → insert** の2段階で動作する。ノードが一時的にDOMツリーから切り離され、再び挿入されるのだ。
+
+この過程で：
+- **CSSアニメーションがリセットされる**
+- iframeがリロードされる
+- フォーカスが失われる
+- ビデオの再生が中断される
+- Custom ElementのconnectedCallbackが再度呼び出される
+
+Toastにフェードインアニメーションがある場合、`appendChild` で移動させた瞬間にアニメーションが最初からやり直しになる。ユーザーから見ると、ちらつくように見えるだろう。
+
+## moveBeforeの登場
+
+Chrome 133（2025年2月）で `moveBefore` という新しいAPIが追加された。
+
+```javascript
+newParent.moveBefore(node, referenceChild);
+```
+
+`moveBefore` はノードを**状態を保持したままアトミックに**移動させる。remove → insertではなく、一度に移動するのだ。
+
+| 特性 | appendChild | moveBefore |
+|------|-------------|------------|
+| 動作方式 | Remove → Insert（2段階） | Atomic Move（1段階） |
+| CSS Animation | リセットされる | 維持される |
+| iframeの状態 | リロードされる | 維持される |
+| フォーカス | 失われる | 維持される |
+| ビデオ再生 | 中断される | 維持される |
+
+Toastのアニメーションが移動中も途切れることなく、自然に維持される！
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Web/API/Node/moveBefore" />
+
+## moveBeforeはどのように動作するのか？
+
+ここで疑問が湧く。`moveBefore` はどのように状態を保持できるのだろうか？
+
+Chromiumのソースコードを見てみると、興味深い実装が見つかる。
+
+### コア：フラグベースの動作
+
+`moveBefore` のコアは**フラグ**だ。
+
+```cpp
+// Chromium - node.cc
+void Node::moveBefore(Node* new_child, Node* ref_child, ...) {
+  // フラグを設定
+  GetDocument().SetStatePreservingAtomicMoveInProgress(true);
+
+  // 既存のinsertBeforeロジックを活用！
+  insertBefore(new_child, ref_child, exception_state);
+
+  GetDocument().SetStatePreservingAtomicMoveInProgress(false);
+}
+```
+
+驚くべきことに、`moveBefore` は内部的に `insertBefore` をそのまま使用している。ただし `StatePreservingAtomicMoveInProgress` というフラグをオンにした状態で実行する。
+
+すると `insertBefore` のロジック内の各所でこのフラグがチェックされ、状態に影響を与える副作用が**スキップ**される。
+
+```cpp
+// フォーカス解除をスキップ
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  GetDocument().RemoveFocusedElementOfSubtree(*child);
+}
+
+// レイアウトツリーの切り離しをスキップ
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  old_child.DetachLayoutTree();
+}
+
+// CSSアニメーションのキャンセルをスキップ
+if (!GetDocument().StatePreservingAtomicMoveInProgress()) {
+  element_animations->CssAnimations().Cancel();
+}
+```
+
+### 影響を受けるサブシステム
+
+フラグがチェックされる箇所を整理すると：
+
+| サブシステム | スキップされる動作 |
+|-----------|--------------|
+| Focus | フォーカスの解除 |
+| Layout | レイアウトツリーの切り離し・再接続 |
+| CSS Animation | アニメーションのキャンセル |
+| iframe | サブフレームの接続解除 |
+| Top Layer | Top Layerからの削除 |
+| Popover | Popoverの非表示化 |
+| Stylesheet | 読み込み中のリソースのクリア |
+
+一方で**常に実行される**ものもある：
+- DOMポインタの操作（ノードの親・兄弟参照の更新）
+- MutationObserverの記録（移動の事実は記録される）
+- slotchangeイベント
+
+### Top Layerの保持
+
+今回のケースで重要なのは **Top Layer状態の保持** だ。
+
+```cpp
+// element.cc
+void Element::RemovedFrom(ContainerNode& insertion_point) {
+  // moveBeforeの場合はTop Layerから削除しない
+  if (IsInTopLayer() && !document.StatePreservingAtomicMoveInProgress()) {
+    document.RemoveFromTopLayerImmediately(this);  // ← スキップされる！
+  }
+}
+```
+
+通常のDOM移動では要素がTop Layerから削除されるが、`moveBefore` では削除されない。Dialogが開いた状態のまま維持されるのだ。
+
+<aside>
+**参考**: `moveBefore` のより詳細な内部実装分析に興味がある場合は、Chromiumソースコードの `node.cc`、`container_node.cc`、`element.cc` などを参照するとよい。
+</aside>
+
+## 実装する
+
+では実際に実装してみよう。大きく3つの部分に分かれる：
+
+1. **topLayerObserver** - Modal Dialogの状態検知
+2. **moveElement** - DOM要素の移動（moveBeforeを使用）
+3. **useToastContainerMover** - React Hookでの接続
+
+### 1. Modal Dialogの状態検知
+
+現在開いているModal Dialogを追跡する必要がある。
+
+```typescript
+// topLayerObserver.ts
+const modalDialogs = new Set<HTMLDialogElement>();
+const listeners = new Set<() => void>();
+
+function handleToggle(event: Event): void {
+  const dialog = event.target as HTMLDialogElement;
+
+  // :modal 状態かどうか確認（showModalで開かれたか）
+  if (dialog.matches(':modal')) {
+    modalDialogs.add(dialog);
+  }
+  notifyListeners();
+}
+
+function handleBeforeToggle(event: Event): void {
+  const toggleEvent = event as ToggleEvent;
+  if (toggleEvent.newState === 'closed') {
+    modalDialogs.delete(event.target as HTMLDialogElement);
+    notifyListeners();
+  }
+}
+
+export const topLayerStore = {
+  getSnapshot: () => {
+    // 最後に開いたDialogを返す
+    return Array.from(modalDialogs).pop() || null;
+  },
+  subscribe: (listener: () => void) => {
+    listeners.add(listener);
+    if (listeners.size === 1) {
+      document.addEventListener('toggle', handleToggle, true);
+      document.addEventListener('beforetoggle', handleBeforeToggle, true);
+    }
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        document.removeEventListener('toggle', handleToggle, true);
+        document.removeEventListener('beforetoggle', handleBeforeToggle, true);
+      }
+    };
+  },
+};
+```
+
+`toggle` と `beforetoggle` イベントを使用する。`beforetoggle` を使う理由は、Dialogが閉じる**前に**Toastを元の位置に戻す必要があるからだ。
+
+### 2. DOM要素の移動
+
+`moveBefore` を使用し、サポートしていないブラウザでは何もしない。
+
+```typescript
+// domElementMover.ts
+export function moveElement(element: Element, parent: Element): void {
+  if (element.parentElement === parent) {
+    return;  // すでに同じ親なら何もしない
+  }
+
+  if ('moveBefore' in parent && typeof parent.moveBefore === 'function') {
+    try {
+      parent.moveBefore(element, null);  // null = 末尾に追加
+    } catch {
+      // エラーを無視（クロスドキュメント移動など）
+    }
+  }
+  // moveBefore非対応の場合はフォールバックなし（意図的）
+}
+```
+
+なぜ `appendChild` のフォールバックを入れなかったのか？`appendChild` を使うとアニメーションが壊れるからだ。ToastがDialogの背後に隠れる方が、アニメーションがちらつくよりもましなUXだと判断した。
+
+### 3. React Hook
+
+Toastコンテナの位置をModal Dialogの状態に応じて管理する。
+
+```tsx
+// useToastContainerMover.ts
+export function useToastContainerMover(
+  containerRef: React.RefObject<HTMLElement | null>
+) {
+  const originalParentRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // 元の親を保存（初回のみ）
+    if (!originalParentRef.current) {
+      originalParentRef.current = container.parentElement;
+    }
+
+    return topLayerStore.subscribe(() => {
+      const topmostDialog = topLayerStore.getSnapshot();
+
+      // Dialogがあればその中へ、なければ元の位置へ
+      const targetParent = topmostDialog || originalParentRef.current;
+
+      if (targetParent) {
+        moveElement(container, targetParent);
+      }
+    });
+  }, [containerRef]);
+}
+```
+
+### 使い方
+
+```tsx
+const ToastContainer = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useToastContainerMover(containerRef);
+
+  return (
+    <div ref={containerRef} className="toast-container">
+      {/* Toastのレンダリング */}
+    </div>
+  );
+};
+```
+
+## 結果
+
+では、解決後のバージョンを確認してみよう。
+
+<Sandpack client:visible files={solutionExample} />
+
+Modalを開いてもToastがちゃんと見える！
+
+アニメーションも途切れることなく自然に維持される。（Chrome 133以降でのみ `moveBefore` が動作し、それ以外のブラウザではフォールバックモードで動作する）
+
+## 全体の流れまとめ
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Browser Events                           │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    topLayerObserver.ts                          │
+│  toggle / beforetoggle イベントを検知                             │
+│  → modalDialogs Setを更新                                       │
+│  → notifyListeners() を呼び出し                                  │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                useToastContainerMover.ts                        │
+│  topLayerStore.subscribe() コールバックを実行                      │
+│  → getSnapshot()で最上位のDialogを取得                            │
+│  → targetParentを決定（Dialogまたは元の親）                        │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    domElementMover.ts                           │
+│  moveElement(toast, targetParent)                               │
+│  → parent.moveBefore(element, null)                             │
+│  → Toastが新しい位置へ移動（状態を維持！）                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 設計上の判断
+
+### なぜPortalではなくDOM移動なのか？
+
+React Portalも検討したが：
+- PortalはReactの仮想DOMと実際のDOMの間に不整合を生む可能性がある
+- `moveBefore` を使えばアニメーションの状態が維持される
+- 既存のコンポーネント構造を大きく変更する必要がない
+
+### なぜフォールバックがないのか？
+
+`moveBefore` をサポートしていないブラウザでは、ToastがDialogの背後に隠れる問題がそのまま残る。意図的な選択だ。
+
+- `appendChild` をフォールバックとして使うとアニメーションが壊れる
+- レガシーブラウザのサポートよりも、最新ブラウザでのUXを優先した
+- プログレッシブ・エンハンスメント戦略
+
+### ブラウザサポート
+
+- Chrome 133+（2025年2月）
+- 他のブラウザも実装中
+
+<LinkPreview src="https://chromestatus.com/feature/5135990159835136" />
+
+## まとめ
+
+Top LayerのせいでToastが隠れてしまう問題を、`moveBefore` で解決できた。
+
+ポイント：
+1. **Top Layer** はCSSスタッキングコンテキストとは分離された別のレイヤー
+2. **moveBefore** はDOMノードを状態を保持したまま移動させる
+3. 内部的には**フラグベース**で副作用をスキップ
+
+`moveBefore` がまだChromeでしかサポートされていないのは残念だが、他のブラウザもまもなく追随するだろう。それまではプログレッシブ・エンハンスメント戦略で進めるのがよさそうだ。
+
+## 参考資料
+
+- [MDN - Top Layer](https://developer.mozilla.org/en-US/docs/Glossary/Top_layer)
+- [MDN - moveBefore](https://developer.mozilla.org/en-US/docs/Web/API/Node/moveBefore)
+- [DOM Standard - moveBefore](https://dom.spec.whatwg.org/#dom-parentnode-movebefore)
+- [Chrome Platform Status - moveBefore](https://chromestatus.com/feature/5135990159835136)

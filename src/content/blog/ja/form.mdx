@@ -1,0 +1,599 @@
+---
+title: 'formとは何か'
+description: "まず、formとは何だろうか？誰かにこの質問を投げかけられたら、どう答えるだろうか？Hypertext Markup Language - 2.0 によると、formは次のように定義されている。A form is a template for a form data set and an associated
+method and action URI."
+author: "Yongseok"
+pubDate: "2024-04-27"
+categories: ["web"]
+heroImage: "/blog-placeholder-4.jpg"
+date: "2024-04-27"
+---
+
+[内容整理中]
+
+https://react.dev/reference/react/use-server#server-actions-in-forms
+
+formにおけるサーバーアクション、その意味を探ってみよう。
+
+まず、formとは何だろうか？
+誰かにこの質問を投げかけられたら、どう答えるだろうか？
+
+## formとは何か？
+
+[Hypertext Markup Language - 2.0](https://datatracker.ietf.org/doc/html/rfc1866#section-8)
+によると、formは次のように定義されている。
+
+<code>
+A form is a template for a form data set and an associated
+method and action URI. A form data set is a sequence of
+name/value pair fields. The names are specified on the NAME
+attributes of form input elements, and the values are given
+initial values by various forms of markup and edited by the
+user. The resulting form data set is used to access an
+information service as a function of the action and method.
+
+Forms elements can be mixed in with document structuring
+elements. For example, a `<PRE>` element may contain a `<FORM>`
+element, or a `<FORM>` element may contain lists which contain
+`<INPUT>` elements. This gives considerable flexibility in
+designing the layout of forms.
+
+Form processing is a level 2 feature.
+
+8.1. Form Elements
+
+8.1.1. Form: FORM
+
+   The `<FORM>` element contains a sequence of input elements, along
+   with document structuring elements. The attributes are:
+
+### ACTION
+            specifies the action URI for the form. The action URI of
+            a form defaults to the base URI of the document (see 7,
+            "Hyperlinks").
+
+### METHOD
+            selects a method of accessing the action URI. The set of
+            applicable methods is a function of the scheme of the
+            action URI of the form. See 8.2.2, "Query Forms:
+            METHOD=GET" and 8.2.3, "Forms with Side-Effects:
+            METHOD=POST".
+
+### ENCTYPE
+            specifies the media type used to encode the name/value
+            pairs for transport, in case the protocol does not
+            itself impose a format. See 8.2.1, "The form-urlencoded
+            Media Type".
+</code>
+<code>
+フォームは、フォームデータセットと関連するメソッドおよびアクションURIのテンプレートである。
+フォームデータセットは、名前/値ペアフィールドのシーケンスである。
+名前はフォーム入力要素のNAME属性で指定され、値はさまざまなマークアップ形式によって初期値が与えられ、ユーザーによって編集される。
+生成されたフォームデータセットは、アクションとメソッドの関数として情報サービスにアクセスするために使用される。
+
+フォーム要素はドキュメント構造化要素と混在させることができる。例えば、`<PRE>`要素は`<FORM>`要素を含むことができ、`<FORM>`要素は`<INPUT>`要素を含むリストを含むことができる。これにより、フォームのレイアウト設計において大きな柔軟性が提供される。
+
+フォーム処理はレベル2の機能である。
+
+8.1. フォーム要素
+
+8.1.1. フォーム: FORM
+
+`<FORM>`要素は、入力要素のシーケンスとドキュメント構造化要素を含む。属性は以下の通り：
+
+### ACTION
+フォームのアクションURIを指定する。フォームのアクションURIは、デフォルトでドキュメントのベースURIに設定される（7, 「ハイパーリンク」参照）。
+
+### METHOD
+アクションURIへのアクセス方法を選択する。適用可能なメソッドのセットは、フォームのアクションURIスキームの関数である。8.2.2,「クエリフォーム: METHOD=GET」および8.2.3,「副作用のあるフォーム: METHOD=POST」参照。
+
+### ENCTYPE
+プロトコル自体がフォーマットを強制しない場合、転送のために名前/値ペアをエンコードするために使用されるメディアタイプを指定する。8.2.1,「form-urlencodedメディアタイプ」参照。
+
+</code>
+
+最初の文にあるように、フォームは以下のように定義される。
+>A form is a template for a form data set and an associated method and action URI
+
+> フォームは、フォームデータセットと関連するメソッドおよびアクションURIのテンプレートである。
+
+これはどういう意味だろうか？
+
+フォームは、ユーザーが入力したデータをサーバーに送信するためのテンプレートと見なすことができる。
+
+では、送信（submit）するとはどういうことだろうか？
+
+<code>
+8.2. Form Submission
+
+   An HTML user agent begins processing a form by presenting the
+   document with the fields in their initial state. The user is allowed
+   to modify the fields, constrained by the field type etc.  When the
+   user indicates that the form should be submitted (using a submit
+   button or image input), the form data set is processed according to
+   its method, action URI and enctype.
+  When there is only one single-line text input field in a form, the
+   user agent should accept Enter in that field as a request to submit
+   the form.
+
+   8.2.2. Query Forms: METHOD=GET
+
+   If the processing of a form is idempotent (i.e. it has no lasting
+   observable effect on the state of the world), then the form method
+   should be `GET'. Many database searches have no visible side-effects
+   and make ideal applications of query forms.
+   To process a form whose action URL is an HTTP URL and whose method is
+   `GET', the user agent starts with the action URI and appends a `?'
+   and the form data set, in `application/x-www-form-urlencoded' format
+   as above. The user agent then traverses the link to this URI just as
+   if it were an anchor (see 7.2, "Activation of Hyperlinks").
+
+      NOTE - The URL encoding may result in very long URIs, which cause
+      some historical HTTP server implementations to exhibit defective
+      behavior. As a result, some HTML forms are written using
+      `METHOD=POST' even though the form submission has no side-effects.
+
+8.2.3. Forms with Side-Effects: METHOD=POST
+
+   If the service associated with the processing of a form has side
+   effects (for example, modification of a database or subscription to a
+   service), the method should be `POST'.
+
+   To process a form whose action URL is an HTTP URL and whose method is
+   `POST', the user agent conducts an HTTP POST transaction using the
+   action URI, and a message body of type `application/x-www-form-
+   urlencoded' format as above. The user agent should display the
+   response from the HTTP POST interaction just as it would display the
+   response from an HTTP GET above.
+
+</code>
+
+<code>
+8.2. フォーム送信
+HTMLユーザーエージェントは、フィールドが初期状態のドキュメントを表示してフォーム処理を開始する。ユーザーはフィールドタイプなどの制約を受けながらフィールドを変更できる。ユーザーがフォームの送信を指示すると（送信ボタンまたはイメージ入力を使用して）、フォームデータセットはそのメソッド、アクションURI、エンコードタイプに従って処理される。フォームに1行のテキスト入力フィールドが1つだけある場合、ユーザーエージェントはそのフィールドでのEnterキーをフォーム送信のリクエストとして受け付けるべきである。
+
+8.2.2. クエリフォーム: METHOD=GET
+フォーム処理が冪等（つまり、世界の状態に持続的な観測可能な影響がない）であれば、フォームメソッドは「GET」であるべきである。多くのデータベース検索は目に見える副作用がなく、クエリフォームの理想的な応用例となる。アクションURLがHTTP URLでメソッドが「GET」のフォームを処理するために、ユーザーエージェントはアクションURIから始め、「?」と上記の「application/x-www-form-urlencoded」形式のフォームデータセットを追加する。その後、ユーザーエージェントはアンカーと同様にこのURIへのリンクをたどる（7.2,「ハイパーリンクのアクティベーション」参照）。
+
+注意 - URLエンコーディングにより非常に長いURIが生成される可能性があり、一部の歴史的なHTTPサーバー実装で不具合のある動作を引き起こすことがある。その結果、フォーム送信に副作用がないにもかかわらず、「METHOD=POST」を使用して記述されるHTMLフォームもある。
+
+8.2.3. 副作用のあるフォーム: METHOD=POST
+フォーム処理に関連するサービスに副作用（例：データベースの変更やサービスへの登録）がある場合、メソッドは「POST」であるべきである。アクションURLがHTTP URLでメソッドが「POST」のフォームを処理するために、ユーザーエージェントはアクションURIを使用し、上記の「application/x-www-form-urlencoded」形式のメッセージボディを使用してHTTP POSTトランザクションを実行する。ユーザーエージェントはHTTP POSTインタラクションのレスポンスを、上記のHTTP GETのレスポンスと同じ方法で表示すべきである。
+</code>
+
+
+METHODがGETの場合はデータをクエリとして送信し、POSTの場合はデータをメッセージボディとして送信する。
+
+では、実際のブラウザでの動作過程を見てみよう。
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;drc=c76cca217f4278f5c53a8d90f7870270ee4dd81e;l=429
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;l=288;drc=c76cca217f4278f5c53a8d90f7870270ee4dd81e;bpv=0;bpt=1
+
+### HTMLFormElement::PrepareForSubmission
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  LocalFrame* frame = GetDocument().GetFrame();
+  // frameがない、または送信中、またはユーザーJS送信イベント中の場合
+  if (!frame || is_submitting_ || in_user_js_submit_event_)
+    return;
+
+
+// 接続されていない場合は送信をキャンセルする。
+//
+  if (!isConnected()) {
+    GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+        mojom::ConsoleMessageSource::kJavaScript,
+        mojom::ConsoleMessageLevel::kWarning,
+        "Form submission canceled because the form is not connected"));
+    return;
+  }
+// ...
+```
+接続されていない場合とは何だろうか？
+```js
+let form = document.createElement('form');
+form.submit();  // フォームがドキュメントに接続されていない状態で送信を試みる
+```
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  // フォーム内の要素を巡回し、送信不可能な要素がないか確認する。
+  for (ListedElement* element : ListedElements()) {
+    // フォーム送信をブロックする要素かどうかを確認する。
+    auto* form_control_element = DynamicTo<HTMLFormControlElement>(element);
+
+    // フォーム送信をブロックする要素の場合
+    if (form_control_element && form_control_element->BlocksFormSubmission()) {
+      // ユーザーカウンターをインクリメントする。
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kFormSubmittedWithUnclosedFormControl);
+
+      // UnclosedFormControlIsInvalidEnabledフラグが有効な場合
+      // 閉じられていないフォーム要素があることを知らせるメッセージを出力する。
+      if (RuntimeEnabledFeatures::UnclosedFormControlIsInvalidEnabled()) {
+        String tag_name = To<HTMLFormControlElement>(element)->tagName();
+        GetDocument().AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+            mojom::ConsoleMessageSource::kSecurity,
+            mojom::ConsoleMessageLevel::kError,
+            "Form submission failed, as the <" + tag_name +
+                "> element named "
+                "'" +
+                element->GetName() +
+                "' was implicitly closed by reaching "
+                "the end of the file. Please add an explicit end tag "
+                "('</" +
+                tag_name + ">')"));
+        // Errorイベントをディスパッチする。
+        DispatchEvent(*Event::Create(event_type_names::kError));
+        return;
+      }
+    }
+  }
+//...
+```
+
+
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+  // 再度フォーム内の要素を巡回し、バリデーションを強制する。
+  for (ListedElement* element : ListedElements()) {
+    // フォームコントロール要素の場合
+    if (auto* form_control =
+            DynamicTo<HTMLFormControlElementWithState>(element)) {
+      // After attempting form submission we have to make the controls start
+      // matching :user-valid/:user-invalid. We could do this by calling
+      // SetUserHasEditedTheFieldAndBlurred() even though the user has not
+      // actually taken those actions, but that would have side effects on
+      // autofill.
+
+      // フォーム送信を試みた後は、コントロールが:user-valid/:user-invalidとマッチするようにする必要がある。
+      // ユーザーが実際にこれらの操作を行っていなくてもSetUserHasEditedTheFieldAndBlurred()を呼び出すことでこれを実現できるが、オートフィルに副作用を引き起こす可能性がある。
+      // フォームコントロールを強制的に有効にする。
+      form_control->ForceUserValid();
+    }
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::PrepareForSubmission
+// ...
+
+  // 送信するかどうか
+  bool should_submit;
+  {
+    // in_user_js_submit_event_フラグをtrueに設定する。
+    base::AutoReset<bool> submit_event_handler_scope(&in_user_js_submit_event_,
+                                                     true);
+
+    // バリデーションをスキップするかどうか
+    // 接続されたページがない、またはnovalidateがtrueの場合
+    // 送信ボタンがあり、novalidateがtrueの場合
+    bool skip_validation = !GetDocument().GetPage() || NoValidate();
+    if (submit_button && submit_button->FormNoValidate())
+      skip_validation = true;
+
+    UseCounter::Count(GetDocument(), WebFeature::kFormSubmissionStarted);
+    // Interactive validation must be done before dispatching the submit event.
+
+    // バリデーションをスキップせず、インタラクティブバリデーションに失敗した場合は送信しない。
+    if (!skip_validation && !ValidateInteractively()) {
+      should_submit = false;
+    } else {
+
+    // DispatchWillSendSubmitEvent関数を呼び出して、送信イベントが発生することを通知する。
+      frame->Client()->DispatchWillSendSubmitEvent(this);
+
+      // SubmitEventInitオブジェクトを生成する。
+      SubmitEventInit* submit_event_init = SubmitEventInit::Create();
+      // イベントバブリングの可否を設定する。
+      submit_event_init->setBubbles(true);
+      // イベントキャンセルの可否を設定する。
+      submit_event_init->setCancelable(true);
+      // 送信ボタンがある場合はsubmitter属性をボタンのHTMLElementに設定する。なければnullポインタに設定する。
+      submit_event_init->setSubmitter(
+          submit_button ? &submit_button->ToHTMLElement() : nullptr);
+      // SubmitEventを生成してディスパッチする。
+      // イベントがキャンセルされなければshould_submitをtrueに設定する。
+      should_submit = DispatchEvent(*MakeGarbageCollected<SubmitEvent>(
+                          event_type_names::kSubmit, submit_event_init)) ==
+                      DispatchEventResult::kNotCanceled;
+    }
+  }
+  // 送信する場合
+  if (should_submit) {
+    // If this form already made a request to navigate another frame which is
+    // still pending, then we should cancel that one.
+
+    // 以前に保留中の別フレームへの送信がある場合（cancel_last_submission_）、リクエストをキャンセルする。
+
+    if (cancel_last_submission_)
+      std::move(cancel_last_submission_).Run();
+    // フォーム送信をスケジューリングする（予約する）。
+    ScheduleFormSubmission(event, submit_button);
+  }
+//...
+```
+ここでディスパッチされるイベントは、JavaScriptが受け取って処理できるイベントである。\
+e.preventDefault()を呼び出してイベントをキャンセルできる。\
+e.defaultPreventedを通じてイベントがキャンセルされたかどうかを確認できる。
+
+ページはこのイベントを通じて送信プロセスを制御する機会を得る。
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/forms/html_form_element.cc;l=429;bpv=1;bpt=1?q=ForceUserValid&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2Fhtml%2Fforms%2F
+HTMLFormElement::ScheduleFormSubmission
+
+
+まず序盤の似たようなロジックはスキップして...
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // フォームが既に送信中の場合は終了する。
+  if (is_submitting_)
+    return;
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // Delay dispatching 'close' to dialog until done submitting.
+  // 送信が完了するまでダイアログを閉じるのを遅延させる。
+
+  // is_submitting_をtrueに設定する。
+  EventQueueScope scope_for_dialog_close;
+  base::AutoReset<bool> submit_scope(&is_submitting_, true);
+
+  // イベントがあり送信ボタンがない場合（暗黙的送信）
+  if (event && !submit_button) {
+    // In a case of implicit submission without a submit button, 'submit'
+    // event handler might add a submit button. We search for a submit
+    // button again.
+    // TODO(tkent): Do we really need to activate such submit button?
+
+    // 動的にsubmitボタンが追加される可能性があるため、再検索する。
+    for (ListedElement* listed_element : ListedElements()) {
+      auto* control = DynamicTo<HTMLFormControlElement>(listed_element);
+      if (!control)
+        continue;
+      DCHECK(!control->IsActivatedSubmit());
+      if (control->IsSuccessfulSubmitButton()) {
+        submit_button = control;
+        break;
+      }
+    }
+  }
+
+//...
+```
+このように動的にボタンが追加されるケースがあり得るとのことだ。\
+イメージとしてはこんな感じになる。
+```js
+form.addEventListener('submit', function() {
+  if (!form.querySelector('input[type="submit"]')) {
+    const submitButton = document.createElement('input');
+    submitButton.type = 'submit';
+    form.appendChild(submitButton);
+  }
+});
+```
+
+
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+// 実際のフォーム送信を処理するオブジェクトを生成する。
+  FormSubmission* form_submission =
+      FormSubmission::Create(this, attributes_, event, submit_button);
+  // 生成に失敗した場合は終了する。
+  if (!form_submission) {
+    // Form submission is not allowed for some NavigationPolicies, e.g. Link
+    // Preview. If an user triggered such user event for form submission, just
+    // ignores it.
+    return;
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // 送信メソッドがdialogの場合（KDialogMethod）、SubmitDialog関数を呼び出す。
+  if (form_submission->Method() == FormSubmission::kDialogMethod) {
+    SubmitDialog(form_submission);
+    return;
+  }
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // メソッドがpostまたはgetの場合
+  DCHECK(form_submission->Method() == FormSubmission::kPostMethod ||
+         form_submission->Method() == FormSubmission::kGetMethod);
+  DCHECK(form_submission->Data());
+
+  // アクションURLが空の場合はメソッドを終了。
+  if (form_submission->Action().IsEmpty())
+    return;
+//...
+```
+```cpp
+// void HTMLFormElement::ScheduleFormSubmission
+// ...
+  // スケジューラーを取得する。
+  FrameScheduler* scheduler = GetDocument().GetFrame()->GetFrameScheduler();
+
+  if (auto* target_local_frame = DynamicTo<LocalFrame>(target_frame)) {
+    // ターゲットのLocalFrameでナビゲーションが許可されていない場合、関数を即座にリターン
+    if (!target_local_frame->IsNavigationAllowed())
+      return;
+
+    // Cancel parsing if the form submission is targeted at this frame.
+    // フォーム送信が現在のフレームをターゲットにしており、アクションプロトコルがJavaScriptでない場合、現在のフレームドキュメントのパーシングをキャンセル
+    if (target_local_frame == GetDocument().GetFrame() &&
+        !form_submission->Action().ProtocolIsJavaScript()) {
+      target_local_frame->GetDocument()->CancelParsing();
+    }
+
+    // Use the target frame's frame scheduler. If we can't due to targeting a
+    // RemoteFrame, then use the frame scheduler from the frame this form is in.
+    // ターゲットフレームのFrameSchedulerを使用。
+    // ターゲットフレームがRemoteFrameで使用できない場合は、現在のフォームが属するフレームのFrameSchedulerを使用
+    scheduler = target_local_frame->GetFrameScheduler();
+
+    // Cancel pending javascript url navigations for the target frame. This new
+    // form submission should take precedence over them.
+    // ターゲットフレームに対してペンディング中のJavaScript URLナビゲーションをキャンセル。
+    // この新しいフォーム送信がそれらよりも優先されるべきである。
+    target_local_frame->GetDocument()->CancelPendingJavaScriptUrls();
+
+    // Cancel any pre-existing attempt to navigate the target frame which was
+    // already sent to the browser process so this form submission will take
+    // precedence over it.
+    // 既にブラウザプロセスに送信された、ターゲットフレームをナビゲートしようとする既存の試みをキャンセル
+    // これにより、このフォーム送信がそのナビゲーションよりも優先権を持つようになる。
+    target_local_frame->Loader().CancelClientNavigation();
+  }
+
+  // フォーム送信をスケジュールし、結果をcancel_last_submission_に保存。
+  cancel_last_submission_ =
+      target_frame->ScheduleFormSubmission(scheduler, form_submission);
+}
+
+//...
+```
+
+GET、POSTの場合を追跡してみると、最終的に
+Frame::ScheduleFormSubmission関数を呼び出すことになる。
+
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/frame.cc;l=561;bpv=1;bpt=1?q=FormSubmission::Navigate&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2F
+third_party/blink/renderer/core/frame/frame.cc
+Frame::ScheduleFormSubmission
+
+```cpp
+// FrameSchedulerとFormSubmissionのポインタを受け取る。
+base::OnceClosure Frame::ScheduleFormSubmission(
+    FrameScheduler* scheduler,
+    FormSubmission* form_submission) {
+  // PostCancellableTaskを通じてFormSubmission::Navigateを実行するタスクをスケジュール
+  form_submit_navigation_task_ = PostCancellableTask(
+      // DOM操作のためにTaskRunnerを取得する。
+      *scheduler->GetTaskRunner(TaskType::kDOMManipulation),
+      FROM_HERE,
+      // WTF::BindOnceを通じてFormSubmission::Navigateを呼び出すコールバックを生成
+      WTF::BindOnce(&FormSubmission::Navigate,
+      // WeakPersistentでFormSubmissionをラップする。
+      // FormSubmissionが削除されても問題がないようにするため。
+                    WrapPersistent(form_submission)));
+  // スケジュールされたタスクのバージョンを追跡するためにバージョンをインクリメントする。
+  form_submit_navigation_task_version_++;
+
+  // キャンセルハンドラを生成する。
+  return WTF::BindOnce(&Frame::CancelFormSubmissionWithVersion,
+                       WrapWeakPersistent(this),
+                       form_submit_navigation_task_version_);
+}
+```
+WTFはWeb Template Frameworkの略で、Chromiumで使用されるテンプレートライブラリである。\
+後で実行できるようにコールバックオブジェクトを作成する役割を持つ。名前の通り、一度だけ実行できるコールバックを作成してくれる。
+
+これでFormSubmission::NavigateはFrameSchedulerによってスケジュールされた。
+ブラウザはスケジュールされた時点でFormSubmission::Navigateを実行することになる。
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/loader/form_submission.cc;l=388;bpv=1;bpt=1?q=FormSubmission::Navigate&sq=&ss=chromium%2Fchromium%2Fsrc:third_party%2Fblink%2Frenderer%2Fcore%2F
+third_party/blink/renderer/core/loader/form_submission.cc
+FormSubmission::Navigate
+
+```cpp
+void FormSubmission::Navigate() {
+  // FrameLoadRequestオブジェクトを生成する。
+  // このオブジェクトはナビゲーションリクエストを表す。
+  // 引数には出発点のwindow（origin_window_）、
+  // リクエストに対するリソースリクエスト情報（resource_request_）を受け取る。
+  FrameLoadRequest frame_request(origin_window_.Get(), *resource_request_);
+
+  // ナビゲーションポリシーを設定する。（新しいタブ、現在のタブなど）
+  frame_request.SetNavigationPolicy(navigation_policy_);
+
+  // クライアントリダイレクト理由を設定する。
+  // クライアント側リダイレクトによって発生したかどうか、そしてその理由が何かを示す。
+  frame_request.SetClientRedirectReason(reason_);
+
+  // ソース要素をsubmitter_に設定する。（フォーム送信ボタンのような）
+  frame_request.SetSourceElement(submitter_);
+
+  // トリガーイベント情報を設定する。
+  // ナビゲーションをトリガーしたイベントに関する情報を示す。
+  frame_request.SetTriggeringEventInfo(triggering_event_info_);
+  frame_request.SetInitiatorFrameToken(initiator_frame_token_);
+  // ナビゲーション状態維持ハンドルを設定する。
+  // フレームのナビゲーション状態がナビゲーション中に維持されるように
+  frame_request.SetInitiatorNavigationStateKeepAliveHandle(
+      std::move(initiator_navigation_state_keep_alive_handle_));
+
+  // ソースロケーションを設定する。
+  frame_request.SetSourceLocation(std::move(source_location_));
+
+  // ターゲットフレームが存在するが、ページがない場合は終了する。
+  if (target_frame_ && !target_frame_->GetPage())
+    return;
+
+  // ターゲットフレームが存在し、ページが存在する場合
+  if (target_frame_)
+    // ターゲットフレームに対するナビゲーションを実行する。
+    target_frame_->Navigate(frame_request, load_type_);
+}
+```
+
+このNavigate関数はLocalFrame::Navigateを呼び出すことになる。
+
+https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/local_frame.cc;bpv=1;bpt=0
+third_party/blink/renderer/core/frame/local_frame.cc
+LocalFrame::Navigate
+
+```cpp
+void LocalFrame::Navigate(FrameLoadRequest& request,
+                          WebFrameLoadType frame_load_type) {
+  if (HTMLFrameOwnerElement* element = DeprecatedLocalOwner())
+    element->CancelPendingLazyLoad();
+
+  // ナビゲーション速度リミッターが続行可能か確認する。
+  if (!navigation_rate_limiter().CanProceed())
+    return;
+
+  TRACE_EVENT2("navigation", "LocalFrame::Navigate", "url",
+               request.GetResourceRequest().Url().GetString().Utf8(),
+               "load_type", static_cast<int>(frame_load_type));
+
+  if (request.ClientRedirectReason() != ClientNavigationReason::kNone)
+    probe::FrameScheduledNavigation(this, request.GetResourceRequest().Url(),
+                                    base::TimeDelta(),
+                                    request.ClientRedirectReason());
+
+  if (NavigationShouldReplaceCurrentHistoryEntry(request, frame_load_type))
+    frame_load_type = WebFrameLoadType::kReplaceCurrentItem;
+
+  const ClientNavigationReason client_redirect_reason =
+      request.ClientRedirectReason();
+  loader_.StartNavigation(request, frame_load_type);
+
+  if (client_redirect_reason != ClientNavigationReason::kNone)
+    probe::FrameClearedScheduledNavigation(this);
+}
+
+```
+最終的にStartNavigationを通じてナビゲーションを開始することになる。
+
+
+
+
+```html
+<form action="https://example.com" method="post">
+  <input type="text" name="name" />
+  <input type="submit" value="Submit" />
+</form>
+```

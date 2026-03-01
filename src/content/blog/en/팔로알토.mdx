@@ -1,0 +1,57 @@
+---
+title: "Palo Alto"
+description: "It's already day three. Sunday has ended back in Korea, but here it's only around 10 AM on Sunday morning. I wanted to jot down notes every night before bed, but between battling jet lag, sorting through footage, and finally unwinding with a shower, I kept falling asleep."
+author: "Yongseok"
+categories: ["essay"]
+date: "2024-05-12T18:19:25.095Z"
+series: "미국 여행기"
+---
+
+It's already day three. Sunday has ended back in Korea, but here it's only around 10 AM on Sunday morning.
+I wanted to jot down notes every night before bed,
+but between battling jet lag, sorting through footage, and finally unwinding with a shower, I kept falling asleep.
+
+After arriving in Mountain View, I spent a day in San Francisco yesterday, and on the way back I got off at Palo Alto.
+
+San Francisco was beautiful, but walking alone through the empty streets, there were definitely moments where I felt on edge.
+The south side, on the other hand, has a suburban feel — cleaner and safer somehow, which puts me at ease. (Also, I see way more Koreans here than I expected.)
+
+<figure>
+<img src="/post/images/paloalto/paloalto.jpeg" />
+<figcaption>At the Blue Bottle in Palo Alto</figcaption>
+</figure>
+
+I got off the Caltrain around 9 AM, grabbed a quick bite, and noticed a Blue Bottle nearby, so I stopped in.
+
+I can never really tell the difference in coffee, and I didn't go to the one on Teheran-ro in Gangnam all that often — and drinking it here wasn't magically different either.
+But the familiar taste from Teheran-ro overlapping with this place gave me a strange feeling.
+
+It felt like I should be crossing the street and walking into the POSCO Tower... that kind of sensation.
+
+I figured I'd transfer some photos to my phone while I was at it, and saw a chance to squeeze in a commit here too, so I opened up my laptop.
+
+I used to use Android File Share to transfer from Mac to Galaxy, but at some point it just stopped working.
+So I had been uploading to the cloud and downloading from there, but with hotel Wi-Fi it was painfully slow to upload and download. While searching for alternatives, I discovered you can push files via adb.
+
+```shell
+❯ for file in sfo_2*.mp4; do adb push --sync "$file" /sdcard/download/sanfran2; done
+sfo_2.mp4: 0 files pushed, 1 skipped.
+sfo_2_00300048.mp4: 1 file pushed, 0...5.3 MB/s (197287814 bytes in 5.323s
+sfo_2_00300432.mp4: 0 files pushed, 1 skipped.
+sfo_2_00300552.mp4: 0 files pushed, 1 skipped.
+sfo_2_00300960.mp4: 0 files pushed, 1 skipped.
+sfo_2_00301440.mp4: 0 files pushed, 1 skipped.
+```
+
+Just like that, I was able to transfer files using `adb push --sync`. The `--sync` flag checks whether the file has changed and skips it if it hasn't.
+I only found out about this option because the transfer got cut off midway.
+
+https://developer.android.com/tools/adb?hl=ko#copyfiles
+
+
+Time to leave one commit worth $7 + alpha (the price of a cookie) and head back.
+
+It's about to be Monday in Korea, which means I need to update the lunch menu for the company lunch bot, and I'm worried.
+I've never missed a full week before, so I'm worried the lunch bot's retention might drop... I should have brought my work laptop.
+
+I'm running low on mobile data, so it's time to disappear.

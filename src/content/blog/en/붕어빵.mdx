@@ -1,0 +1,154 @@
+---
+title: "Fish-shaped Bread"
+description: "There's a fish-shaped bread cart near my place that sells them for 1,000 won each. Let me organize the component I made the other day. It started as a Lit component wrapping YouTube embeds, taking two properties: src for the YouTube link and caption for the caption text."
+author: "Yongseok"
+pubDate: "Jan 17 2024"
+date: "2024-01-17"
+categories: ["dev"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+# There's a fish-shaped bread cart near my place
+
+They sell them for 1,000 won each.
+
+# Let me organize the component I made the other day
+
+It started as a Lit component I made to conveniently wrap YouTube embeds.
+It takes two properties: `src` for the YouTube link and `caption` for the caption text.
+
+```typescript
+// src/components/lit/youtube-element.ts
+import { LitElement, html, css } from "lit";
+import { customElement, property } from "lit/decorators.js";
+
+@customElement("youtube-element")
+export class YouTube extends LitElement {
+  static styles = css`
+      // ... omitted
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  get videoId() {
+    return this.extractVideoId(this.src);
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+
+  render() {
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src="https://www.youtube.com/embed/${this.videoId}"
+            title="YouTube Video Player"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+While writing another post, I realized I also needed a similar component for embedding Google Maps.
+So this time, I generalized the YouTube component into an abstract class.
+
+It takes the same `src` and `caption` properties. Additionally, it accepts `iframeAttributes` for the iframe's attributes.
+
+```typescript
+// src/components/lit/figure-element.ts
+import { LitElement, css, html } from "lit";
+import { property } from "lit/decorators.js";
+
+export abstract class FigureElement extends LitElement {
+  static styles = css`
+    // ... omitted
+  `;
+
+  @property()
+  src?: string;
+
+  @property()
+  caption?: string;
+
+  abstract get iframeSrc(): string;
+
+  abstract get iframeAttributes(): Partial<HTMLIFrameElement>;
+
+  render() {
+    const attrs = this.iframeAttributes;
+    return html`
+      <figure>
+        <div class="iframe__wrapper">
+          <iframe
+            src=${this.iframeSrc}
+            .title=${attrs.title || ""}
+            .allow=${attrs.allow || ""}
+            .allowfullscreen=${attrs.allowFullscreen || ""}
+            .loading=${attrs.loading || ""}
+            .referrerpolicy=${attrs.referrerPolicy || ""}
+          ></iframe>
+        </div>
+        ${this.caption ? html`<figcaption>${this.caption}</figcaption>` : ""}
+      </figure>
+    `;
+  }
+}
+```
+
+Using this abstract class, I rewrote the YouTube component like this:
+
+```typescript
+import { customElement } from "lit/decorators.js";
+import { FigureElement } from "./common/figure-element";
+
+@customElement("youtube-element")
+export class YouTube extends FigureElement {
+  get iframeSrc() {
+    return `https://www.youtube.com/embed/${this.extractVideoId(this.src)}`;
+  }
+
+  get iframeAttributes(): Partial<HTMLIFrameElement> {
+    return {
+      title: "YouTube Video Player",
+      allow:
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+      loading: "lazy",
+      referrerPolicy: "no-referrer-when-downgrade",
+    };
+  }
+
+  extractVideoId(url?: string) {
+    if (!url) return "";
+    const regExp = /^https:\/\/youtu\.be\/([a-zA-Z0-9_-]+)/;
+    const match = url.match(regExp);
+    return match ? match[1] : "";
+  }
+}
+```
+
+The code itself has become more concise, but it's harder to tell what this component actually does just by looking at it.
+The rendering logic is hidden away, which makes it even more opaque. With React, JSX at least gives you a sense that something is being rendered,
+but building Lit components this way makes the rendering subject feel unclear.
+
+How can I make a prettier Lit component...
+
+
+
+
+<YouTube src="https://youtu.be/-om5KeRqfq4?si=H-PkLgafhbh2wIgC"
+  caption="Creep - Radiohead"
+/>

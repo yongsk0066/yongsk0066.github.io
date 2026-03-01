@@ -1,0 +1,244 @@
+---
+title: "HTML element attributesについて調べてみよう"
+description: "この発表の内容の一部を補足して整理してみた。React.HTMLAttributes<HTMLButtonElement>、React.HTMLProps<HTMLButtonElement>、JSX.IntrinsicElements['button']、React.ButtonHTMLAttributes<HTMLButtonElement>"
+author: "Yongseok"
+pubDate: "2024-03-01"
+date: "2024-03-01"
+categories: ["react"]
+heroImage: "/blog-placeholder-3.jpg"
+---
+import YouTube from '@components/embeds/YouTube.astro';
+
+
+<YouTube src="https://youtu.be/z2q1Hs_Ok24?si=CGN522KjVXSTZhVS&t=172" />
+
+この発表の内容の一部を補足して整理してみた。
+
+```ts
+React.HTMLAttributes<HTMLButtonElement>
+
+React.HTMLProps<HTMLButtonElement>
+
+JSX.IntrinsicElements['button']
+
+React.ButtonHTMLAttributes<HTMLButtonElement>
+
+React.ComponentProps<'button'>
+
+React.ComponentPropsWithRef<'button'>
+
+React.ComponentPropsWithoutRef<'button'>
+```
+
+
+上記の多くの型... これらはすべてbuttonに対する型を表している。\
+作業していると、たまにこれらを拡張して使う必要があるケースに出くわすが、どれを使えばいいのだろうか？\
+一つずつ見ていこう。
+
+
+## 1. `React.HTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface HTMLAttributes<T> extends AriaAttributes, DOMAttributes<T> {
+  // React-specific Attributes
+
+  // Standard HTML Attributes
+
+  // RDFa Attributes (RDFaについてはまた別の機会に書いてみよう)
+}
+
+interface DOMAttributes<T> {
+  children?: ReactNode | undefined;
+  // ...
+  // event handlers...
+}
+```
+ジェネリクスで受け取り、DOMAttributesに拡張される。\
+全体的に多くのHTML属性を含んでいるが、特定のタグに対する具体的な型は提供できない。
+
+```tsx
+interface ButtonProps extends React.HTMLAttributes<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌ エラー: 'type'プロパティはHTMLButtonElementに存在しません。
+  const isSubmit = props.type === 'submit';
+  // ...
+}
+```
+
+## 2. `React.HTMLProps<HTMLButtonElement>`
+
+https://github.com/DefinitelyTyped/DefinitelyTyped/blob/2bcc7e759889c24eff2891949c18dcabfc38d888/types/react/index.d.ts#L2302
+```ts
+interface HTMLProps<T> extends AllHTMLAttributes<T>, ClassAttributes<T> {
+}
+
+interface AllHTMLAttributes<T> extends HTMLAttributes<T> {
+  //...
+  type?: string | undefined;
+  // ...
+}
+interface ClassAttributes<T> extends RefAttributes<T> {
+}
+
+```
+
+`AllHTMLAttributes`のエイリアスとして、すべてのHTML属性を含んでいる。\
+そのため型自体も多く、特定のタグに対する型も提供されるが、あまり具体的でない型になってしまう。
+
+```tsx
+interface ButtonProps extends React.HTMLProps<HTMLButtonElement> {}
+
+function Button(props: ButtonProps) {
+  // ❌
+  // type?: 'button' | 'submit' | 'reset' | undefined;
+  //
+  // 'type'プロパティは存在するが、型が不十分です。
+  // type?: string | undefined;
+  const type = props.type;
+  // ...
+}
+```
+
+## 3. `JSX.IntrinsicElements['button']`
+
+```ts
+interface IntrinsicElements {
+  // HTML
+  // ...
+  button: React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>;
+}
+
+type DetailedHTMLProps<E extends HTMLAttributes<T>, T> = ClassAttributes<T> & E;
+```
+
+TypeScriptのグローバルスコープにある型で、使用可能なネイティブJSXエレメントの型を提供する。\
+そのため「組み込みエレメント」とも呼ばれる。\
+
+しかし、この型はインターフェースの拡張ができない。
+
+```tsx
+// ❌ エラー: インデックスアクセス型は拡張できません。
+interface ButtonProps extends JSX.IntrinsicElements['button'] {}
+```
+
+こうすれば一応できるが..
+
+```tsx
+interface ButtonProps extends NonNullable<JSX.IntrinsicElements['button'], {}> {}
+
+```
+
+## 4. `React.ButtonHTMLAttributes<HTMLButtonElement>`
+
+```ts
+interface ButtonHTMLAttributes<T> extends HTMLAttributes<T> {
+    disabled?: boolean | undefined;
+    form?: string | undefined;
+    formAction?:
+        | string
+        | DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS[
+            keyof DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS
+        ]
+        | undefined;
+    formEncType?: string | undefined;
+    formMethod?: string | undefined;
+    formNoValidate?: boolean | undefined;
+    formTarget?: string | undefined;
+    name?: string | undefined;
+    type?: "submit" | "reset" | "button" | undefined;
+    value?: string | readonly string[] | number | undefined;
+}
+```
+
+上記の`JSX.IntrinsicElements['button']`の内部で確認できた型で、
+私たちが必要とするものを提供してくれる。ただし、もっと便利な型がある。
+
+ここに非常に面白い型がある。\
+[`DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_FORM_ACTIONS`](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/c76c419153bf70858ab82843483657ae1bf11f17/types/react/canary.d.ts#L90)\
+RSC（React Server Components）でform actionをサポートするための型だ。\
+現在Canaryチャンネルでのみ使用可能だ。型名の通り、今使うとクビになるかもしれない。
+
+ここでは具体的に掘り下げないが、以下の資料を見ればより詳しく知ることができるだろう。
+- https://react.dev/reference/react-dom/components/form
+- https://github.com/DefinitelyTyped/DefinitelyTyped/pull/66928
+- https://github.com/facebook/react/pull/27459
+- https://github.com/facebook/react/pull/27460
+
+<aside>
+React's extensions to the formAction prop are currently only available in React's Canary and experimental channels. In stable releases of React, formAction works only as a built-in browser HTML component. Learn more about React's release channels here.
+</aside>
+
+
+## 5. `React.ComponentProps<'button'>`
+https://react-typescript-cheatsheet.netlify.app/docs/react-types/componentprops/
+
+```ts
+type ComponentProps<T extends keyof JSX.IntrinsicElements | JSXElementConstructor<any>> = T extends
+    JSXElementConstructor<infer P> ? P
+    : T extends keyof JSX.IntrinsicElements ? JSX.IntrinsicElements[T]
+    : {};
+```
+
+まず結論から言うと、`ButtonHTMLAttributes`と同等と言えるが、より短く簡潔だ。使わない理由がない。
+
+型が少し複雑だが、順を追って見ていこう。
+
+- 第一条件: `T extends JSXElementConstructor<infer P>` — `T`が`JSXElementConstructor<infer P>`に割り当て可能か？\
+つまり`T`がコンポーネントコンストラクタ型であれば、コンストラクタが受け取るprops型である`P`を返す。
+- 第二条件: 第一条件を満たさず、`T extends keyof JSX.IntrinsicElements` — `T`が`JSX.IntrinsicElements`に割り当て可能であれば、\
+つまり`T`が`JSX.IntrinsicElements`のキーの一つであれば、`JSX.IntrinsicElements[T]`を返す。
+
+`React.ComponentProps<'button'>`はJSXエレメントを生成する関数やクラスの型ではないため、第二条件に該当する。
+そのため`JSX.IntrinsicElements['button']`を返す。
+
+`JSX.IntrinsicElements['button']`はさらに`React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>`を返す。
+結局、必要なものをすべて含んでいる。
+
+第一条件に該当するケースは以下の通りだ。
+
+```tsx
+type Props = { name: string; age: number; };
+type Component = (props: Props) => (<div>...</div>);
+type ComponentProps = React.ComponentProps<typeof Component>;
+// ComponentProps = { name: string; age: number; }
+```
+
+この構造により、柔軟に使用できる。
+
+## 6. `React.ComponentPropsWithRef<'button'>`, `React.ComponentPropsWithoutRef<'button'>`
+
+
+```ts
+type ComponentPropsWithRef<T extends ElementType> = T extends (new(props: infer P) => Component<any, any>)
+    ? PropsWithoutRef<P> & RefAttributes<InstanceType<T>>
+    : PropsWithRef<ComponentProps<T>>;
+
+type ComponentPropsWithoutRef<T extends ElementType> = PropsWithoutRef<ComponentProps<T>>;
+
+type PropsWithoutRef<P> =
+    P extends any ? ("ref" extends keyof P ? Omit<P, "ref"> : P) : P;
+type PropsWithRef<P> =
+    "ref" extends keyof P
+        ? P extends { ref?: infer R | undefined }
+            ? string extends R ? PropsWithoutRef<P> & { ref?: Exclude<R, string> | undefined }
+            : P
+        : P
+        : P;
+```
+
+
+
+### `React.ComponentPropsWithRef<'button'>`
+
+こちらも型が少し複雑だが、順を追って見ていこう。
+
+- 第一条件: `T extends (new(props: infer P) => Component<any, any>)` — `T`が`new(props: infer P) => Component<any, any>`に割り当て可能か？\
+`T`がクラスコンポーネントのコンストラクタに割り当て可能であれば、props型からrefを除いた残りの型と`RefAttributes<InstanceType<T>>`を合わせた型を返す。
+- そうでなければ、`PropsWithRef<ComponentProps<T>>`を返す。
+
+`PropsWithRef`はさらに複雑だが、簡単にまとめると、refが文字列型でない場合に該当するrefの型を維持または調整して返す。
+
+## 結論
+
+`React.ComponentProps<'button'>`を使えば、簡潔かつ柔軟に使用できる。

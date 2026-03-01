@@ -1,0 +1,36 @@
+---
+title: "Reactパフォーマンス測定とAI"
+description: "Reactパフォーマンス測定とAI"
+author: "Yongseok"
+categories: ["react"]
+date: "2026-01-25T04:42:26.224Z"
+heroImage: "/post/images/react-performance-track-with-ai/thumb.png"
+draft: true
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import YouTube from "@components/embeds/YouTube.astro";
+
+## はじめに
+
+昨年（2025年）、React Devtoolsの機能が強化された。コンポーネントのレンダリングやスケジューラに関する情報を、
+Chrome DevtoolsのPerformanceタブで一緒に確認できるようになった。
+
+<LinkPreview src="https://react.dev/reference/dev-tools/react-performance-tracks" />
+<YouTube src="https://youtu.be/CclO4tPoebs?si=Wh87iqqdCO9TFxrE" />
+
+Chromeチームが、Chromeを操作しDevtoolsの情報にアクセスできるChrome-devtools-mcpを公開した。
+これにより、AIがパフォーマンス関連の測定を行えるようになった。
+
+<LinkPreview src="https://github.com/ChromeDevTools/chrome-devtools-mcp" />
+
+Claude Codeのような開発を支援するさまざまなAIツールが登場した。これらのAIはCLI上で動作しながら、Reactのコードを書いてくれたり、開発サーバーを起動したりできる。
+MCPのようなツールも活用できる。
+
+上記の3つを一度に活用することはできないだろうか？ そんな考えが浮かんだ。AIがChrome DevTools MCPにアクセスでき、Chrome DevToolsのPerformanceにReactのレンダリングやスケジューリング情報が表示されるなら、AIがコードを書きつつ、アプリケーションの詳細なReactパフォーマンス指標も確認できるのではないだろうか？ この3つをつなげるには何が必要だろう？
+
+結論から言うと、chrome-devtools-mcpを拡張することで、MCPを通じてAIにReact Devtoolsの情報を見せることができる！
+
+ここに至るまでにどのようなことを理解する必要があるのか、一緒に見ていこう。
+
+## Performance Trackとは何か？

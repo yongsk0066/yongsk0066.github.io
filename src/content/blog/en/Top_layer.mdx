@@ -1,0 +1,181 @@
+---
+title: "Top Layer Animations"
+description: "Elements rendered above all other elements. Supported elements: `<dialog>`, popover attribute `<div popover=auto>`. The goal is to make these elements animatable."
+author: "Yongseok"
+pubDate: "Oct 22 2023"
+date: "2023-10-22"
+categories: ["css"]
+---
+
+# Top Layer Animation
+
+## References
+
+<aside>
+### Main References
+- [Lightning Talks - Session 1 [BlinkOn 18]](https://youtu.be/ycWhFbKSDEI?si=oHgPVwuUx9paC2oU&t=1728)
+
+### Additional References
+
+- [Explainer: improved CSS-triggered entry and exit animations](https://github.com/chrishtr/rendering/blob/master/entry-exit-animations.md#example-code)
+
+- [Chrome Platform Status - @starting-style Rule](https://chromestatus.com/feature/4515377717968896)
+
+- [Chrome Platform Status - overlay property](https://chromestatus.com/feature/5138724910792704)
+
+- [Four new CSS features for smooth entry and exit animations - Chrome for Developers](https://developer.chrome.com/blog/entry-exit-animations/)
+
+</aside>
+
+## Top Layer
+
+- Elements that render above all other elements
+- Supported elements
+  - `<dialog>`
+  - popover attribute `<div popover=auto>`
+
+The goal is to make these elements animatable.
+
+## Entry Animations
+
+### Problem
+
+Animations starting from `display: none` do not work. Since there are no computed styles, it is impossible to interpolate from 0 to 1 as shown in the example.
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* Does not apply. Because :not([open]) applies display:none */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### Solution
+
+The `@starting-style` rule allows you to set initial values.
+
+```css
+dialog {
+  transition: opacity 1s;
+}
+
+dialog[open] {
+  @starting-style {
+    opacity: 0;
+  }
+  opacity: 1;
+}
+```
+
+## Exit Animations
+
+### Problem
+
+- The display property cannot be animated
+- Transitions cannot be applied to discrete properties
+
+```css
+dialog {
+  transition: opacity 1s;
+  /* Does not apply. For a similar reason as above — the moment [open] is removed, it becomes display:none */
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+### Solution
+
+- `transition-behavior: allow-discrete;` has been added
+- Enables animation of the display property and other discrete properties
+
+```css
+dialog {
+	/* transition-behavior : allow-discrete; */
+	transition: opacity 1s, **display 1s allow-discrete;**
+	opacity: 0;
+}
+
+dialog[open] {
+	opacity:1;
+}
+```
+
+### Layer Issue During Animation
+
+- During animation, the element is no longer in the top layer.
+  - Other top layer elements or z-index values can block the animation.
+- User-agent styles will not be applied.
+  - This can cause the position to shift suddenly, or the backdrop to stop working.
+
+### Solution
+
+- A new overlay property has been added
+  - It allows elements to remain in the Top Layer during animation.
+
+```css
+dialog {
+  transition:
+    opacity 1s,
+    * * overlay 1s allow-discrete * *,
+    display 1s allow-discrete;
+  opacity: 0;
+}
+
+dialog[open] {
+  opacity: 1;
+}
+```
+
+## @starting-style
+
+[css-transition-2 - defining-before-change-style](https://drafts.csswg.org/css-transitions-2/#defining-before-change-style)
+
+### Core Concepts
+
+- @starting-style is a grouping rule. It is used to compute styles for elements that have not had their before-change style set.
+- @starting-style only applies to certain elements — specifically, elements that were not rendered or were not part of the DOM during the previous style change event.
+- If an element does not have a before-change style for a given style change event, the starting style is used in place of the before-change style.
+
+### Example
+
+On initial render, transition the h1's background-color from transparent to green.
+
+```css
+h1 {
+  transition: background-color 1.5s;
+  background-color: green;
+}
+@starting-style {
+  h1 {
+    background-color: transparent;
+  }
+}
+```
+
+## The overlay Property
+
+[css-overflow-4 - overlay](https://drafts.csswg.org/css-position-4/#overlay)
+
+The `overlay` property determines whether an element that is in the Top Layer is actually rendered in the Top Layer.
+
+### Property Values
+
+none: The element is not rendered in the Top Layer.
+auto: If the element is in the Top Layer, it is rendered in the Top Layer.
+
+### Characteristics
+
+- overlay is a somewhat unusual property — it can only be set by the user agent, not by authors.
+- Through transitions, you can control the timing of overlay value changes.
+- The auto value of overlay does not animate continuously but changes in discrete steps (instant change).
+  - The behavior of overlay is determined by the progress value p of the animation:
+    When p is between 0 and 1: the element is rendered in the Top Layer (i.e., the overlay value remains auto).
+    When p is a value other than 0 or 1: the overlay value is determined by the start or end point of the animation.
+    Thanks to this behavior, the element remains in the Top Layer for most of the animation duration.

@@ -1,0 +1,24 @@
+---
+title: "Cancelling Axios Requests [2]"
+description: "In the previous post, we explored how a cancelToken gets subscribed when passed into a request's config. This time, let's look at the CancelToken implementation and how cancellation actually happens."
+author: "Yongseok"
+pubDate:  "2024-01-31"
+date: "2024-01-31"
+categories: ["javascript"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<YouTube src="https://youtu.be/AKflm82wVLk?si=i0Gx3DLVGIUpIS5b" />
+
+## Cancelling Axios Requests [2]
+
+In [Cancelling Axios Requests [1]](http://localhost:4321/blog/axios-%EC%9A%94%EC%B2%AD%EC%9D%84-cancel%ED%95%B4%EB%B3%B4%EC%9E%90-1/), we explored how a cancelToken gets subscribed when passed into a request's config.
+
+This time, let's look at the CancelToken implementation and how cancellation actually happens.
+
+First, let's examine the CancelToken implementation.
+https://github.com/axios/axios/blob/a52e4d9af51205959ef924f87bcf90c605e08a1e/lib/cancel/CancelToken.js#L12
+```js
+// lib/cancel/CancelToken.js
+```https://chat.openai.com/c/b52fef78-f0c7-4150-bf54-1837254253f8

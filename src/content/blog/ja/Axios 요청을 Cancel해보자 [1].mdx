@@ -1,0 +1,416 @@
+---
+title: "Axiosリクエストをキャンセルしてみよう [1]"
+description: "Axiosリクエストをキャンセルしてみよう。axiosでリクエストを送る際にcancelTokenを渡すとキャンセルできる。cancelTokenを渡すとどこに流れていくのだろうか？"
+author: "Yongseok"
+pubDate: "Jan 30 2024"
+date: "2024-01-30"
+categories: ["javascript"]
+---
+
+import YouTube from '@components/embeds/YouTube.astro';
+
+<YouTube src="https://youtu.be/K1pBEpFMDuY?si=m3eoY_QgiaANQGd5" />
+
+## Axiosリクエストをキャンセルしてみよう
+
+
+```js
+import axios from 'axios';
+
+const source = axios.CancelToken.source();
+
+axios.get('https://example.com', {
+  cancelToken: source.token
+});
+
+source.cancel('Operation canceled by the user.');
+```
+
+axiosでリクエストを送る際にcancelTokenを渡すとキャンセルできる。\
+cancelTokenを渡すとどこに流れていくのだろうか？
+
+axiosリクエストを構成する部分まで辿ってみよう...
+
+```js
+// lib/core/Axios.js
+class Axios {
+  constructor(instanceConfig) {
+    this.defaults = instanceConfig;
+    this.interceptors = {
+      request: new InterceptorManager(),
+      response: new InterceptorManager()
+    };
+  }
+
+  /**
+   * Dispatch a request
+   *
+   * @param {String|Object} configOrUrl The config specific for this request (merged with this.defaults)
+   * @param {?Object} config
+   *
+   * @returns {Promise} The Promise to be fulfilled
+   */
+  async request(configOrUrl, config) {
+    try {
+      return await this._request(configOrUrl, config);
+    } catch (err) {
+      if (err instanceof Error){
+      ...
+
+```
+requestメソッドを見ると、configOrUrlとconfigを引数として受け取っている。
+そしてthis._requestメソッドを呼び出している。
+_requestを見てみよう。
+
+---
+
+## _requestメソッド
+
+```js
+_request(configOrUrl, config) {
+  ...
+  // デフォルト設定とユーザー設定をマージしたり...
+  config = mergeConfig(this.defaults, config);
+  ...
+  // configにmethodの設定もする... なければデフォルト値としてgetを設定して...
+  config.method = (config.method || this.defaults.method || 'get').toLowerCase();
+  ...
+```
+### インターセプターのセットアップ
+インターセプターに関する設定も行う。
+```js
+// インターセプターに関する設定も行う...
+const requestInterceptorChain = []; // インターセプターチェーンを作成し
+let synchronousRequestInterceptors = true; // 同期的に実行するかどうかを設定する。
+this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) { // インターセプターを順に処理して
+  if (typeof interceptor.runWhen === 'function' && interceptor.runWhen(config) === false) { // runWhenが設定されていれば実行する。
+    return; // falseなら終了する。
+  }
+
+  synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor.synchronous; // 同期的に実行するかどうかを設定する。
+
+  requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected); // インターセプターチェーンにfulfilled、rejectedを追加する。
+});
+
+const responseInterceptorChain = []; // responseインターセプターチェーンを作成し
+this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) { // インターセプターを順に処理して
+  responseInterceptorChain.push(interceptor.fulfilled, interceptor.rejected); // インターセプターチェーンにfulfilled、rejectedを追加する。
+});
+```
+### requestInterceptorChainの実行
+
+```js
+// requestInterceptorChainを実行する。
+len = requestInterceptorChain.length; // インターセプターチェーンの長さを取得し
+
+let newConfig = config; // newConfigにconfigを代入し
+
+i = 0; // インデックスを0に設定して
+
+while (i < len) { // インデックスが長さより小さい間
+  const onFulfilled = requestInterceptorChain[i++]; // onFulfilledにrequestInterceptorChain[i++]を代入し
+  const onRejected = requestInterceptorChain[i++]; // onRejectedにrequestInterceptorChain[i++]を代入する。
+  try {
+    newConfig = onFulfilled(newConfig); // newConfigにonFulfilledを実行した結果を代入し
+  } catch (error) {
+    onRejected.call(this, error); // onRejectedを実行する。
+    break;
+  }
+}
+```
+
+### dispatchRequestの実行（実際にリクエストを送信するメソッド）
+
+```js
+// 実際にリクエストを送信するdispatchRequestを実行する。
+// 最終的に構成されたnewConfigをdispatchRequestに渡す。
+try {
+  promise = dispatchRequest.call(this, newConfig);
+} catch (error) {
+  return Promise.reject(error);
+}
+```
+### responseInterceptorChainの実行
+```js
+// responseInterceptorChainを実行する。
+i = 0; // インデックスを0に設定して
+len = responseInterceptorChain.length; // インターセプターチェーンの長さを取得し
+
+while (i < len) { // インデックスが長さより小さい間
+// promiseにresponseInterceptorChain[i++]、responseInterceptorChain[i++]を実行した結果を代入する。
+  promise = promise.then(responseInterceptorChain[i++], responseInterceptorChain[i++]);
+}
+
+return promise; // promiseを返す。
+}
+```
+おお... なかなかシンプルだ。
+2つのインターセプターがリクエストの前後で実行されているのが分かる。
+
+それでは、dispatchRequestを見てみよう。
+
+---
+
+## dispatchRequest
+
+このメソッドの前方に宣言された1つのメソッドがある。\
+`throwIfCancellationRequested`というメソッドがdispatchRequestの最初に実行される。\
+このメソッドはキャンセルが要求されていれば`CanceledError`をスローする。
+`throwIfRequested`の実装は以下の通りだ。
+
+```js
+// lib/core/dispatchRequest.js
+/**
+ * キャンセルが要求されていれば`CanceledError`をスローする。
+ *
+ * @param {Object} config  リクエストに使用する設定
+ *
+ * @returns {void}
+ */
+function throwIfCancellationRequested(config) { // キャンセルが要求されていれば`CanceledError`をスローする。
+  if (config.cancelToken) { // configにcancelTokenがあれば
+    config.cancelToken.throwIfRequested(); // throwIfRequestedを実行する。
+  }
+
+  if (config.signal && config.signal.aborted) { // configにsignalがありabortedがtrueなら
+    throw new CanceledError(null, config); // CanceledErrorをスローする。
+  }
+}
+
+/**
+ * 設定されたアダプターを使用してサーバーにリクエストを送信する。
+ *
+ * @param {object} config リクエストに使用する設定
+ *
+ * @returns {Promise} (履行されるPromiseオブジェクト)
+ */
+export default function dispatchRequest(config) {
+  throwIfCancellationRequested(config); // キャンセルが要求されていれば`CanceledError`をスローする。
+
+```
+もっと深く入ってみよう。
+
+### リクエストの準備
+
+```js
+export default function dispatchRequest(config) {
+  throwIfCancellationRequested(config); // キャンセルが要求されていれば`CanceledError`をスローする。
+
+  // リクエストヘッダーをAxiosHeadersオブジェクトに変換する。
+  config.headers = AxiosHeaders.from(config.headers);
+
+  // リクエストデータを変換する。
+  config.data = transformData.call(
+    config,
+    config.transformRequest
+  );
+
+  // 特定のメソッドに対するヘッダーを設定...
+  if (['post', 'put', 'patch'].indexOf(config.method) !== -1) {
+    config.headers.setContentType('application/x-www-form-urlencoded', false);
+  }
+  ...
+```
+
+リクエストのための設定をいくつか行っている。
+
+### アダプター
+
+アダプターはconfigオブジェクトに基づいて実際にHTTPリクエストを送信する場所だ。
+ブラウザではXMLHttpRequestやfetchを使い、Node.jsではhttpモジュールなどを使うことになる。
+
+getAdapterを通じて適切なアダプターを取得する。
+
+
+```js
+const adapter = adapters.getAdapter(config.adapter || defaults.adapter);
+return adapter(config).then(function onAdapterResolution(response) {
+  ...
+}, function onAdapterRejection(reason) {
+  ...
+});
+```
+アダプターを通じてリクエストが実行されるが、\
+成功すればonAdapterResolution、失敗すればonAdapterRejectionが実行される。
+
+#### onAdapterResolution
+
+
+
+```js
+throwIfCancellationRequested(config);
+response.data = transformData.call(config, config.transformResponse, response);
+response.headers = AxiosHeaders.from(response.headers);
+return response;
+```
+まずリクエストがキャンセルされたかどうかを確認し、\
+レスポンスデータを変換し、\
+レスポンスヘッダーをAxiosHeadersオブジェクトに変換する。
+そしてレスポンスを返す。
+
+#### onAdapterRejection
+
+```js
+function onAdapterRejection(reason) {
+  if (!isCancel(reason)) {
+    throwIfCancellationRequested(config);
+
+    // Transform response data
+    if (reason && reason.response) {
+      reason.response.data = transformData.call(
+        config,
+        config.transformResponse,
+        reason.response
+      );
+      reason.response.headers = AxiosHeaders.from(reason.response.headers);
+    }
+  }
+
+  return Promise.reject(reason);
+}
+```
+リクエストが失敗した場合、reasonを受け取って処理する。\
+エラーがキャンセルでなければ、リクエストがキャンセルされたかどうかを確認し、\
+レスポンスデータを変換する（ここで異なる点は、reason.responseを渡していることだ。リクエストが失敗したためresponseが存在しないからである）。\
+レスポンスヘッダーをAxiosHeadersオブジェクトに変換する。
+そしてPromise.reject(reason)を返す。
+
+ここまで来ると、だいたいどこでリクエストがリターンされrejectされるのかが分かる。
+
+では、アダプターを見てみよう。
+
+---
+
+## アダプター（Adapter）
+
+```js
+// lib/adapters/adapters.js
+const knownAdapters = {
+  http: httpAdapter,
+  xhr: xhrAdapter
+}
+```
+アダプターのマッピングも行い...
+
+```js
+export default {
+  getAdapter: (adapters) => {
+    // ...
+    return adapter;
+  },
+  adapters: knownAdapters
+}
+
+```
+適切なアダプターを見つけて返し、なければAxiosErrorをスローする。\
+ブラウザという前提で`xhrAdapter`に進んでみよう。
+
+---
+
+## xhrAdapter
+
+```js
+// lib/adapters/xhr.js
+const isXHRAdapterSupported = typeof XMLHttpRequest !== 'undefined';
+
+export default isXHRAdapterSupported && function (config) {
+    return new Promise(function dispatchXhrRequest(resolve, reject) {
+      ...
+```
+XMLHttpRequestかどうかを確認し、そうであれば関数を返す。
+
+```js
+  ...
+  // XMLHttpRequestインスタンスを生成する。
+  let request = new XMLHttpRequest();
+  ...
+```
+
+どんどん進んでいこう（この間にリクエストのための様々な設定を行っている）。
+我々が探していたcancelTokenがどこに流れたのかを見てみよう。
+
+```js
+    ...
+    if (config.cancelToken || config.signal) {
+      // Handle cancellation
+      onCanceled = cancel => {
+        if (!request) {
+          return;
+        }
+        reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+        request.abort();
+        request = null;
+      };
+
+      config.cancelToken && config.cancelToken.subscribe(onCanceled);
+      if (config.signal) {
+        config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+      }
+    }
+    ...
+
+    request.send(requestData || null);
+  });
+}
+```
+
+おお！ configに渡したcancelTokenがここで使われている。\
+詳しく見てみよう。
+
+リクエストに`cancelToken`や`signal`がある場合、キャンセルロジックを設定する。
+```js
+  if (config.cancelToken || config.signal) {
+    //...
+  }
+```
+onCanceledはリクエストがキャンセルされた時に実行される関数だ。\
+requestを確認し、rejectを行う。\
+この時、cancelがないかcancel.typeがあればCanceledErrorをスローし、そうでなければcancelをそのままスローする。\
+そしてrequestをabortし、requestをnullに設定する。
+
+```js
+  onCanceled = cancel => {
+    if (!request) {
+      return;
+    }
+    reject(!cancel || cancel.type ? new CanceledError(null, config, request) : cancel);
+    request.abort();
+    request = null;
+  };
+```
+
+cancelTokenがあればonCanceledを購読し、\
+signalがあればsignalにabortイベントを登録する。
+
+```js
+  config.cancelToken && config.cancelToken.subscribe(onCanceled);
+  if (config.signal) {
+    config.signal.aborted ? onCanceled() : config.signal.addEventListener('abort', onCanceled);
+  }
+```
+
+途中で飛ばした部分があるが、unsubscribeを行う部分だ。
+```js
+  function done() {
+    if (config.cancelToken) {
+      config.cancelToken.unsubscribe(onCanceled);
+    }
+
+    if (config.signal) {
+      config.signal.removeEventListener('abort', onCanceled);
+    }
+  }
+```
+リクエストが完了したらunsubscribeを行う。
+
+
+ここまでを通じて、cancelTokenのtokenがリクエストのconfigに入り、どこまで下っていき、\
+どのようにcancelが購読されるのかを辿ることができた。
+
+cancelとほぼ一緒に行動するものがある...！\
+signalというものだ。\
+signalについては次回また説明したいと思う。
+
+血糖値が下がって、記事の終盤になるにつれてうまく書けなくなってきた...\
+第2回ではCancelTokenについて、\
+第3回ではsignalについて見ていきたいと思う。

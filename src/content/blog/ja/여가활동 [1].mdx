@@ -1,0 +1,65 @@
+---
+title: "余暇活動"
+description: "Midjourneyのランディングページがとても気に入って、どんなライブラリを使っているのか調べていたら、クローニングした動画を見つけた。その方の作業を見ると、コード量はそれほど多くなかったので、自分でもクローニングしてみた。トランスフォームのロジックだけ少し分離して、パイプライン形式で入れられるようにした。作った後、Lit Elementでうまくラップした。"
+author: "Yongseok"
+pubDate: "2024-02-17"
+date: "2024-02-17"
+categories: ["dev"]
+---
+
+
+import YouTube from '@components/embeds/YouTube.astro';
+import AsciiElement from '../../../components/article/AsciiElement.astro';
+
+
+[Midjourneyのランディングページ](https://www.midjourney.com/home)がとても気に入って、どんなライブラリを使っているのか調べていたら、クローニングした動画を見つけた。
+
+<YouTube src="https://youtu.be/YCJgQI71jEE?si=KOp-YtU2n-yCZR8z" />
+
+この方の作業を見ると、コード量はそれほど多くなかったので、自分でもクローニングしてみた。
+
+トランスフォームのロジックだけ少し分離して、パイプライン形式で入れられるようにした。
+作った後、Lit Elementでうまくラップした。
+
+こんなことができる。
+
+### 基本
+
+<AsciiElement
+  transforms={[]}
+  />
+
+### Midjourneyスタイル spiral
+
+```tsx
+<AsciiElement
+  transforms={['spiral']} />
+```
+
+<AsciiElement
+  transforms={['spiral']}
+  />
+
+### spiral -> zoom -> wave
+
+```tsx
+<AsciiElement
+  transforms={['spiral', 'zoom', 'wave']}/>
+```
+
+<AsciiElement
+  transforms={['spiral', 'zoom', 'wave']}
+  />
+
+
+### しばらく待つと銀河の形になる
+
+<AsciiElement
+  transforms={['hurricane', 'spiral']}
+  />
+
+
+
+~もっといくつか追加しようとしたけど、これ以上入れるとブラウザが固まりそうだった...なのでここまでにしておく。~ \
+DOM数を少し減らしてみたら大丈夫になった。 \
+うまく管理して使えば面白そうだ。

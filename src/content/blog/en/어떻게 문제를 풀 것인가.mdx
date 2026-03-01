@@ -1,0 +1,115 @@
+---
+title: "How to Solve It?"
+description: "While visiting home during the Lunar New Year holiday, I found a book I had bought around my sophomore year of high school. The Korean edition is titled 'How to Solve It - Methods of Mathematical Thinking.' As I recall, I stumbled upon it on the Kyowoo-sa publisher's website while trying to buy a Calculus violin book."
+author: "Yongseok"
+pubDate: "2024-02-10"
+date: "2024-02-10"
+categories: ["essay"]
+heroImage: "/how_to_solve_it_placeholder.png"
+---
+
+
+import YouTube from '@components/embeds/YouTube.astro';
+import LinkPreview from '../../../components/embeds/LinkPreview.astro'
+
+While visiting home during the Lunar New Year holiday, I found a book I had bought around my sophomore year of high school.
+The Korean edition is titled *How to Solve It - Methods of Mathematical Thinking*.
+As I recall, I stumbled upon it on the Kyowoo-sa publisher's website while trying to buy a Calculus violin book.
+(The keyword "Kyowoo-sa" triggered the memory.) \
+At the time, I hadn't done any research on the book before buying it. I just remember being drawn to the title and vaguely hoping it might help me get better at solving problems.
+After that purchase, it sat untouched on my bookshelf.
+
+Nearly ten years later, I finally picked it up again.
+
+_There is a Korean edition as well, but the order of Chapter 3 is slightly different. Since the order doesn't affect the content, it shouldn't matter much. The English edition has Chapter 3 arranged alphabetically, while the Korean translator seems to have imposed their own semantic ordering._
+[Korean edition link](https://www.yes24.com/Product/Goods/325507)
+
+<LinkPreview
+  src="https://www.yes24.com/Product/Goods/325507" />
+
+
+# How to Solve It?
+
+I don't intend to summarize the entire book. That was never the point.
+I just wanted to write down my thoughts while reading it.
+
+The book's purpose is primarily pedagogical. On the surface, it may seem to deal only with mathematics, but it presents a methodology for asking questions and finding solutions to problems in general.
+The goal isn't simply to find a solution, but to develop problem-solving abilities through the process of generalization and abstraction.
+
+Extending this further, I believe the mathematical thinking methodology presented in this book can also be applied to software development.\
+The things we encounter while developing, the problems we face -- discovering a problem, defining it, and working through solutions follows a methodology similar to mathematical thinking.
+
+Sometimes we don't even know what the unknown is. Sometimes we lose sight of the goal. Multiple approaches may exist, and we may not know which one is optimal.
+
+In this book, the author approaches problems by asking a series of questions.
+
+In the book, these questions are exchanged between teacher and student, but in the case of development, think of it as a dialogue between you and yourself.
+
+# Four Phases
+
+1. Understanding the problem
+2. Identifying connections and devising a plan
+3. Carrying out the plan
+4. Reviewing and reflecting on the solution
+
+The book states that sound problem-solving requires going through these four phases.
+
+The example used in the book is finding the length of the diagonal of a rectangular parallelepiped.
+
+Here are the kinds of questions the teacher asks throughout the four phases:
+
+- 'What is the unknown?'
+- 'What is given?'
+- 'Do you know a related problem?'
+- 'Have you solved a related problem before?'
+- 'What auxiliary element could you introduce to help solve the problem?'
+- 'How can you verify that a step is correct?'
+- 'Can you derive the result by a different method?'
+- 'Can you see it at a glance?'
+- 'Can you apply the result or method to another problem?'
+
+The book also discusses what makes a good question versus a bad one.
+
+In the process of solving the problem above, instead of asking 'Do you know a related problem?', one could ask 'Can you apply the Pythagorean theorem?' However, the author does not consider this a good question.
+
+# Questioning in Problem Solving
+
+
+The Pythagorean theorem is so concise that it's easy to memorize and apply. But without understanding *why* it holds, it becomes difficult to extend it or apply it to other problems.
+For example, the Pythagorean theorem does not hold in non-Euclidean geometry. Without that deeper understanding, it would be hard to arrive at the question: *Why doesn't the Pythagorean theorem hold in spherical coordinates?*
+
+Having only the formula is like how AI interprets images.
+AI interprets artwork as surface-level pixels -- like a kind of orthogonal projection -- but Van Gogh's *The Starry Night* has an additional dimension: the layered brushstrokes.
+To understand that, you need to understand the process of painting.
+
+In software development as well, asking questions to solve problems is important.
+These questions can be directed at yourself or at your colleagues.
+
+The approaches in the book are oriented toward learning, but since development also spans the domain of work, they can't be applied 100% directly.
+You can't invest unlimited time in solving a problem, and you risk losing sight of higher-level objectives.
+Solving problems for the sake of technical achievement can be a goal in itself, but fundamentally, we solve problems to achieve business objectives.
+
+That said, asking questions to solve problems remains important.
+Many diverse solutions to the problems we wrestle with already exist out there.
+
+Finding and applying a suitable solution is no easy feat in itself,
+but I believe it's important to take time -- at least some -- to understand the problem yourself and ask questions in pursuit of a solution.
+
+For example, when you encounter a complex component, you might face the problem: *How can I reduce this complexity?*
+Depending on the specific situation, there could be many approaches: `compound components`, `render props`, `custom hooks`, `HOC`, and so on.
+Choosing appropriately among these will certainly help solve the problem more quickly.
+Of course, the point isn't to reinvent the wheel -- but behind each of those wheels, someone once asked the right questions.
+
+What I'm trying to say is: if you have the time, take a moment to ask yourself questions.
+Through that process of solving problems, you might converge on an existing solution, or you might discover something new.
+Along the way, you'll also come to understand the purpose and the flow behind how those methodologies were born and evolved.
+
+
+# respice finem
+
+> A maxim from the book. In Latin, it means "Before you begin, think of the end." That is, look at the end. Remember your aim. Do not forget your goal.
+
+As you read through the book, most of it feels like common sense -- "well, of course." But just because something is obvious doesn't mean we're actually doing it.
+I think it's important to remind ourselves of these things.
+
+<YouTube src="https://youtu.be/YyOn5Djx_0I?si=LfL_DhnTggUGvAQU" />
