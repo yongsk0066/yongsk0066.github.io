@@ -200,7 +200,8 @@ export default function markdownExport(): AstroIntegration {
             continue;
           }
 
-          const slug = file.id;
+          // Worker가 URL을 lowercase로 리다이렉트하므로 slug도 lowercase로 생성
+          const slug = file.id.toLowerCase();
           const sourceUrl = `${SITE_URL}/blog/${slug}/`;
           const cleanMd = mdxToCleanMarkdown(body, frontmatter, sourceUrl);
 
