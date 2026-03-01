@@ -6,24 +6,23 @@ import FormattedDate from "@components/blog/FormattedDate.astro";
 import PostNavigation from "@components/blog/PostNavigation.astro";
 import Share from "@components/blog/Share.astro";
 import TOC from "@components/blog/TOC.astro";
-import { DEFAULT_LOCALE } from "@consts";
+import { DEFAULT_LOCALE, OTHER_LOCALES } from "@consts";
 import { useTranslations } from "@i18n/utils";
 import PageLayout from "@layouts/PageLayout.astro";
 import { readingTime } from "@lib/blog";
 import { getCollection, render, type CollectionEntry } from "astro:content";
 
-const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
-
 export async function getStaticPaths() {
+  const _locales = ["en", "ja"];
+  const _getLocale = (id: string) => _locales.find((l) => id.startsWith(`${l}/`)) || "ko";
+
   const allPosts = (await getCollection("blog"))
     .filter((post) => import.meta.env.DEV || !post.data.draft)
     .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
   return allPosts.map((post, index) => {
-    const isEnPost = post.id.startsWith("en/");
-    const sameLangPosts = allPosts.filter((p) =>
-      isEnPost ? p.id.startsWith("en/") : !p.id.startsWith("en/")
-    );
+    const postLocale = _getLocale(post.id);
+    const sameLangPosts = allPosts.filter((p) => _getLocale(p.id) === postLocale);
     const langIndex = sameLangPosts.findIndex((p) => p.id === post.id);
 
     const prevPost = langIndex < sameLangPosts.length - 1
@@ -43,6 +42,7 @@ type NavPost = { slug: string; title: string };
 type Props = { post: CollectionEntry<"blog">; prevPost?: NavPost; nextPost?: NavPost };
 
 const { post, prevPost, nextPost } = Astro.props;
+const currentLocale = OTHER_LOCALES.find((l) => post.id.startsWith(`${l}/`)) || DEFAULT_LOCALE;
 
 const seriesPosts = (
   await getCollection("blog", ({ id }) => {
@@ -66,7 +66,8 @@ if (currentLocale === DEFAULT_LOCALE) {
   translationSlug = `en/${post.id}`;
   hasTranslation = allPosts.some((p) => p.id === translationSlug);
 } else {
-  translationSlug = post.id.replace("en/", "");
+  const baseSlug = post.id.replace(new RegExp(`^${currentLocale}/`), "");
+  translationSlug = baseSlug;
   hasTranslation = allPosts.some((p) => p.id === translationSlug);
 }
 
@@ -112,21 +113,6 @@ const t = useTranslations(currentLocale as any);
           </div>
         </div>
 
-        {
-          hasTranslation && (
-            <a
-              href={`/blog/${translationSlug}`}
-              class="inline-flex items-center px-3 py-1 rounded-md border border-zinc-300 text-sm font-medium hover:bg-zinc-100 transition-colors"
-              title={
-                currentLocale === DEFAULT_LOCALE
-                  ? "View in English"
-                  : "한국어로 보기"
-              }
-            >
-              {currentLocale === DEFAULT_LOCALE ? "🇺🇸 EN" : "🇰🇷 KR"}
-            </a>
-          )
-        }
       </div>
 
       <div class="text-3xl font-bold text-black">

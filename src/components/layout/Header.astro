@@ -3,11 +3,13 @@ import Container from "./Container.astro";
 import Link from "./Link.astro";
 import HeaderClock from "../widget/HeaderClock";
 
-import { DEFAULT_LOCALE } from "@consts";
+import { DEFAULT_LOCALE, LOCALE_LABELS } from "@consts";
 import { useTranslations } from "@i18n/utils";
 
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 const t = useTranslations(currentLocale as any);
+
+const locales = Object.entries(LOCALE_LABELS);
 ---
 
 <header>
@@ -16,16 +18,33 @@ const t = useTranslations(currentLocale as any);
       <Link href="/" underline={false} fetchpriority="high">
         <div class="font-semibold">{t("page.title")}</div>
       </Link>
-      <nav class="flex gap-1">
-        <HeaderClock client:only="react" />
+      <nav class="flex items-center gap-1">
+        <div class="flex items-center gap-0.5 mr-1">
+          {locales.map(([code, label], i) => (
+            <>
+              {i > 0 && <span class="text-zinc-300 text-xs select-none">|</span>}
+              <button
+                data-locale={code}
+                class:list={[
+                  "locale-btn text-xs px-1 cursor-pointer transition-colors duration-300",
+                  code === currentLocale
+                    ? "text-black font-semibold"
+                    : "text-zinc-400 hover:text-black",
+                ]}
+              >
+                {label}
+              </button>
+            </>
+          ))}
+        </div>
+        <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;">
+          <span id="header-clock-placeholder">--:--:--</span>
+          <HeaderClock client:only="react" />
+        </div>
         <span>
           {`/`}
         </span>
         <Link href={t("path.blog")} fetchpriority="high"> blog </Link>
-        <span>
-          {`/`}
-        </span>
-        <Link href="/unknown"> unknown </Link>
         <span>
           {`/`}
         </span>
@@ -40,3 +59,48 @@ const t = useTranslations(currentLocale as any);
     content-visibility: auto;
   }
 </style>
+
+<script>
+  function initLocaleSwitcher() {
+    const locales = Array.from(document.querySelectorAll<HTMLButtonElement>(".locale-btn"))
+      .map((btn) => btn.dataset.locale)
+      .filter((l): l is string => !!l && l !== "ko");
+
+    document.querySelectorAll<HTMLButtonElement>(".locale-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.locale;
+        if (!target) return;
+
+        const path = window.location.pathname;
+
+        // Detect current locale from path
+        const localePattern = new RegExp(`^/blog/(${locales.join("|")})(\/|$)`);
+        const match = path.match(localePattern);
+        const currentLocale = match ? match[1] : "ko";
+        if (target === currentLocale) return;
+
+        let newPath: string;
+
+        if (target === "ko") {
+          // Remove locale segment from path
+          newPath = path.replace(localePattern, "/blog/");
+        } else if (currentLocale === "ko") {
+          // Insert locale after /blog
+          if (path.startsWith("/blog")) {
+            newPath = path.replace(/^\/blog/, `/blog/${target}`);
+          } else {
+            return;
+          }
+        } else {
+          // Switch between non-default locales (e.g., en → ja)
+          newPath = path.replace(`/blog/${currentLocale}`, `/blog/${target}`);
+        }
+
+        window.location.href = newPath;
+      });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", initLocaleSwitcher);
+  document.addEventListener("astro:after-swap", initLocaleSwitcher);
+</script>

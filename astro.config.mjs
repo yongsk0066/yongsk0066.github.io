@@ -17,9 +17,10 @@ export default defineConfig({
   },
   i18n: {
     defaultLocale: 'ko',
-    locales: ['ko', 'en'],
+    locales: ['ko', 'en', 'ja'],
     fallback: {
-      'en': 'ko'
+      'en': 'ko',
+      'ja': 'ko'
     },
     routing: {
       prefixDefaultLocale: false

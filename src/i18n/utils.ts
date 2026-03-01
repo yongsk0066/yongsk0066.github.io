@@ -14,6 +14,8 @@ export const ui = {
     "word.back_to_top": "위로 올라가요",
     "word.prev_post": "이전 글",
     "word.next_post": "다음 글",
+    "word.categories": "카테고리",
+    "word.all": "전체",
   },
   en: {
     "page.title": "Yongseok's Blog",
@@ -29,6 +31,25 @@ export const ui = {
     "word.back_to_top": "Back to top",
     "word.prev_post": "Previous",
     "word.next_post": "Next",
+    "word.categories": "Categories",
+    "word.all": "All",
+  },
+  ja: {
+    "page.title": "ヨンソクのブログ",
+
+    "path.blog": "/blog/ja",
+    "path.about": "/about",
+    "path.unknown": "/unknown",
+
+    "page.back": "戻る",
+    "word.series": "シリーズ",
+    "word.share": "共有",
+    "word.rss_subscribe": "RSS",
+    "word.back_to_top": "トップへ",
+    "word.prev_post": "前の記事",
+    "word.next_post": "次の記事",
+    "word.categories": "カテゴリ",
+    "word.all": "すべて",
   },
 } as const;
 

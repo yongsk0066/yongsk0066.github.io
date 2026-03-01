@@ -2,17 +2,48 @@
 import { type CollectionEntry, getCollection } from "astro:content";
 import PageLayout from "@layouts/PageLayout.astro";
 import ArrowCard from "@components/blog/ArrowCard.astro";
+import BlogSidebar from "@components/blog/BlogSidebar.astro";
 import { DEFAULT_LOCALE, SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 
 const data = (
   await getCollection("blog", ({ id }) => {
-    return !id.startsWith("en/");
+    return !id.includes("/");
   })
 )
   .filter((post) => import.meta.env.DEV || !post.data.draft)
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+// Categories with counts
+const categoryMap = new Map<string, number>();
+data.forEach((post) => {
+  post.data.categories?.forEach((cat) => {
+    categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
+  });
+});
+const categories = [...categoryMap.entries()]
+  .sort((a, b) => b[1] - a[1])
+  .map(([name, count]) => ({ name, count }));
+
+// Series with post lists (2+ posts only)
+const seriesMap = new Map<string, typeof data>();
+data.forEach((post) => {
+  if (post.data.series) {
+    if (!seriesMap.has(post.data.series)) {
+      seriesMap.set(post.data.series, []);
+    }
+    seriesMap.get(post.data.series)!.push(post);
+  }
+});
+const series = [...seriesMap.entries()]
+  .filter(([, posts]) => posts.length > 1)
+  .map(([name, posts]) => ({
+    name,
+    posts: posts
+      .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf())
+      .map((p) => ({ title: p.data.title, href: `/${p.collection}/${p.id}/` })),
+  }));
 
 type Acc = {
   [year: string]: CollectionEntry<"blog">[];
@@ -35,15 +66,16 @@ const years = Object.keys(posts).sort((a, b) => parseInt(b) - parseInt(a));
   <div class="mx-auto max-w-screen-md px-5">
     <div class="space-y-10">
       <div class="animate font-semibold text-black">블로그</div>
+      <BlogSidebar categories={categories} series={series} locale="ko" />
       <div class="space-y-4">
         {
           years.map((year) => (
-            <section class="animate space-y-4">
+            <section class="animate space-y-4" data-year={year}>
               <div class="font-semibold text-black">{year}</div>
               <div>
                 <ul class="flex flex-col gap-4">
                   {posts[year].map((post) => (
-                    <li>
+                    <li data-categories={JSON.stringify(post.data.categories || [])}>
                       <ArrowCard entry={post} />
                     </li>
                   ))}

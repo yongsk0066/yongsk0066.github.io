@@ -1,20 +1,18 @@
 ---
 import ArrowCard from "@components/blog/ArrowCard.astro";
 import BlogSidebar from "@components/blog/BlogSidebar.astro";
-import { SITE_DESCRIPTION_EN, SITE_TITLE_EN } from "@consts";
 import PageLayout from "@layouts/PageLayout.astro";
 import { type CollectionEntry, getCollection } from "astro:content";
 
 const data = (await getCollection("blog"))
   .filter((post) => {
-    // Exclude other locale posts (ja/, etc.) — only keep en/ and root (ko)
-    if (post.id.includes("/") && !post.id.startsWith("en/")) return false;
+    if (post.id.includes("/") && !post.id.startsWith("ja/")) return false;
     return import.meta.env.DEV || !post.data.draft;
   })
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .filter((post, index, self) => {
-    const hasEnglishVersion = self.some((p) => p.id === `en/${post.id}`);
-    if (hasEnglishVersion && !post.id.startsWith("en/")) {
+    const hasJaVersion = self.some((p) => p.id === `ja/${post.id}`);
+    if (hasJaVersion && !post.id.startsWith("ja/")) {
       return false;
     }
     return true;
@@ -66,12 +64,12 @@ const posts = data.reduce((acc: Acc, post) => {
 const years = Object.keys(posts).sort((a, b) => parseInt(b) - parseInt(a));
 ---
 
-<PageLayout title={SITE_TITLE_EN} description={SITE_DESCRIPTION_EN}
-  webmcpPageType="blog-list" webmcpCurrentLocale="en">
+<PageLayout title="ヨンソクのブログ" description="開発、技術、そして日常のブログです。"
+  webmcpPageType="blog-list" webmcpCurrentLocale="ja">
   <div class="mx-auto max-w-screen-md px-5">
     <div class="space-y-10">
-      <div class="animate font-semibold text-black">Blog</div>
-      <BlogSidebar categories={categories} series={series} locale="en" />
+      <div class="animate font-semibold text-black">ブログ</div>
+      <BlogSidebar categories={categories} series={series} locale="ja" />
       <div class="space-y-4">
         {
           years.map((year) => (

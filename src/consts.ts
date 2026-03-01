@@ -1,7 +1,12 @@
 import type { Socials } from "@types";
 
 export const DEFAULT_LOCALE = "ko";
-export const OTHER_LOCALES = ["en"];
+export const OTHER_LOCALES = ["en", "ja"];
+export const LOCALE_LABELS: Record<string, string> = {
+  ko: "KO",
+  en: "EN",
+  ja: "JA",
+};
 
 export const SITE_TITLE = "장용석 블로그";
 export const SITE_TITLE_EN = "Yongseok's Blog";
