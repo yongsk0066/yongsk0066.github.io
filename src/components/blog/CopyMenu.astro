@@ -7,7 +7,7 @@ const t = useTranslations(currentLocale as any);
 ---
 
 <!-- Split button: [Copy page | ▾] -->
-<div class="copy-menu-wrapper" data-copied-text={t("word.copied")}>
+<div class="copy-menu-wrapper" data-copied-text={t("word.copied")} data-copying-text={t("word.copying")}>
   <button id="copy-page-btn" class="copy-page-btn" data-action="copy-page">
     <!-- Copy icon (Phosphor PiCopyDuotone style) -->
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" class="copy-icon">
@@ -224,10 +224,12 @@ const t = useTranslations(currentLocale as any);
     copyBtn.dataset.init = "1";
 
     // Copy page (main button)
-    var copiedText = copyBtn.closest(".copy-menu-wrapper").dataset.copiedText || "Copied!";
+    var wrapper = copyBtn.closest(".copy-menu-wrapper");
+    var copiedText = wrapper.dataset.copiedText || "Copied!";
+    var copyingText = wrapper.dataset.copyingText || "Copying...";
 
     copyBtn.addEventListener("click", function () {
-      if (copyBtn.dataset.loading) return; // 중복 클릭 방지
+      if (copyBtn.dataset.loading) return;
       var mdUrl = new URL("index.md", window.location.href).toString();
       var label = document.getElementById("copy-page-label");
       var icon = copyBtn.querySelector(".copy-icon");
@@ -236,7 +238,7 @@ const t = useTranslations(currentLocale as any);
       copyBtn.dataset.loading = "1";
       copyBtn.style.opacity = "0.6";
       copyBtn.style.pointerEvents = "none";
-      if (label) { label.textContent = "..."; }
+      if (label) { label.textContent = copyingText; }
 
       function restore() {
         delete copyBtn.dataset.loading;
