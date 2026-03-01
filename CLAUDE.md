@@ -35,6 +35,25 @@
 - `_examples/` 디렉토리: Sandpack 코드 샘플 (빌드 제외)
 - `content/wip/`: 작성 중 글 (빌드 제외)
 
+### Blog Categories
+카테고리는 글의 주제 분류 태그. 시리즈(`series`)와는 별개 — 시리즈는 연재 묶음, 카테고리는 주제 분류.
+
+| 카테고리 | 의미 | 예시 |
+|---------|------|------|
+| `react` | React 생태계 | hooks, compiler, devtools, RSC, 성능 |
+| `javascript` | JS 언어/런타임 | 문법, API, 라이브러리 소스분석, V8 |
+| `css` | CSS/스타일링 | CSS 스펙, 애니메이션, 레이아웃 |
+| `web` | 웹 플랫폼/HTML/DOM | HTML 스펙, DOM API, 브라우저 기능 |
+| `math` | 수학/CS 이론/시각화 | 기하학, 오토마타, 3D, 양자 |
+| `dev` | 개발 문화/블로그/도구 | 블로그 자체, 오픈소스 기여, 개발 실험 |
+| `essay` | 에세이/회고/일상 | 회고, 여행, 서평, 일상 |
+
+- 모두 **소문자 영문** 통일 (한글, 대문자 사용 금지)
+- 배열 형식: `["react"]`, 복수 태그: `["react", "dev"]`
+- 시리즈명을 카테고리로 쓰지 않음 (예: React Compiler 시리즈 → `categories: ["react"]`, `series: "React Compiler"`)
+- `yarn new:post` 기본값: `dev`
+- RSS(`rss.xml`)에 `<category>` 태그로 자동 포함, 검색 인덱스에도 반영
+
 ### Custom Plugins
 - `plugin/remark-mermaid/` — Mermaid 다이어그램 → SVG 변환 (Lit SSR + mmdc CLI)
 - Shiki 커스텀 테마: `shiki/github-dark-default.json`

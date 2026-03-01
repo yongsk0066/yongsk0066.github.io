@@ -48,7 +48,7 @@ async function createPost() {
         type: 'input',
         name: 'categories',
         message: '카테고리를 입력하세요 (쉼표로 구분):',
-        default: 'blog',
+        default: 'dev',
         filter: (input) => {
           return input.split(',').map(cat => cat.trim()).filter(Boolean);
         },
