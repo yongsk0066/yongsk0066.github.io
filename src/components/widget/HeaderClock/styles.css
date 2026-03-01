@@ -1,7 +1,59 @@
 .header__clock {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
+}
+
+.digit-slot {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  width: 1ch;
+  height: 1lh;
+  align-items: center;
   justify-content: center;
-  box-sizing: border-box;
+}
+
+.digit-sep {
+  display: inline-flex;
+  width: 1ch;
+  justify-content: center;
+}
+
+.digit-slot > span {
+  position: absolute;
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@starting-style {
+  .digit-slot > span {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+.digit-slot > span.exiting {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .digit-slot > span {
+    transition: none;
+  }
+
+  @starting-style {
+    .digit-slot > span {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  .digit-slot > span.exiting {
+    transform: none;
+    opacity: 0;
+  }
 }
