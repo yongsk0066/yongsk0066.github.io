@@ -1,0 +1,193 @@
+---
+interface SeriesPost {
+  title: string;
+  href: string;
+}
+
+interface Props {
+  categories: { name: string; count: number }[];
+  series: { name: string; posts: SeriesPost[] }[];
+  locale: "ko" | "en";
+}
+
+const { categories, series, locale } = Astro.props;
+const isKo = locale === "ko";
+---
+
+<aside
+  id="blog-sidebar"
+  class="mb-8 xl:fixed xl:left-[calc(50%+25.5rem)] xl:top-40 xl:w-52 xl:mb-0"
+>
+  <div class="mb-6">
+    <div class="text-xs font-semibold text-black mb-3 tracking-wide uppercase">
+      {isKo ? "카테고리" : "Categories"}
+    </div>
+    <div class="flex flex-wrap gap-1.5" id="category-tags">
+      <button
+        data-category="all"
+        class="category-tag active text-xs px-2 py-1 rounded-md bg-zinc-200 text-black transition-colors duration-300 cursor-pointer"
+      >
+        {isKo ? "전체" : "All"}
+      </button>
+      {categories.map((cat) => (
+        <button
+          data-category={cat.name}
+          class="category-tag text-xs px-2 py-1 rounded-md text-zinc-400 hover:text-black hover:bg-zinc-200 transition-colors duration-300 cursor-pointer"
+        >
+          #{cat.name}
+          <span class="text-zinc-300 ml-0.5 text-[10px]">{cat.count}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {series.length > 0 && (
+    <div>
+      <div class="text-xs font-semibold text-black mb-3 tracking-wide uppercase">
+        {isKo ? "시리즈" : "Series"}
+      </div>
+      <div class="sidebar-series space-y-1">
+        {series.map((s) => (
+          <details class="group">
+            <summary>
+              <span class="text-sm text-zinc-400 group-hover:text-black transition-colors duration-300">
+                {s.name}
+                <span class="text-zinc-300 text-xs ml-1">({s.posts.length})</span>
+              </span>
+            </summary>
+            <ul>
+              {s.posts.map((post) => (
+                <li>
+                  <a
+                    href={post.href}
+                    class="block text-xs text-zinc-400 hover:text-black transition-colors duration-300 py-1 truncate"
+                    title={post.title}
+                  >
+                    {post.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ))}
+      </div>
+    </div>
+  )}
+</aside>
+
+<style>
+  .sidebar-series details {
+    border: none;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .sidebar-series summary {
+    padding: 0.25rem 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .sidebar-series summary::marker,
+  .sidebar-series summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .sidebar-series summary::after {
+    content: "";
+    width: 0.75rem;
+    height: 0.75rem;
+    background: none;
+    border-right: 1.5px solid rgb(161 161 170);
+    border-bottom: 1.5px solid rgb(161 161 170);
+    transform: rotate(-45deg);
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+  }
+
+  .sidebar-series [open] summary::after {
+    transform: rotate(45deg);
+  }
+
+  .sidebar-series details::details-content {
+    transition:
+      height 0.3s ease,
+      content-visibility 0.3s ease allow-discrete;
+    height: 0;
+    overflow: clip;
+    padding: 0;
+  }
+
+  .sidebar-series [open]::details-content {
+    height: auto;
+  }
+
+  /* Fallback for browsers without ::details-content */
+  @supports not selector(::details-content) {
+    .sidebar-series details > ul {
+      padding-left: 0.5rem;
+    }
+  }
+
+  /* Fallback for browsers without interpolate-size */
+  @supports not (interpolate-size: allow-keywords) {
+    .sidebar-series [open]::details-content {
+      height: auto;
+      overflow: visible;
+    }
+  }
+
+  .sidebar-series ul {
+    padding-left: 0.5rem;
+    margin: 0;
+    list-style: none;
+  }
+</style>
+
+<script>
+  function initCategoryFilter() {
+    const buttons = document.querySelectorAll<HTMLButtonElement>(".category-tag");
+    const posts = document.querySelectorAll<HTMLElement>("[data-categories]");
+    const yearSections = document.querySelectorAll<HTMLElement>("[data-year]");
+
+    function filterPosts(category: string) {
+      buttons.forEach((btn) => {
+        const isActive = btn.dataset.category === category;
+        btn.classList.toggle("bg-zinc-200", isActive);
+        btn.classList.toggle("text-black", isActive);
+        btn.classList.toggle("active", isActive);
+        btn.classList.toggle("text-zinc-400", !isActive);
+      });
+
+      posts.forEach((li) => {
+        const cats: string[] = JSON.parse(li.dataset.categories || "[]");
+        li.style.display = category === "all" || cats.includes(category) ? "" : "none";
+      });
+
+      yearSections.forEach((section) => {
+        const visible = section.querySelectorAll("[data-categories]:not([style*='display: none'])");
+        section.style.display = visible.length > 0 ? "" : "none";
+      });
+
+      const url = new URL(window.location.href);
+      if (category === "all") {
+        url.searchParams.delete("category");
+      } else {
+        url.searchParams.set("category", category);
+      }
+      history.replaceState(null, "", url.toString());
+    }
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => filterPosts(btn.dataset.category || "all"));
+    });
+
+    const initial = new URLSearchParams(window.location.search).get("category");
+    if (initial) filterPosts(initial);
+  }
+
+  document.addEventListener("DOMContentLoaded", initCategoryFilter);
+  document.addEventListener("astro:after-swap", initCategoryFilter);
+</script>
