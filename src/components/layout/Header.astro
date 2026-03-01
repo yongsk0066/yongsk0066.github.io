@@ -1,7 +1,7 @@
 ---
 import Container from "./Container.astro";
 import Link from "./Link.astro";
-import HeaderClock from "../widget/HeaderClock/HeaderClock.astro";
+import HeaderClock from "../widget/HeaderClock";
 
 import { DEFAULT_LOCALE, LOCALE_LABELS } from "@consts";
 import { useTranslations } from "@i18n/utils";
@@ -37,9 +37,9 @@ const locales = Object.entries(LOCALE_LABELS);
             </>
           ))}
         </div>
-        <div id="header-clock-wrapper" style="font-family:'JetBrains Mono',monospace;" transition:persist="header-clock">
-          <span id="header-clock-placeholder" class="text-sm">--:--:--</span>
-          <HeaderClock />
+        <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;">
+          <span id="header-clock-placeholder">--:--:--</span>
+          <HeaderClock client:only="react" />
         </div>
         <span>
           {`/`}
@@ -81,8 +81,6 @@ const locales = Object.entries(LOCALE_LABELS);
 </style>
 
 <script>
-  import { navigate } from "astro:transitions/client";
-
   function initLocaleSwitcher() {
     const locales = Array.from(document.querySelectorAll<HTMLButtonElement>(".locale-btn"))
       .map((btn) => btn.dataset.locale)
@@ -96,10 +94,6 @@ const locales = Object.entries(LOCALE_LABELS);
 
     document.querySelectorAll<HTMLButtonElement>(".locale-btn").forEach((btn) => {
       const locale = btn.dataset.locale;
-
-      // Reset previous state (for View Transitions re-init)
-      delete btn.dataset.unavailable;
-      delete btn.dataset.tooltip;
 
       if (available && locale && !available.includes(locale)) {
         btn.dataset.unavailable = "";
@@ -136,11 +130,10 @@ const locales = Object.entries(LOCALE_LABELS);
           newPath = path.replace(`/blog/${currentLocale}`, `/blog/${target}`);
         }
 
-        navigate(newPath);
+        window.location.href = newPath;
       });
     });
   }
 
   document.addEventListener("DOMContentLoaded", initLocaleSwitcher);
-  document.addEventListener("astro:after-swap", initLocaleSwitcher);
 </script>

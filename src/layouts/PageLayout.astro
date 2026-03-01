@@ -1,5 +1,4 @@
 ---
-import { ClientRouter } from "astro:transitions";
 import Head from "@components/head/Head.astro";
 import Header from "@components/layout/Header.astro";
 import Footer from "@components/layout/Footer.astro";
@@ -39,7 +38,6 @@ const {
       image={heroImage}
     />
     <ClarityIdentify pageId={Astro.url.pathname} />
-    <ClientRouter />
 
     <!-- 웹사이트 구조화된 데이터 -->
     <script type="application/ld+json">

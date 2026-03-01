@@ -122,243 +122,214 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
   const DEFAULT_VOLUME = 50;
   const SPECTRO_TRACK_WIDTH = 48;
 
-  function initNotFoundPlayer() {
-    // Guard: only init if the component is on the page
-    const btnPlay = document.getElementById("btn-play");
-    if (!btnPlay) return;
+  let player: YT.Player;
 
-    // Guard: don't double-init
-    if (btnPlay.dataset.init) return;
-    btnPlay.dataset.init = "true";
-
-    let player: YT.Player;
-
-    function getClipTime(): number | null {
-      try {
-        return Math.max(0, player.getCurrentTime() - VIDEO_START);
-      } catch {
-        return null;
-      }
+  function getClipTime(): number | null {
+    try {
+      return Math.max(0, player.getCurrentTime() - VIDEO_START);
+    } catch {
+      return null;
     }
-
-    // ---- Playback ----
-
-    function setPlaying(playing: boolean) {
-      btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
-        ? "block"
-        : "none";
-      btnPlay.querySelector<SVGElement>(".icon-play")!.style.display = playing
-        ? "none"
-        : "block";
-      btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
-    }
-
-    setPlaying(false);
-
-    btnPlay.addEventListener("click", () => {
-      if (!player) return;
-      player.getPlayerState() === YT.PlayerState.PLAYING
-        ? player.pauseVideo()
-        : player.playVideo();
-    });
-
-    // ---- Volume ----
-
-    const btnMute = document.getElementById("btn-mute")!;
-    const volumeRange = document.getElementById(
-      "volume-range",
-    ) as HTMLInputElement;
-    let savedVolume = DEFAULT_VOLUME;
-
-    function setMuted(muted: boolean) {
-      btnMute.querySelector<SVGElement>(".icon-muted")!.style.display = muted
-        ? "block"
-        : "none";
-      btnMute.querySelector<SVGElement>(".icon-unmuted")!.style.display = muted
-        ? "none"
-        : "block";
-      btnMute.setAttribute("aria-label", muted ? "음소거 해제" : "음소거");
-    }
-
-    function applyVolume(vol: number) {
-      if (!player) return;
-      const muted = vol === 0;
-      if (muted) {
-        player.mute();
-      } else {
-        if (player.isMuted()) player.unMute();
-        player.setVolume(vol);
-      }
-      volumeRange.value = String(vol);
-      volumeRange.style.setProperty("--vol", `${vol}%`);
-      setMuted(muted);
-    }
-
-    setMuted(true);
-
-    btnMute.addEventListener("click", () => {
-      if (!player) return;
-      if (player.isMuted()) {
-        applyVolume(savedVolume);
-      } else {
-        savedVolume = player.getVolume() || DEFAULT_VOLUME;
-        applyVolume(0);
-      }
-    });
-
-    volumeRange.addEventListener("input", () => {
-      const vol = Number(volumeRange.value);
-      if (vol > 0) savedVolume = vol;
-      applyVolume(vol);
-    });
-
-    // ---- YouTube Player ----
-
-    const loadingCover = document.querySelector<HTMLElement>(".loading-cover")!;
-    let revealed = false;
-
-    const ytReady = new Promise<void>((resolve) => {
-      // YouTube API may already be loaded from a previous navigation
-      if ((window as any).YT?.Player) {
-        player = new YT.Player("yt-player", {
-          events: {
-            onReady() { resolve(); },
-            onStateChange(e: YT.OnStateChangeEvent) {
-              if (e.data === YT.PlayerState.ENDED) {
-                player.seekTo(VIDEO_START, true);
-                player.playVideo();
-              }
-              setPlaying(e.data === YT.PlayerState.PLAYING);
-              if (e.data === YT.PlayerState.PLAYING && !revealed) {
-                revealed = true;
-                loadingCover.classList.add("ready");
-              }
-            },
-          },
-        });
-        return;
-      }
-
-      const ytScript = document.createElement("script");
-      ytScript.src = "https://www.youtube.com/iframe_api";
-      document.head.appendChild(ytScript);
-
-      (window as any).onYouTubeIframeAPIReady = () => {
-        player = new YT.Player("yt-player", {
-          events: {
-            onReady() { resolve(); },
-            onStateChange(e: YT.OnStateChangeEvent) {
-              if (e.data === YT.PlayerState.ENDED) {
-                player.seekTo(VIDEO_START, true);
-                player.playVideo();
-              }
-              setPlaying(e.data === YT.PlayerState.PLAYING);
-              if (e.data === YT.PlayerState.PLAYING && !revealed) {
-                revealed = true;
-                loadingCover.classList.add("ready");
-              }
-            },
-          },
-        });
-      };
-    });
-
-    // ---- Mode Display ----
-
-    const modeRoller = document.getElementById("mode-roller")!;
-
-    function rollToMode(name: string) {
-      const current = modeRoller.querySelector("span:not(.exiting)");
-      if (current) {
-        if (current.textContent === name) return;
-        current.classList.add("exiting");
-        current.addEventListener("transitionend", () => current.remove(), {
-          once: true,
-        });
-      }
-      const next = document.createElement("span");
-      next.textContent = name;
-      modeRoller.appendChild(next);
-    }
-
-    // ---- Overlay ----
-
-    const renderer = createOverlayRenderer(
-      document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
-      getClipTime,
-      rollToMode,
-    );
-    renderer.start();
-
-    // ---- Coordinated start ----
-
-    Promise.all([renderer.ready(), ytReady]).then(() => {
-      player.playVideo();
-    });
-
-    // ---- Spectrogram Border ----
-
-    function parseSpectroData(buf: ArrayBuffer) {
-      const v = new DataView(buf);
-      const binsPerFrame = v.getUint16(0, true);
-      const fps = v.getUint16(2, true);
-      const frameCount = v.getUint16(4, true);
-      const frames = new Uint8Array(buf, 6);
-
-      let lastFrame = -1;
-
-      return {
-        getColumn(clipTime: number) {
-          const idx = Math.floor(clipTime * fps) % frameCount;
-          if (idx === lastFrame) return null;
-          lastFrame = idx;
-          return { frames, offset: idx * binsPerFrame, binsPerFrame };
-        },
-      };
-    }
-
-    const borderCanvas =
-      document.querySelector<HTMLCanvasElement>(".spectro-border")!;
-    const wrap = document.querySelector<HTMLElement>(".video-border-wrap")!;
-    const dpr = Math.min(window.devicePixelRatio, 2);
-    const wrapRect = wrap.getBoundingClientRect();
-    borderCanvas.width = Math.round(wrapRect.width * dpr);
-    borderCanvas.height = Math.round(wrapRect.height * dpr);
-
-    const spectroRenderer = createSpectroBorderRenderer(
-      borderCanvas,
-      SPECTRO_TRACK_WIDTH,
-    );
-
-    let spectroData: ReturnType<typeof parseSpectroData> | null = null;
-
-    fetch("/assets/404-audio.bin")
-      .then((r) => r.arrayBuffer())
-      .then((buf) => {
-        spectroData = parseSpectroData(buf);
-      });
-
-    function renderViz() {
-      requestAnimationFrame(renderViz);
-      const clipTime = getClipTime();
-      if (clipTime == null || !spectroData) return;
-
-      const col = spectroData.getColumn(clipTime);
-      if (col) {
-        spectroRenderer.pushColumn(
-          col.frames,
-          col.offset,
-          col.binsPerFrame,
-          clipTime,
-        );
-      }
-    }
-
-    requestAnimationFrame(renderViz);
   }
 
-  // Run on first load and every client-side navigation
-  document.addEventListener("astro:page-load", initNotFoundPlayer);
+  // ---- Playback ----
+
+  const btnPlay = document.getElementById("btn-play")!;
+
+  function setPlaying(playing: boolean) {
+    btnPlay.querySelector<SVGElement>(".icon-pause")!.style.display = playing
+      ? "block"
+      : "none";
+    btnPlay.querySelector<SVGElement>(".icon-play")!.style.display = playing
+      ? "none"
+      : "block";
+    btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
+  }
+
+  setPlaying(false);
+
+  btnPlay.addEventListener("click", () => {
+    if (!player) return;
+    player.getPlayerState() === YT.PlayerState.PLAYING
+      ? player.pauseVideo()
+      : player.playVideo();
+  });
+
+  // ---- Volume ----
+
+  const btnMute = document.getElementById("btn-mute")!;
+  const volumeRange = document.getElementById(
+    "volume-range",
+  ) as HTMLInputElement;
+  let savedVolume = DEFAULT_VOLUME;
+
+  function setMuted(muted: boolean) {
+    btnMute.querySelector<SVGElement>(".icon-muted")!.style.display = muted
+      ? "block"
+      : "none";
+    btnMute.querySelector<SVGElement>(".icon-unmuted")!.style.display = muted
+      ? "none"
+      : "block";
+    btnMute.setAttribute("aria-label", muted ? "음소거 해제" : "음소거");
+  }
+
+  function applyVolume(vol: number) {
+    if (!player) return;
+    const muted = vol === 0;
+    if (muted) {
+      player.mute();
+    } else {
+      if (player.isMuted()) player.unMute();
+      player.setVolume(vol);
+    }
+    volumeRange.value = String(vol);
+    volumeRange.style.setProperty("--vol", `${vol}%`);
+    setMuted(muted);
+  }
+
+  setMuted(true);
+
+  btnMute.addEventListener("click", () => {
+    if (!player) return;
+    if (player.isMuted()) {
+      applyVolume(savedVolume);
+    } else {
+      savedVolume = player.getVolume() || DEFAULT_VOLUME;
+      applyVolume(0);
+    }
+  });
+
+  volumeRange.addEventListener("input", () => {
+    const vol = Number(volumeRange.value);
+    if (vol > 0) savedVolume = vol;
+    applyVolume(vol);
+  });
+
+  // ---- YouTube Player ----
+
+  const loadingCover = document.querySelector<HTMLElement>(".loading-cover")!;
+  let revealed = false;
+
+  const ytReady = new Promise<void>((resolve) => {
+    const ytScript = document.createElement("script");
+    ytScript.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(ytScript);
+
+    (window as any).onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("yt-player", {
+        events: {
+          onReady() {
+            resolve();
+          },
+          onStateChange(e: YT.OnStateChangeEvent) {
+            if (e.data === YT.PlayerState.ENDED) {
+              player.seekTo(VIDEO_START, true);
+              player.playVideo();
+            }
+            setPlaying(e.data === YT.PlayerState.PLAYING);
+
+            if (e.data === YT.PlayerState.PLAYING && !revealed) {
+              revealed = true;
+              loadingCover.classList.add("ready");
+            }
+          },
+        },
+      });
+    };
+  });
+
+  // ---- Mode Display ----
+
+  const modeRoller = document.getElementById("mode-roller")!;
+
+  function rollToMode(name: string) {
+    const current = modeRoller.querySelector("span:not(.exiting)");
+    if (current) {
+      if (current.textContent === name) return;
+      current.classList.add("exiting");
+      current.addEventListener("transitionend", () => current.remove(), {
+        once: true,
+      });
+    }
+    const next = document.createElement("span");
+    next.textContent = name;
+    modeRoller.appendChild(next);
+  }
+
+  // ---- Overlay ----
+
+  const renderer = createOverlayRenderer(
+    document.querySelector<HTMLCanvasElement>(".ascii-overlay")!,
+    getClipTime,
+    rollToMode,
+  );
+  renderer.start();
+
+  // ---- Coordinated start ----
+
+  Promise.all([renderer.ready(), ytReady]).then(() => {
+    player.playVideo();
+  });
+
+  // ---- Spectrogram Border ----
+
+  function parseSpectroData(buf: ArrayBuffer) {
+    const v = new DataView(buf);
+    const binsPerFrame = v.getUint16(0, true);
+    const fps = v.getUint16(2, true);
+    const frameCount = v.getUint16(4, true);
+    const frames = new Uint8Array(buf, 6);
+
+    let lastFrame = -1;
+
+    return {
+      getColumn(clipTime: number) {
+        const idx = Math.floor(clipTime * fps) % frameCount;
+        if (idx === lastFrame) return null;
+        lastFrame = idx;
+        return { frames, offset: idx * binsPerFrame, binsPerFrame };
+      },
+    };
+  }
+
+  const borderCanvas =
+    document.querySelector<HTMLCanvasElement>(".spectro-border")!;
+  const wrap = document.querySelector<HTMLElement>(".video-border-wrap")!;
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  const wrapRect = wrap.getBoundingClientRect();
+  borderCanvas.width = Math.round(wrapRect.width * dpr);
+  borderCanvas.height = Math.round(wrapRect.height * dpr);
+
+  const spectroRenderer = createSpectroBorderRenderer(
+    borderCanvas,
+    SPECTRO_TRACK_WIDTH,
+  );
+
+  let spectroData: ReturnType<typeof parseSpectroData> | null = null;
+
+  fetch("/assets/404-audio.bin")
+    .then((r) => r.arrayBuffer())
+    .then((buf) => {
+      spectroData = parseSpectroData(buf);
+    });
+
+  function renderViz() {
+    requestAnimationFrame(renderViz);
+    const clipTime = getClipTime();
+    if (clipTime == null || !spectroData) return;
+
+    const col = spectroData.getColumn(clipTime);
+    if (col) {
+      spectroRenderer.pushColumn(
+        col.frames,
+        col.offset,
+        col.binsPerFrame,
+        clipTime,
+      );
+    }
+  }
+
+  requestAnimationFrame(renderViz);
 </script>
 
 <style>

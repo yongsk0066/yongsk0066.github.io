@@ -262,13 +262,11 @@ function drawTOCLines() {
   })
 }
 
-function initTOC() {
+document.addEventListener('DOMContentLoaded', () => {
   if (window.innerWidth >= 1024) {
     drawTOCLines()
   }
-}
-document.addEventListener('DOMContentLoaded', initTOC)
-document.addEventListener('astro:after-swap', initTOC)
+})
 window.addEventListener('resize', () => {
   if (window.innerWidth >= 1024) {
     drawTOCLines()

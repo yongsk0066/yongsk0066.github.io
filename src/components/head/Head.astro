@@ -253,17 +253,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
   }
 </script>
 
-<script>
-  import type { TransitionBeforeSwapEvent } from "astro:transitions/client";
-  document.addEventListener("astro:before-swap", (e) =>
-    [
-      ...(e as TransitionBeforeSwapEvent).newDocument.head.querySelectorAll(
-        'link[as="font"]'
-      ),
-    ].forEach((link) => link.remove())
-  );
-</script>
-
 <script is:inline>
   function init() {
     preloadTheme();
@@ -352,6 +341,5 @@ const { title, description, image = "/nano.png" } = Astro.props;
   }
 
   document.addEventListener("DOMContentLoaded", () => init());
-  document.addEventListener("astro:after-swap", () => init());
   preloadTheme();
 </script>
