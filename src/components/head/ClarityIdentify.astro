@@ -16,9 +16,9 @@ const generatedUserId =
   userId || `anonymous-${Math.random().toString(36).substring(2, 15)}`;
 ---
 
-<script define:vars={{ generatedUserId, pageId, friendlyName }}>
+<script define:vars={{ generatedUserId, pageId, friendlyName, isProd: import.meta.env.PROD }}>
   // 브라우저에서만 실행 및 프로덕션 환경에서만 실행
-  if (typeof window !== "undefined" && window.clarity && import.meta.env.PROD) {
+  if (typeof window !== "undefined" && window.clarity && isProd) {
     // 페이지 로드 시 사용자 식별
     window.clarity(
       "identify",
