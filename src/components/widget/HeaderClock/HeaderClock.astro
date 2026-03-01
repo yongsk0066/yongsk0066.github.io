@@ -1,0 +1,170 @@
+---
+---
+
+<div class="header__clock text-sm" id="header-clock"></div>
+
+<style is:global>
+  .header__clock {
+    font-family: "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+  }
+
+  .digit-slot {
+    position: relative;
+    display: inline-flex;
+    overflow: hidden;
+    width: 1ch;
+    height: 1lh;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .digit-sep {
+    display: inline-flex;
+    width: 1ch;
+    justify-content: center;
+  }
+
+  .digit-slot > span {
+    position: absolute;
+    transition:
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Suppress transitions (and thus @starting-style) during init and persist reattach */
+  .header__clock[data-no-transition] .digit-slot > span {
+    transition: none !important;
+  }
+
+  @starting-style {
+    .digit-slot > span {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+  }
+
+  .digit-slot > span.exiting {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .digit-slot > span {
+      transition: none;
+    }
+
+    @starting-style {
+      .digit-slot > span {
+        transform: none;
+        opacity: 1;
+      }
+    }
+
+    .digit-slot > span.exiting {
+      transform: none;
+      opacity: 0;
+    }
+  }
+</style>
+
+<script>
+  const INITIAL = "--:--:--";
+
+  function formatTime() {
+    return new Date().toLocaleTimeString("it-IT", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  function rollSlot(slot: Element, ch: string) {
+    const current = slot.querySelector("span:not(.exiting)");
+    if (current) {
+      current.classList.add("exiting");
+      current.addEventListener("transitionend", () => current.remove(), {
+        once: true,
+      });
+    }
+    const next = document.createElement("span");
+    next.textContent = ch;
+    slot.appendChild(next);
+  }
+
+  function buildSlots(container: HTMLElement, chars: string[]) {
+    chars.forEach((ch) => {
+      const slot = document.createElement("span");
+      slot.className = ch === ":" ? "digit-sep" : "digit-slot";
+      const inner = document.createElement("span");
+      inner.textContent = ch;
+      slot.appendChild(inner);
+      container.appendChild(slot);
+    });
+  }
+
+  function initClock() {
+    const container = document.getElementById("header-clock");
+    if (!container || container.children.length > 0) return;
+
+    document.getElementById("header-clock-placeholder")?.remove();
+
+    // Suppress @starting-style for initial "--:--:--" build
+    container.dataset.noTransition = "";
+    buildSlots(container, INITIAL.split(""));
+
+    // Force style recalc so @starting-style is processed with transition:none (= no animation)
+    void container.offsetHeight;
+    delete container.dataset.noTransition;
+
+    let prevChars = INITIAL.split("");
+    const digitIndices = prevChars
+      .map((ch, i) => (ch !== ":" ? i : -1))
+      .filter((i) => i !== -1);
+
+    // Stagger-roll from --:--:-- to current time
+    // Now @starting-style is active, so new digits slide in from top
+    setTimeout(() => {
+      const time = formatTime();
+      const newChars = time.split("");
+      const slots = container.children;
+
+      digitIndices.forEach((charIdx, order) => {
+        setTimeout(() => rollSlot(slots[charIdx], newChars[charIdx]), order * 50);
+      });
+
+      prevChars = newChars;
+    }, 100);
+
+    // Tick every second
+    setInterval(() => {
+      const newChars = formatTime().split("");
+      const slots = container.children;
+
+      newChars.forEach((ch, i) => {
+        if (ch === prevChars[i]) return;
+        const slot = slots[i];
+        if (!slot || slot.classList.contains("digit-sep")) return;
+        rollSlot(slot, ch);
+      });
+
+      prevChars = newChars;
+    }, 1000);
+  }
+
+  // Suppress @starting-style during persist reattach
+  document.addEventListener("astro:before-swap", () => {
+    document.getElementById("header-clock")?.setAttribute("data-no-transition", "");
+  });
+  document.addEventListener("astro:after-swap", () => {
+    const clock = document.getElementById("header-clock");
+    if (clock) {
+      void clock.offsetHeight;
+      clock.removeAttribute("data-no-transition");
+    }
+  });
+
+  initClock();
+</script>
