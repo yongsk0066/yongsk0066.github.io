@@ -238,12 +238,6 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     };
   });
 
-  // ---- Coordinated start ----
-
-  Promise.all([renderer.ready(), ytReady]).then(() => {
-    player.playVideo();
-  });
-
   // ---- Mode Display ----
 
   const modeRoller = document.getElementById("mode-roller")!;
@@ -270,6 +264,12 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     rollToMode,
   );
   renderer.start();
+
+  // ---- Coordinated start ----
+
+  Promise.all([renderer.ready(), ytReady]).then(() => {
+    player.playVideo();
+  });
 
   // ---- Spectrogram Border ----
 
