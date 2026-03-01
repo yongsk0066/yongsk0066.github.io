@@ -145,69 +145,48 @@ const { title, description, image = "/nano.png" } = Astro.props;
   href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap"
   rel="stylesheet"
 />
+{Astro.currentLocale === 'ja' && (
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+)}
 
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />
 
 <!-- hreflang tags -->
 {
-  Astro.url.pathname.includes("/blog/en") ? (
-    <>
-      <link
-        rel="alternate"
-        hreflang="en"
-        href={new URL(Astro.url.pathname, Astro.site)}
-      />
-      <link
-        rel="alternate"
-        hreflang="ko"
-        href={
-          new URL(Astro.url.pathname.replace(/\/blog\/en/, "/blog"), Astro.site)
-        }
-      />
-      <link
-        rel="alternate"
-        hreflang="x-default"
-        href={
-          new URL(Astro.url.pathname.replace(/\/blog\/en/, "/blog"), Astro.site)
-        }
-      />
-    </>
-  ) : Astro.url.pathname.startsWith("/blog") &&
-    !Astro.url.pathname.includes("/en") ? (
-    <>
-      <link
-        rel="alternate"
-        hreflang="ko"
-        href={new URL(Astro.url.pathname, Astro.site)}
-      />
-      <link
-        rel="alternate"
-        hreflang="en"
-        href={
-          new URL(Astro.url.pathname.replace(/^\/blog/, "/blog/en"), Astro.site)
-        }
-      />
-      <link
-        rel="alternate"
-        hreflang="x-default"
-        href={new URL(Astro.url.pathname, Astro.site)}
-      />
-    </>
-  ) : (
-    <>
-      <link
-        rel="alternate"
-        hreflang="ko"
-        href={new URL(Astro.url.pathname, Astro.site)}
-      />
-      <link
-        rel="alternate"
-        hreflang="x-default"
-        href={new URL(Astro.url.pathname, Astro.site)}
-      />
-    </>
-  )
+  (() => {
+    const p = Astro.url.pathname;
+    const isBlog = p.match(/^\/blog\/.+/);
+    const isEn = p.includes("/blog/en");
+    const isJa = p.includes("/blog/ja");
+
+    if (!isBlog) {
+      // Non-blog pages: ko + x-default only
+      return (
+        <>
+          <link rel="alternate" hreflang="ko" href={new URL(p, Astro.site)} />
+          <link rel="alternate" hreflang="x-default" href={new URL(p, Astro.site)} />
+        </>
+      );
+    }
+
+    // Derive ko/en/ja paths from current pathname
+    const koPath = isEn ? p.replace(/\/blog\/en/, "/blog") : isJa ? p.replace(/\/blog\/ja/, "/blog") : p;
+    const enPath = koPath.replace(/^\/blog/, "/blog/en");
+    const jaPath = koPath.replace(/^\/blog/, "/blog/ja");
+
+    return (
+      <>
+        <link rel="alternate" hreflang="ko" href={new URL(koPath, Astro.site)} />
+        <link rel="alternate" hreflang="en" href={new URL(enPath, Astro.site)} />
+        <link rel="alternate" hreflang="ja" href={new URL(jaPath, Astro.site)} />
+        <link rel="alternate" hreflang="x-default" href={new URL(koPath, Astro.site)} />
+      </>
+    );
+  })()
 }
 
 <!-- Markdown alternate for AI agents (blog posts only, not list pages) -->
@@ -222,12 +201,20 @@ const { title, description, image = "/nano.png" } = Astro.props;
 }
 
 <!-- RSS -->
-<link
-  rel="alternate"
-  type="application/rss+xml"
-  title={title}
-  href={new URL("rss.xml", Astro.site)}
-/>
+{
+  (() => {
+    const locale = Astro.currentLocale || 'ko';
+    const rssPath = locale === 'ko' ? 'rss.xml' : `${locale}/rss.xml`;
+    return (
+      <link
+        rel="alternate"
+        type="application/rss+xml"
+        title={title}
+        href={new URL(rssPath, Astro.site)}
+      />
+    );
+  })()
+}
 
 <!-- Primary Meta Tags -->
 <title>{title}</title>
@@ -287,27 +274,6 @@ const { title, description, image = "/nano.png" } = Astro.props;
 
     const backToPrev = document.getElementById("back-to-prev");
     backToPrev?.addEventListener("click", () => window.history.back());
-
-    const shareButton = document.getElementById("share-button");
-    shareButton?.addEventListener("click", () => {
-      const url = window.location.href;
-      if (navigator.share) {
-        navigator.share({
-          title: document.title,
-          url: url,
-        });
-      } else {
-        navigator.clipboard
-          .writeText(url)
-          .then(() => {
-            alert("링크가 복사되었어요!");
-          })
-          .catch((error) => {
-            console.error("클립보드에 복사 실패:", error);
-            prompt("아래 링크를 복사하세요!", url);
-          });
-      }
-    });
 
     const lightThemeButton = document.getElementById("light-theme-button");
     lightThemeButton?.addEventListener("click", () => {
