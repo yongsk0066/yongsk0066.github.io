@@ -211,7 +211,7 @@ body {
 }
 
 body {
-  font-family: "Pretendard", "Oswald", "Atkinson", sans-serif;
+  font-family: "Pretendard", "Noto Sans JP", "Oswald", "Atkinson", sans-serif;
   @apply flex flex-col;
   @apply bg-zinc-100;
   @apply text-black/50;
@@ -234,7 +234,7 @@ footer {
 /* Specific styles for article content - only affects actual article tags in blog posts */
 @layer utilities {
   article a {
-    font-family: "Pretendard", "Oswald", "Atkinson", sans-serif;
+    font-family: "Pretendard", "Noto Sans JP", "Oswald", "Atkinson", sans-serif;
     @apply font-sans text-current underline underline-offset-2;
     @apply decoration-black/15;
     @apply transition-colors duration-300 ease-in-out;

@@ -31,7 +31,7 @@ const {
 ---
 
 <!doctype html>
-<html lang="en" {...(availableLocales ? { "data-available-locales": availableLocales.join(",") } : {})}>
+<html lang={webmcpCurrentLocale || 'ko'} {...(availableLocales ? { "data-available-locales": availableLocales.join(",") } : {})}>
   <head>
     <Head
       title={`${title} | ${SITE_TITLE}`}

@@ -126,6 +126,12 @@ const { title, description, image = "/blog-placeholder-1.jpg" } = Astro.props;
   href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap"
   rel="stylesheet"
 />
+{Astro.currentLocale === 'ja' && (
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+)}
 
 <!-- RSS -->
 <link
