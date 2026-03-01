@@ -39,7 +39,7 @@ const locales = Object.entries(LOCALE_LABELS);
         </div>
         <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;">
           <span id="header-clock-placeholder">--:--:--</span>
-          <HeaderClock client:only="react" />
+          <HeaderClock client:only="react" transition:persist="header-clock" />
         </div>
         <span>
           {`/`}

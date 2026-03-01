@@ -112,7 +112,7 @@ const { src, title } = Astro.props;
 </div>
 
 <script define:vars={{ src }}>
-  document.addEventListener("DOMContentLoaded", () => {
+  function initAllAudioPlayers() {
     const initAudioPlayer = (audioPlayerId) => {
       // Find the closest parent component
       const playerContainer = document
@@ -202,5 +202,7 @@ const { src, title } = Astro.props;
     document.querySelectorAll(".audio-player").forEach((player, index) => {
       initAudioPlayer(`audio-player-${index}`);
     });
-  });
+  }
+  document.addEventListener("DOMContentLoaded", initAllAudioPlayers);
+  document.addEventListener("astro:after-swap", initAllAudioPlayers);
 </script>

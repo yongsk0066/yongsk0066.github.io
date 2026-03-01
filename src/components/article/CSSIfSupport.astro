@@ -180,4 +180,5 @@ const { class: className } = Astro.props;
   } else {
     checkCSSIfSupport();
   }
+  document.addEventListener("astro:after-swap", checkCSSIfSupport);
 </script>
