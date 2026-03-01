@@ -5,6 +5,7 @@ import Container from "@components/layout/Container.astro";
 import FormattedDate from "@components/blog/FormattedDate.astro";
 import PostNavigation from "@components/blog/PostNavigation.astro";
 import CopyMenu from "@components/blog/CopyMenu.astro";
+import Share from "@components/blog/Share.astro";
 import TOC from "@components/blog/TOC.astro";
 import { DEFAULT_LOCALE, OTHER_LOCALES } from "@consts";
 import { useTranslations } from "@i18n/utils";
@@ -179,8 +180,9 @@ const t = useTranslations(currentLocale as any);
         </div>
       )
     }
-    <div class="mx-auto my-4 flex justify-center">
+    <div class="mx-auto my-4 flex gap-2 justify-center">
       <CopyMenu />
+      <Share />
     </div>
     <PostNavigation prevPost={prevPost} nextPost={nextPost} />
     <Comments />

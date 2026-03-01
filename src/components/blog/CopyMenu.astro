@@ -51,34 +51,6 @@ const anchorName = `--copy-trigger-${uid}`;
       </svg>
       <span>{t("word.open_in_chatgpt")}</span>
     </button>
-
-    <hr />
-
-    <!-- RSS feeds by language -->
-    <a role="menuitem" href="/rss.xml" target="_blank" tabindex="-1" class="rss-link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="menu-icon">
-        <path d="M19 20.001C19 11.729 12.271 5 4 5v2c7.168 0 13 5.832 13 13.001h2z"></path>
-        <path d="M12 20.001h2C14 14.486 9.514 10 4 10v2c4.411 0 8 3.589 8 8.001z"></path>
-        <circle cx="6" cy="18" r="2"></circle>
-      </svg>
-      <span>RSS (KO)</span>
-    </a>
-    <a role="menuitem" href="/en/rss.xml" target="_blank" tabindex="-1" class="rss-link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="menu-icon">
-        <path d="M19 20.001C19 11.729 12.271 5 4 5v2c7.168 0 13 5.832 13 13.001h2z"></path>
-        <path d="M12 20.001h2C14 14.486 9.514 10 4 10v2c4.411 0 8 3.589 8 8.001z"></path>
-        <circle cx="6" cy="18" r="2"></circle>
-      </svg>
-      <span>RSS (EN)</span>
-    </a>
-    <a role="menuitem" href="/ja/rss.xml" target="_blank" tabindex="-1" class="rss-link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="menu-icon">
-        <path d="M19 20.001C19 11.729 12.271 5 4 5v2c7.168 0 13 5.832 13 13.001h2z"></path>
-        <path d="M12 20.001h2C14 14.486 9.514 10 4 10v2c4.411 0 8 3.589 8 8.001z"></path>
-        <circle cx="6" cy="18" r="2"></circle>
-      </svg>
-      <span>RSS (JA)</span>
-    </a>
   </div>
 </div>
 
@@ -184,7 +156,7 @@ const anchorName = `--copy-trigger-${uid}`;
     margin: 0.25rem 0;
   }
 
-  .copy-menu-panel [role="menuitem"] {
+  .copy-menu-panel button[role="menuitem"] {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -201,7 +173,7 @@ const anchorName = `--copy-trigger-${uid}`;
     transition: all 150ms ease-in-out;
   }
 
-  .copy-menu-panel [role="menuitem"]:hover {
+  .copy-menu-panel button[role="menuitem"]:hover {
     background: rgb(0 0 0 / 0.05);
     color: rgb(0 0 0);
   }
@@ -211,10 +183,6 @@ const anchorName = `--copy-trigger-${uid}`;
     height: 1rem;
     flex-shrink: 0;
     fill: currentColor;
-  }
-
-  .copy-menu-panel a[role="menuitem"] {
-    text-decoration: none;
   }
 
   @supports not (anchor-name: --test) {
