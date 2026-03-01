@@ -6,136 +6,154 @@ const SITE_URL = "https://yongseok.me";
 const CONTENT_DIR = "./src/content/blog";
 const LOCALES = ["en", "ja"];
 
-/**
- * MDX 원본에서 import 문과 JSX 컴포넌트를 제거하여 clean Markdown을 생성한다.
- */
+// --- MDX → clean Markdown 변환 ---
+
+/** 임베드 컴포넌트를 Markdown 링크로 변환하는 규칙 */
+const EMBED_RULES: { pattern: RegExp; replace: (url: string) => string }[] = [
+  // <YouTube src="url" /> (single-line & multiline)
+  { pattern: /<YouTube\s[^>]*src=["']([^"']+)["'][^>]*\/?>/gs, replace: (url) => `[YouTube](${url})` },
+  // <LinkPreview src="url" />
+  { pattern: /<LinkPreview\s+src=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[${url}](${url})` },
+  // <GoogleMap src="url" />
+  { pattern: /<GoogleMap\s+src=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[Google Maps](${url})` },
+  // <AudioPlayer src="url" />
+  { pattern: /<AudioPlayer\s+src=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[Audio](${url})` },
+  // <Video src="url" />
+  { pattern: /<Video\s+src=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[Video](${url})` },
+  // <TwitterVideo src="url" />
+  { pattern: /<TwitterVideo\s+src=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[Twitter Video](${url})` },
+  // <InstagramEmbed url="url" />
+  { pattern: /<InstagramEmbed\s+url=["']([^"']+)["'][^>]*\/?>/g, replace: (url) => `[Instagram](${url})` },
+];
+
+/** interactive 전용 컴포넌트 (제거 대상) */
+const INTERACTIVE_COMPONENTS = [
+  "Sandpack", "Gyroscope", "Globe", "SolarSystem",
+  "CylinderSection", "UnfoldableCylinder", "NotFoundPlayer",
+  "CSSLogicGates", "CSSIfSupport", "AsciiElement",
+];
+
+function stripImports(md: string): string {
+  return md
+    .replace(/^import\s+.+from\s+['"].*['"];?\s*$/gm, "")
+    .replace(/^import\s+\{[^}]*\}\s+from\s+['"].*['"];?\s*$/gm, "");
+}
+
+function convertEmbeds(md: string): string {
+  for (const rule of EMBED_RULES) {
+    md = md.replace(rule.pattern, (_, url) => rule.replace(url));
+  }
+  return md;
+}
+
+function stripInteractiveComponents(md: string): string {
+  const joined = INTERACTIVE_COMPONENTS.join("|");
+  return md.replace(new RegExp(`<(?:${joined})\\b[^>]*/>`, "gs"), "");
+}
+
+function convertBlockComponents(md: string): string {
+  // <Letter>text</Letter> → text
+  md = md.replace(/<Letter[^>]*>([\s\S]*?)<\/Letter>/g, "$1");
+  // Chat 컴포넌트 → blockquote로 변환
+  md = md.replace(/<ChatBubble[^>]*>([\s\S]*?)<\/ChatBubble>/g, "> $1\n");
+  md = md.replace(/<ChatInfo[^>]*>([\s\S]*?)<\/ChatInfo>/g, "_$1_\n");
+  md = md.replace(/<ChatContainer[^>]*>([\s\S]*?)<\/ChatContainer>/gs, "$1");
+  // 나머지 PascalCase self-closing 제거
+  md = md.replace(/<[A-Z]\w+\b[^>]*\/>/g, "");
+  // 나머지 PascalCase block — 내부 텍스트만 보존
+  md = md.replace(/<[A-Z]\w+[^>]*>([\s\S]*?)<\/[A-Z]\w+>/g, "$1");
+  return md;
+}
+
+function cleanupJsxArtifacts(md: string): string {
+  // {expression} 단독 줄 제거
+  md = md.replace(/^\s*\{[^}]*\}\s*$/gm, "");
+  // client:visible 등 Astro 디렉티브 잔여물 제거
+  md = md.replace(/\s*client:\w+(?:=["'][^"']*["'])?\s*/g, " ");
+  // 연속 빈 줄 정리
+  md = md.replace(/\n{3,}/g, "\n\n");
+  return md.trim();
+}
+
+function buildFrontmatter(
+  frontmatter: Record<string, unknown>,
+  sourceUrl: string,
+): string {
+  const lines = [
+    "---",
+    `title: ${JSON.stringify(frontmatter.title)}`,
+    `date: ${frontmatter.date instanceof Date ? frontmatter.date.toISOString() : frontmatter.date}`,
+  ];
+  if (frontmatter.description)
+    lines.push(`description: ${JSON.stringify(frontmatter.description)}`);
+  if (Array.isArray(frontmatter.categories) && frontmatter.categories.length > 0)
+    lines.push(`categories: [${frontmatter.categories.map((c: string) => JSON.stringify(c)).join(", ")}]`);
+  if (frontmatter.series)
+    lines.push(`series: ${JSON.stringify(frontmatter.series)}`);
+  lines.push(`source_url: ${JSON.stringify(sourceUrl)}`);
+  lines.push("---");
+  return lines.join("\n");
+}
+
 function mdxToCleanMarkdown(
   body: string,
   frontmatter: Record<string, unknown>,
   sourceUrl: string,
 ): string {
   let md = body;
+  md = stripImports(md);
+  md = convertEmbeds(md);
+  md = stripInteractiveComponents(md);
+  md = convertBlockComponents(md);
+  md = cleanupJsxArtifacts(md);
 
-  // 1. import 문 제거
-  md = md.replace(/^import\s+.+from\s+['"].*['"];?\s*$/gm, "");
-  // import { ... } from '...' 패턴도 제거
-  md = md.replace(/^import\s+\{[^}]*\}\s+from\s+['"].*['"];?\s*$/gm, "");
-
-  // 2. JSX 컴포넌트 → Markdown 변환
-  // <YouTube src="url" /> → [YouTube](url)
-  md = md.replace(
-    /<YouTube\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[YouTube](${url})`,
-  );
-  // multiline YouTube
-  md = md.replace(
-    /<YouTube\s*\n\s*src=["']([^"']+)["'][^/]*\/?\s*>/g,
-    (_, url) => `[YouTube](${url})`,
-  );
-
-  // <LinkPreview src="url" /> → [url](url)
-  md = md.replace(
-    /<LinkPreview\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[${url}](${url})`,
-  );
-
-  // <GoogleMap src="url" /> → [Google Maps](url)
-  md = md.replace(
-    /<GoogleMap\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[Google Maps](${url})`,
-  );
-
-  // <AudioPlayer src="url" /> → [Audio](url)
-  md = md.replace(
-    /<AudioPlayer\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[Audio](${url})`,
-  );
-
-  // <Video src="url" /> → [Video](url)
-  md = md.replace(
-    /<Video\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[Video](${url})`,
-  );
-
-  // <TwitterVideo src="url" /> → [Twitter Video](url)
-  md = md.replace(
-    /<TwitterVideo\s+src=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[Twitter Video](${url})`,
-  );
-
-  // <InstagramEmbed url="url" /> → [Instagram](url)
-  md = md.replace(
-    /<InstagramEmbed\s+url=["']([^"']+)["']\s*\/?\s*>/g,
-    (_, url) => `[Instagram](${url})`,
-  );
-
-  // interactive 컴포넌트 제거 (Sandpack, Gyroscope, 3D 등)
-  // self-closing: <Component ... />
-  md = md.replace(
-    /<(?:Sandpack|Gyroscope|Globe|SolarSystem|CylinderSection|UnfoldableCylinder|NotFoundPlayer|CSSLogicGates|CSSIfSupport|AsciiElement)\b[^>]*\/>/gs,
-    "",
-  );
-
-  // block 컴포넌트 — 내부 텍스트만 보존
-  // <Letter>text</Letter> → text
-  md = md.replace(/<Letter[^>]*>([\s\S]*?)<\/Letter>/g, "$1");
-
-  // <ChatContainer>...<ChatBubble>text</ChatBubble>...</ChatContainer>
-  // → 대화 내용만 추출
-  md = md.replace(/<ChatBubble[^>]*>([\s\S]*?)<\/ChatBubble>/g, "> $1\n");
-  md = md.replace(/<ChatInfo[^>]*>([\s\S]*?)<\/ChatInfo>/g, "_$1_\n");
-  md = md.replace(/<ChatContainer[^>]*>([\s\S]*?)<\/ChatContainer>/gs, "$1");
-
-  // 나머지 알 수 없는 self-closing 컴포넌트 제거 (PascalCase)
-  md = md.replace(/<[A-Z]\w+\b[^>]*\/>/g, "");
-
-  // 나머지 알 수 없는 block 컴포넌트 — 내부 텍스트 보존
-  md = md.replace(/<[A-Z]\w+[^>]*>([\s\S]*?)<\/[A-Z]\w+>/g, "$1");
-
-  // 3. JSX expression cleanup
-  // {expression} 단독 줄 제거 (Sandpack files prop 등)
-  md = md.replace(/^\s*\{[^}]*\}\s*$/gm, "");
-
-  // client:visible, client:only 등 잔여 Astro 디렉티브 제거
-  md = md.replace(/\s*client:\w+(?:=["'][^"']*["'])?\s*/g, " ");
-
-  // 4. 연속 빈 줄 정리 (3개 이상 → 2개로)
-  md = md.replace(/\n{3,}/g, "\n\n");
-  md = md.trim();
-
-  // 5. YAML frontmatter 생성
-  const fm = [
-    "---",
-    `title: ${JSON.stringify(frontmatter.title)}`,
-    `date: ${frontmatter.date instanceof Date ? frontmatter.date.toISOString() : frontmatter.date}`,
-  ];
-  if (frontmatter.description)
-    fm.push(`description: ${JSON.stringify(frontmatter.description)}`);
-  if (
-    frontmatter.categories &&
-    Array.isArray(frontmatter.categories) &&
-    frontmatter.categories.length > 0
-  )
-    fm.push(
-      `categories: [${frontmatter.categories.map((c: string) => JSON.stringify(c)).join(", ")}]`,
-    );
-  if (frontmatter.series)
-    fm.push(`series: ${JSON.stringify(frontmatter.series)}`);
-  fm.push(`source_url: ${JSON.stringify(sourceUrl)}`);
-  fm.push("---");
-
-  return fm.join("\n") + "\n\n" + md + "\n";
+  return buildFrontmatter(frontmatter, sourceUrl) + "\n\n" + md + "\n";
 }
 
-function getLocale(id: string): string {
-  const locale = LOCALES.find((l) => id.startsWith(`${l}/`));
-  return locale || "ko";
+// --- Frontmatter 파싱 ---
+
+function parseFrontmatter(content: string): {
+  frontmatter: Record<string, unknown>;
+  body: string;
+} {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+
+  const fmRaw = match[1];
+  const body = match[2];
+  const fm: Record<string, unknown> = {};
+
+  // multiline value를 처리하기 위해 key: value 쌍을 순회
+  // description 등에 ':'이 포함될 수 있으므로 첫 번째 ':' 기준으로만 분리
+  for (const line of fmRaw.split("\n")) {
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) continue;
+
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
+    if (!key || !value) continue;
+
+    if (key === "categories") {
+      const arrMatch = value.match(/\[([^\]]*)\]/);
+      if (arrMatch) {
+        fm[key] = arrMatch[1]
+          .split(",")
+          .map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
+          .filter(Boolean);
+      }
+    } else if (key === "draft") {
+      fm[key] = value === "true";
+    } else if (key === "date") {
+      fm[key] = new Date(value.replace(/^['"]|['"]$/g, ""));
+    } else {
+      fm[key] = value.replace(/^['"]|['"]$/g, "");
+    }
+  }
+
+  return { frontmatter: fm, body };
 }
 
-function idToSlug(id: string): string {
-  // id 에서 확장자 제거 (glob loader는 확장자 포함하지 않지만 안전하게)
-  return id.replace(/\.(mdx?|md)$/, "");
-}
+// --- 파일 수집 ---
 
 async function collectMdxFiles(
   dir: string,
@@ -149,7 +167,6 @@ async function collectMdxFiles(
     const relativePath = base ? `${base}/${entry.name}` : entry.name;
 
     if (entry.isDirectory()) {
-      // _examples 디렉토리와 wip 디렉토리 스킵
       if (entry.name.startsWith("_") || entry.name === "wip") continue;
       results.push(...(await collectMdxFiles(fullPath, relativePath)));
     } else if (extname(entry.name) === ".mdx" || extname(entry.name) === ".md") {
@@ -161,44 +178,7 @@ async function collectMdxFiles(
   return results;
 }
 
-function parseFrontmatter(content: string): {
-  frontmatter: Record<string, unknown>;
-  body: string;
-} {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
-  if (!match) return { frontmatter: {}, body: content };
-
-  const fmRaw = match[1];
-  const body = match[2];
-
-  // 간단한 YAML 파싱 (title, date, description, categories, series, draft)
-  const fm: Record<string, unknown> = {};
-
-  for (const line of fmRaw.split("\n")) {
-    const kv = line.match(/^(\w+):\s*(.+)$/);
-    if (!kv) continue;
-    const [, key, value] = kv;
-
-    if (key === "categories") {
-      // ["react", "dev"] 형태 파싱
-      const arrMatch = value.match(/\[([^\]]*)\]/);
-      if (arrMatch) {
-        fm[key] = arrMatch[1]
-          .split(",")
-          .map((s) => s.trim().replace(/^['"]|['"]$/g, ""))
-          .filter(Boolean);
-      }
-    } else if (key === "draft") {
-      fm[key] = value.trim() === "true";
-    } else if (key === "date") {
-      fm[key] = new Date(value.replace(/^['"]|['"]$/g, ""));
-    } else {
-      fm[key] = value.replace(/^['"]|['"]$/g, "");
-    }
-  }
-
-  return { frontmatter: fm, body };
-}
+// --- Astro Integration ---
 
 export default function markdownExport(): AstroIntegration {
   return {
@@ -215,30 +195,22 @@ export default function markdownExport(): AstroIntegration {
           const raw = await readFile(file.path, "utf-8");
           const { frontmatter, body } = parseFrontmatter(raw);
 
-          // draft 글 스킵
           if (frontmatter.draft) {
             skipped++;
             continue;
           }
 
-          const locale = getLocale(file.id);
-          const slug = idToSlug(file.id);
-
-          // source URL 생성
+          const slug = file.id;
           const sourceUrl = `${SITE_URL}/blog/${slug}/`;
-
           const cleanMd = mdxToCleanMarkdown(body, frontmatter, sourceUrl);
 
-          // 출력 경로: dist/blog/{slug}/index.md
           const outPath = join(outDir, "blog", slug, "index.md");
           await mkdir(dirname(outPath), { recursive: true });
           await writeFile(outPath, cleanMd, "utf-8");
           count++;
         }
 
-        logger.info(
-          `Generated ${count} markdown files (${skipped} drafts skipped)`,
-        );
+        logger.info(`Generated ${count} markdown files (${skipped} drafts skipped)`);
       },
     },
   };
