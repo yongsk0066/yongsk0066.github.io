@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 Ø
 **/.claude/settings.local.json
+
+# local-only assets
+scripts/404-audio.wav
