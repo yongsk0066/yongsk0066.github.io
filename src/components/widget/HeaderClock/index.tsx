@@ -24,6 +24,17 @@ function rollSlot(slot: Element, ch: string) {
   slot.appendChild(next);
 }
 
+function buildSlots(container: HTMLElement, chars: string[]) {
+  chars.forEach((ch) => {
+    const slot = document.createElement("span");
+    slot.className = ch === ":" ? "digit-sep" : "digit-slot";
+    const inner = document.createElement("span");
+    inner.textContent = ch;
+    slot.appendChild(inner);
+    container.appendChild(slot);
+  });
+}
+
 function HeaderClock() {
   const containerRef = useRef<HTMLDivElement>(null);
   const prevChars = useRef<string[]>([]);
@@ -32,23 +43,41 @@ function HeaderClock() {
     document.getElementById("header-clock-placeholder")?.remove();
 
     const container = containerRef.current!;
-    const chars = INITIAL.split("");
+    const isRemount = (window as any).__headerClockMounted;
 
-    // Build initial DOM: 8 digit-slots + 2 digit-seps
-    chars.forEach((ch) => {
-      const slot = document.createElement("span");
-      slot.className = ch === ":" ? "digit-sep" : "digit-slot";
-      const inner = document.createElement("span");
-      inner.textContent = ch;
-      slot.appendChild(inner);
-      container.appendChild(slot);
-    });
-    prevChars.current = chars;
+    if (isRemount) {
+      // Re-mount (page transition): start with current time, no rolling
+      const chars = formatTime().split("");
+      buildSlots(container, chars);
+      prevChars.current = chars;
+    } else {
+      // First mount: show --:--:-- then stagger-roll to current time
+      const chars = INITIAL.split("");
+      buildSlots(container, chars);
+      prevChars.current = chars;
 
-    // Map from full string index to digit-slot index (skipping ":" positions)
-    const digitIndices = chars
-      .map((ch, i) => (ch !== ":" ? i : -1))
-      .filter((i) => i !== -1);
+      const digitIndices = chars
+        .map((ch, i) => (ch !== ":" ? i : -1))
+        .filter((i) => i !== -1);
+
+      const initialTimer = setTimeout(() => {
+        const time = formatTime();
+        const newChars = time.split("");
+        const slots = container.children;
+
+        digitIndices.forEach((charIdx, order) => {
+          setTimeout(
+            () => rollSlot(slots[charIdx], newChars[charIdx]),
+            order * 50,
+          );
+        });
+
+        prevChars.current = newChars;
+      }, 100);
+
+      (window as any).__headerClockInitialTimer = initialTimer;
+      (window as any).__headerClockMounted = true;
+    }
 
     function tick() {
       const newChars = formatTime().split("");
@@ -64,22 +93,9 @@ function HeaderClock() {
       prevChars.current = newChars;
     }
 
-    // Initial transition: stagger left→right for digit slots only
-    const initialTimer = setTimeout(() => {
-      const time = formatTime();
-      const newChars = time.split("");
-      const slots = container.children;
-
-      digitIndices.forEach((charIdx, order) => {
-        setTimeout(() => rollSlot(slots[charIdx], newChars[charIdx]), order * 50);
-      });
-
-      prevChars.current = newChars;
-    }, 100);
-
     const interval = setInterval(tick, 1000);
     return () => {
-      clearTimeout(initialTimer);
+      clearTimeout((window as any).__headerClockInitialTimer);
       clearInterval(interval);
     };
   }, []);
