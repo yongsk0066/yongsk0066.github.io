@@ -3,9 +3,46 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Serve /blog/*/index.md with correct Content-Type
+    if (path.endsWith("/index.md") && path.startsWith("/blog/")) {
+      const response = await env.ASSETS.fetch(request);
+      if (response.ok) {
+        const newHeaders = new Headers(response.headers);
+        newHeaders.set("content-type", "text/markdown; charset=utf-8");
+        newHeaders.set("x-robots-tag", "noindex");
+        return new Response(response.body, {
+          status: response.status,
+          headers: newHeaders,
+        });
+      }
+    }
+
+    // Content negotiation: Accept: text/markdown → serve index.md
+    const accept = request.headers.get("accept") || "";
+    if (
+      accept.includes("text/markdown") &&
+      path.startsWith("/blog/") &&
+      !path.endsWith("/index.md")
+    ) {
+      const mdPath = path.replace(/\/?$/, "/index.md");
+      const mdUrl = new URL(mdPath, url.origin);
+      const mdResponse = await env.ASSETS.fetch(
+        new Request(mdUrl.toString(), request),
+      );
+      if (mdResponse.ok) {
+        const newHeaders = new Headers(mdResponse.headers);
+        newHeaders.set("content-type", "text/markdown; charset=utf-8");
+        newHeaders.set("x-robots-tag", "noindex");
+        return new Response(mdResponse.body, {
+          status: 200,
+          headers: newHeaders,
+        });
+      }
+    }
+
     // Only lowercase redirect for page URLs, not static assets
     const isStaticAsset =
-      /\.(?:js|css|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|webp|avif|ico|mp4|webm|json|xml|txt|wasm)$/i.test(
+      /\.(?:js|css|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|webp|avif|ico|mp4|webm|json|xml|txt|wasm|md)$/i.test(
         path,
       ) ||
       path.startsWith("/_astro/") ||

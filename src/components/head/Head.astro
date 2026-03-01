@@ -210,6 +210,17 @@ const { title, description, image = "/nano.png" } = Astro.props;
   )
 }
 
+<!-- Markdown alternate for AI agents (blog posts only, not list pages) -->
+{
+  Astro.url.pathname.match(/^\/blog\/.+/) && (
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href={new URL(Astro.url.pathname.replace(/\/?$/, "/index.md"), Astro.site)}
+    />
+  )
+}
+
 <!-- RSS -->
 <link
   rel="alternate"

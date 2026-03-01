@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import mermaid from "./plugin/remark-mermaid";
+import markdownExport from "./plugin/markdown-export";
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -33,7 +34,7 @@ export default defineConfig({
       output: "mathml",
       strict: false
     })]
-  }), sitemap(), react()],
+  }), sitemap(), react(), markdownExport()],
   markdown:{
     shikiConfig: {
       theme: customTheme,
