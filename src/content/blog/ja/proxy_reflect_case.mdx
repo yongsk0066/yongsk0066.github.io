@@ -1,0 +1,532 @@
+---
+title: 'ProxyとReflect、どこで使うのか？'
+description: "ProxyとReflectはES6で追加された機能である。Proxyはオブジェクトの基本動作をインターセプトする機能を提供し、Reflectはオブジェクトの基本動作を代行するメソッドを提供する。実例を通して見ていこう。"
+author: "Yongseok"
+categories: ["javascript"]
+date: '2024-08-04T22:00:00.000Z'
+heroImage: "/post/images/proxy_reflect_case/thumb.png"
+---
+import LinkPreview from '@components/embeds/LinkPreview.astro'
+import YouTube from '@components/embeds/YouTube.astro'
+
+
+
+たまに耳にはしていたものの、実際にはあまり使ったことがなかったProxyとReflectを使ってみた。
+ProxyとReflectはES6で追加された機能である。Proxyはオブジェクトの基本動作をインターセプトする機能を提供し、Reflectはオブジェクトの基本動作を代行するメソッドを提供する。
+
+
+## 本題に入る前に
+
+ちょっとした装飾が好きで、愛用していた[chalk](https://github.com/chalk/chalk)というライブラリがある。\
+知らない方もいるかもしれないので、console.logの仕様について軽く触れておこう。
+
+```js
+console.log('%cHello', 'color: blue;');
+```
+
+このようにコンソールを書くと、`Hello`という文字が青色で出力される。\
+`console.log`の仕様には、書式指定子に関する実装が定義されている。
+
+<LinkPreview src="https://console.spec.whatwg.org/#logger" />
+
+<aside>
+2.2.1. Summary of formatting specifiers
+The following is an informative summary of the format specifiers processed by the above algorithm.
+
+|Specifier|Purpose|Type Conversion|
+|---|---|---|
+|%s|Element which substitutes is converted to a string|	%String%(element)|
+|%d or %i|Element which substitutes is converted to an integer|%parseInt%(element, 10)|
+|%f|Element which substitutes is converted to a float|%parseFloat%(element, 10)|
+|%o|Element is displayed with optimally useful formatting|n/a|
+|%O|Element is displayed with generic JavaScript object formatting|n/a|
+|%c|Applies provided CSS|n/a|
+</aside>
+
+Chromium側のフォーマット実装はこちらにある。順にdevtools側とv8エンジン側である。
+<LinkPreview src="https://source.chromium.org/chromium/chromium/src/+/main:third_party/devtools-frontend/src/front_end/panels/console/ConsoleFormat.ts;drc=b36375ce9ad77da9c8eb0791755b4a14ca0b76de;l=40" />
+<LinkPreview src="https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/builtins-console.cc;drc=b36375ce9ad77da9c8eb0791755b4a14ca0b76de;l=64?q=builtins-co&ss=chromium%2Fchromium%2Fsrc"/>
+
+Chromium側には`%_`のような非標準のフォーマットもあるが、\
+ここでは脱線しないことにしよう。\
+とにかく`console.log`をスタイリングできるということが重要だ。
+
+## Consoleを装飾する方法
+
+で、なぜ`console.log`の話が出たのか。
+
+基本形を使ってスタイリングしてみると、いくつか不便な点がある。
+
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: skyblue">[function 1] </span><span style="color: green">result : 1234</span>
+</div>
+このように一行の中でスタイルを分けて適用するにはどうすればいいだろうか？
+
+```js
+console.log('%c[function 1]', 'color: skyblue;', '%cresult : 1234', 'color: green;');
+```
+これでうまくいくだろうか？残念ながら、以下のように最初の引数でのみ書式指定子が適用される。残りはスタイルでなければ、ただの文字列として出力される。
+理由は上で貼った実装を見てみよう。
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: skyblue">[function 1]</span><span> %cresult : 1234 color: green;</span>
+</div>
+
+望み通りに出力するには、以下のように書く必要がある。
+```js
+console.log('%c[function 1] %cresult : 1234', 'color: skyblue;', 'color: green;');
+```
+あるいは`ANSI_escape_code`を使ってスタイリングする必要がある。（この場合、CSSに比べて扱える範囲は確実に狭くなる。例えば背景画像を入れるといったことは不可能だ。）
+```js
+console.log('\x1B[34m[function 1]\x1B[0m\x1B[32mresult : 1234\x1B[0m')
+```
+`ANSI_escape_code`の詳細についてはWikiを参照(https://en.wikipedia.org/wiki/ANSI_escape_code)\
+ASCII形式の場合、Node環境では引数を分けて書いても適用可能だ。ブラウザで実行すると後半部分は文字列として表示されるだろう。
+```js
+console.log('\x1B[34m[function 1]\x1B[0m','\x1B[32mresult : 1234\x1B[0m')
+```
+
+
+どちらの方法も便利そうには見えないが、\
+二つの方法のうち、一つ目の方が可読性は良い。二つ目の方法は一行にまとめて適用するので可読性は落ちるが、構造を作るには向いている。
+
+こういう時に`chalk`を使うと便利だ。
+
+```js
+import chalk from 'chalk';
+
+console.log(chalk.skyblue('[function 1]') + chalk.green('result : 1234'));
+
+// このようにチェーン形式で複数のスタイルを適用できる。
+console.log(chalk.blue.bgWhite.bold('Hello world!'));
+```
+シンプルなコンソールスタイリングライブラリで、上の例のようにチェーニングでスタイルを適用できる。
+
+ここで印象的だったポイントは、チェーニング方式だ。
+
+これを一度実装してみよう。
+
+## Chalkの実装
+
+### スタイル定義
+
+上で見たスタイリング方式の中で、機能的には`ANSI_escape_code`で十分だろう。\
+まずスタイルの定義をしてみよう。
+```js
+const styles = {
+  // 色
+  black: "\x1b[30m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  // 背景
+  bgBlack: "\x1b[40m",
+  bgRed: "\x1b[41m",
+  bgGreen: "\x1b[42m",
+  bgYellow: "\x1b[43m",
+  bgBlue: "\x1b[44m",
+  bgMagenta: "\x1b[45m",
+  bgCyan: "\x1b[46m",
+  bgWhite: "\x1b[47m",
+  // スタイル
+  bold: "\x1b[1m",
+  italic: "\x1b[3m",
+  underline: "\x1b[4m",
+  // リセット
+  reset: "\x1b[0m",
+}
+```
+
+### 要件定義
+
+実装の前に、望む入力方式とそれに対する出力を見ておこう。
+```js
+// 1. 1つのスタイルのみ適用
+console.log(c.blue("Hello")) // 青色で出力
+
+// 実際にはこのように出力される。
+console.log("\x1B[34mHello\x1B[0m");
+// {\x1B[34m} Hello {\x1B[0m}
+// {スタイル(色 blue)} Hello {リセット}
+
+// 2. 複数スタイルの適用
+console.log(c.blue.bgWhite.bold("Hello world!"));
+console.log("\x1B[34m\x1B[47m\x1B[1mHello\x1B[0m");
+// {\x1B[34m} {\x1B[47m} {\x1B[1m} Hello {\x1B[0m}
+// {スタイル(色 blue)} {スタイル(背景 white)} {スタイル(ボールド)} Hello {リセット}
+```
+
+チェーニングするたびに新しいスタイルが一層ずつ追加されなければならない。どう実装するか？\
+少しスクロールを止めて考えてみよう。
+
+考えただろうか？\
+では実装してみよう。
+
+まず要件を整理し直そう。
+
+1. 引数として出力する文字列を受け取り、スタイルを適用した文字列を返す。
+2. チェーニングでスタイルを適用できなければならない。
+3. チェーニングするたびに新しいスタイルが追加されなければならない。
+4. 最後にリセットスタイルが追加されなければならない。
+
+
+### スタイル適用関数の実装
+
+
+文字列を受け取ってスタイルを適用した文字列を返す関数を作る必要がある。
+まず以下のように一つのスタイルを適用する関数を作ってみよう。
+```js
+c.blue("Hello") // \x1B[34mHello\x1B[0m
+```
+`c.blue`は以下のような機能を持つ。定義済みのスタイルからblueを探して適用し、リセットを追加する。
+```js
+c.blue = (text) => {
+  return `${styles.blue}${text}${styles.reset}`;
+}
+```
+`c.{style}`の形式でスタイルを適用するにはどうすればいいだろうか？\
+`c`というオブジェクトにプロパティとして関数が定義されていれば可能だろう。\
+では`c`というオブジェクトを作ってみよう。
+
+```js
+const c = {
+  blue: (text) => {
+    return `${styles.blue}${text}${styles.reset}`;
+  }
+  // ...
+}
+```
+これで`c.blue`を通じてスタイルを適用できる。\
+しかし少し不合理に見える。すでにスタイルに関する情報が`styles`に定義されているのに、`c`にも同じ情報が重複して定義されている。
+
+`c`オブジェクトで`style`にアクセスするたびに、自動的に対応するスタイルを見つけて適用してくれればいい。\
+これを実装するために`Proxy`を利用する。
+
+<LinkPreview src="https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Global_Objects/Proxy"/>
+
+`Proxy`には`getトラップ`というものがある。これはプロパティにアクセスするたびに呼び出されるトラップだ。
+```js
+const c = new Proxy({}, {
+  get: function(target, prop) {
+    // ...
+  }
+});
+```
+`c`というオブジェクトにアクセスするたびに`get`トラップが呼び出される。\
+`c.blue`にアクセスすると`getトラップ`が呼び出され、`prop`には`blue`が渡される。\
+これを利用して`styles`にあるスタイルを見つけて適用してみよう。
+
+```js
+const c = new Proxy({}, {
+  get: function(target, prop) {
+    return function(text) {
+      if (prop in styles) { // stylesにあるスタイルなら適用
+        return `${styles[prop]}${text}${styles.reset}`;
+      }
+      return text;
+    };
+  }
+});
+
+console.log(c.blue("Hello"));
+```
+<div style="padding: 12px 16px; background-color: #282828; color: white; border-radius:6px;">
+<span style="color: #3e71e8">Hello</span>
+</div>
+上のように`c`オブジェクトを実装できる。実際に実行してみよう。\
+`c.blue`で青色に出力され、`c.red`で赤色に出力される。
+
+第1段階は完了だ。\
+次はチェーニングを実装してみよう。
+
+### チェーニングの実装
+
+この実装でのチェーニングは一種の再帰的な構造を持っている。\
+関数を呼び出すたびに新しい関数を返し、最後に最終的に累積されたスタイルの文字列を返す。
+
+以前に作ったコードは単純に文字列を返す関数だった。\
+これを関数を返す関数に変えてみよう。
+
+再帰的に作るために、まず一番最後に実行される基本関数を作ってみよう。
+```js
+const styleFunction = (text) => {
+  return `${currentStyle}${text}${styles.reset}`;
+};
+```
+スタイルを持ち回り、最終的に構成されたスタイルを返す関数だ。\
+この関数に`Proxy`を適用してチェーニングを実装しよう。
+この関数のプロパティにアクセスする場合は、新しいスタイルを付けて新しい`styleFunction`を返す。
+
+```js
+new Proxy(styleFunction, {
+  get(target, prop) {
+    if (prop in styles) {
+      return createStyleFunction(currentStyle + styles[prop]);
+    }
+    return target[prop];
+  },
+});
+```
+
+初期値を設定するために`createStyleFunction`という関数を作ってみよう。
+
+```js
+function createStyleFunction(currentStyle = "") {
+  const styleFunction = (text) => {
+    return `${currentStyle}${text}${styles.reset}`;
+  };
+
+  return new Proxy(styleFunction, {
+    get(target, prop) {
+      if (prop in styles) {
+        return createStyleFunction(currentStyle + styles[prop]);
+      }
+      return target[prop];
+    },
+  });
+}
+
+export const c = createStyleFunction();
+
+console.log(c.blue.bgWhite("Hello"));
+```
+
+最終的にはこのような形になる。
+
+### 動作
+
+完成したので、動作を見てみよう。
+
+```js
+console.log(c.blue.bgWhite("Hello"));
+```
+
+1. `c.blue`プロパティにアクセスすると`get`トラップが呼び出される。
+2. `createStyleFunction`関数が呼び出され、`currentStyle`に`styles.blue`が追加された`styleFunction`が返される。
+3. 返された`Proxy`処理済みの`c.blue`に対して`bgWhite`プロパティにアクセスすると、再び`get`トラップが呼び出される。
+4. `createStyleFunction`関数が呼び出され、`currentStyle`に`styles.bgWhite`が追加された`styleFunction`が返される。
+5. この時点でcurrentStyleは`styles.blue` + `styles.bgWhite`となる。
+6. "Hello"が上で返された`styleFunction`に渡され、最終的に`styles.blue` + `styles.bgWhite` + "Hello" + `styles.reset`が返される。
+
+このようにチェーニングを通じてスタイルを適用できる。
+
+### 中間まとめ
+
+**Proxy**自体を深く掘り下げるのではなく、ユースケースを通して見てきた。\
+上の実装のように、**Proxy**は基本動作をインターセプトする機能を提供すると考えれば理解しやすい。\
+インターセプトするということは、元となるものが存在し、それを拡張またはオーバーライドする概念とも捉えられる。\
+そのため、チェーニングのような機能を実装する際に便利に使えた。
+
+## Reflect
+
+拡張・継承の概念において、**Reflect**は**Proxy**と組み合わせるとさらに強力な機能を提供する。\
+ProxyとReflectは1対1に対応するメソッドを持っている。\
+Proxyがインターセプトする動作を代行するメソッドを提供するなら、Reflectは元の動作を代行するメソッドを提供する。\
+安全に元の動作を返す役割を担うと考えればいい。
+
+簡単な例を通して**Reflect**を見ていこう。
+
+### 例1 - ORMライブラリ
+
+**ORM**ライブラリを作ると仮定しよう。上で習得したチェーニング技術も使って、**SQL文**を作る**クエリビルダー**を作ってみよう。\
+まずこんな形で使いたい。（TypeORMなどのライブラリのquerybuilderを思い出してほしい。）
+
+```js
+const query = createQueryBuilder()
+  .select('name', 'email')
+  .from('users')
+  .where('age > 18')
+  .status('active')  // 動的に生成されたWHERE句
+  .createdAt('2024-08-04')  // もう一つの動的WHERE句
+  .toSQL();
+
+
+console.log(query);
+// SELECT name, email FROM users WHERE age > 18 AND
+// status = 'active' AND createdAt = '2024-08-04'
+```
+宣言的に動作を定義し、**SQL文**を生成する形だ。\
+基本的な**SQL**文の定義があり、それを拡張するメソッドを追加していく。
+
+まずベースとなる**QueryBuilder**を作ってみよう。
+
+各基本メソッドを定義し、チェーニングのために**QueryBuilder**のインスタンスを返すようにした。
+そして**toSQL**メソッドで**SQL**文を返すようにした。
+
+```ts
+class QueryBuilder {
+  private query: any = {};
+
+  select(...fields: string[]): this {
+    this.query.select = fields;
+    return this;
+  }
+
+  from(table: string): this {
+    this.query.from = table;
+    return this;
+  }
+
+  where(condition: string): this {
+    this.query.where = this.query.where || [];
+    this.query.where.push(condition);
+    return this;
+  }
+
+  toSQL(): string {
+    let sql = `SELECT ${this.query.select ? this.query.select.join(', ') : '*'} FROM ${this.query.from}`;
+    if (this.query.where) {
+      sql += ` WHERE ${this.query.where.join(' AND ')}`;
+    }
+    return sql;
+  }
+}
+
+```
+基本的な**SQL**文を生成する**QueryBuilder**ができた。\
+次に**Proxy**を使って動的に**WHERE**句を生成する機能を追加してみよう。
+
+```ts
+
+function createQueryBuilder(): QueryBuilderProxy {
+  const builder = new QueryBuilder();
+
+  const handler: ProxyHandler<QueryBuilder> = {
+    get(target: QueryBuilder, prop: string | symbol, receiver: any): any {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      // 動的WHERE句の生成
+      return (value: any) => {
+        target.where(`${prop.toString()} = '${value}'`);
+        return receiver;
+      };
+    }
+  };
+
+  return new Proxy(builder, handler) as QueryBuilderProxy;
+}
+```
+**Proxy**を使って、**QueryBuilder**のインスタンスにアクセスするたびに**get**トラップが呼び出される。\
+これを利用して**WHERE**句を動的に生成する機能を追加した。
+
+`.status('active')`のように**WHERE**句を動的に生成できる。
+
+## 例2 - 状態管理
+
+**Proxy**は**get**トラップの他に**set**トラップも提供する。\
+つまり**set**される値もインターセプトできるということだ。\
+変化を検知できるなら、これを利用して状態管理もできるだろう。
+
+簡単な**状態管理**ツールを作ってみよう。
+
+```ts
+type Listener = () => void;
+
+export class StateManager<T extends object> {
+  private state: T;
+  private listeners = new Set<Listener>();
+
+  constructor(initialState: T) {
+    this.state = new Proxy<T>(initialState, {
+      get: (target: T, prop: string | symbol): any => {
+        return Reflect.get(target, prop);
+      },
+      set: (target: T, prop: string | symbol, value: any): boolean => {
+        const oldState = { ...target };
+        const result = Reflect.set(target, prop, value);
+        if (prop in target && oldState[prop as keyof T] !== target[prop as keyof T]) {
+          this.notifyListeners();
+        }
+        return result;
+      },
+    });
+  }
+
+  getState = (): T => this.state;
+
+  setState = <K extends keyof T>(key: K, value: T[K]): void => {
+    if (this.state[key] !== value) {
+      this.state = { ...this.state, [key]: value };
+      this.notifyListeners();
+    }
+  };
+
+  subscribe = (listener: Listener): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  private notifyListeners = (): void => {
+    this.listeners.forEach((listener) => listener());
+  };
+}
+```
+
+**StateManager**は**Proxy**を使って**state**をインターセプトし、**set**トラップで状態変化を検知する。\
+新しい値が**set**されるたびに登録されたリスナーに通知を送る。
+
+この状態管理を**React**に組み込むとどうだろうか？\
+外部状態なので**useSyncExternalState**と合わせて使うと良さそうだ。
+
+```ts
+interface GlobalState {
+  count: number;
+}
+
+// グローバル状態インスタンスの生成
+const globalState = new StateManager<GlobalState>({
+  count: 0,
+});
+
+export function useGlobalState<K extends keyof GlobalState>(
+  key: K
+): [GlobalState[K], (value: GlobalState[K]) => void] {
+  const value = useSyncExternalStore(
+    globalState.subscribe,
+    () => globalState.getState()[key],
+    () => globalState.getState()[key]
+  );
+
+  const setValue = (newValue: GlobalState[K]) => {
+    globalState.setState(key, newValue);
+  };
+
+  return [value, setValue];
+}
+```
+
+このようにイベントの購読さえ適切に設定すれば、**useSyncExternalState**を使って**React**と連携できる。
+実際の使い方は以下の通り。正しく動作することが確認できる。
+
+```tsx
+import { useGlobalState } from './store';
+
+function Counter() {
+  const [count, setCount] = useGlobalState('count');
+
+  return (
+    <div>
+      Count: {count}
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+Reactに依存しないため、他のフレームワークでも使えるだろう。\
+[Valtio](https://github.com/pmndrs/valtio)が**Proxy**ベースだと聞いているが、こんな感じではないだろうか。
+
+## おわりに
+
+馴染みのなかった**Proxy**と**Reflect**を使ってみた。\
+**Proxy**は基本動作をインターセプトする機能を提供し、**Reflect**は基本動作を代行するメソッドを提供する。\
+これらを使って**コンソールスタイリングライブラリ**と**ORMライブラリ**、**状態管理ライブラリ**を作ってみた。
+
+
+締めのコメントはCopilotに任せてみた。
+夕飯を食べていないので腹が減って仕方がない。ここで筆を置くとする。

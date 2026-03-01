@@ -1,0 +1,1111 @@
+---
+title: "useEffectEventは黒魔術なのか？そしてもう一つの自動化"
+description: "useEffectEventがStale Closureを解決する原理をReactの内部実装とともに分析し、React Compilerのfire()がこれをどう自動化するのかを探る。"
+author: "Yongseok"
+categories: ["react"]
+date: "2026-01-04T11:00:00.000Z"
+heroImage: "/post/images/useEffectEvent/thumb.png"
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import Sandpack from "../../../components/article/Sandpack";
+
+import example1 from "../_examples/useEffectEvent_ja/example1";
+import example2 from "../_examples/useEffectEvent_ja/example2";
+import example3 from "../_examples/useEffectEvent_ja/example3";
+
+`useEffectEvent`は黒魔術だ。本当にそうだろうか？
+
+React 19.2でstableになった`useEffectEvent`が何なのか、なぜ登場したのか、そしてこれからどう使うべきかを見ていこう。
+
+## useEffectEventとは？
+
+[useEffectEvent](https://react.dev/reference/react/useEffectEvent)についてはドキュメントにもよく説明されている。ドキュメントを引用すると
+
+```plaintext
+## Usage
+Reading the latest props and state
+Typically, when you access a reactive value inside an Effect, you must include it in the dependency array. This makes sure your Effect runs again whenever that value changes, which is usually the desired behavior.
+
+But in some cases, you may want to read the most recent props or state inside an Effect without causing the Effect to re-run when those values change.
+
+To read the latest props or state in your Effect, without making those values reactive, include them in an Effect Event.
+
+## 使い方
+最新のpropsとstateを読み取る
+通常、Effect内部でリアクティブな値にアクセスする場合、その値を依存配列に含める必要がある。こうすることで、その値が変更されるたびにEffectが再実行され、望ましい動作になる。
+しかし場合によっては、値が変更されてもEffectを再実行せずに、Effect内部で最新のpropsやstateを読み取りたいことがある。
+Effectで最新のpropsやstateを読み取るには、その値をEffect Eventに含めればよい。
+```
+
+上記のような説明になっている。`useEffect`内部で使う関数が常に最新の値を参照できるようにラップしてくれるフックということだ。
+直感的にはピンとこないかもしれない。ドキュメントの例題を通して、まず問題のケースを簡単に見てみよう。
+
+## useEffectEventが必要な理由
+
+より直感的に理解できるよう、例題を少し変形してみた。
+
+### ケース1. 依存配列にすべて入れた場合
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on("connected", () => {
+      showNotification("接続しました！", theme);
+    });
+    connection.connect();
+    return () => {
+      showNotification("切断されました！", theme);
+      connection.disconnect();
+    };
+  }, [roomId, theme]);
+
+  return <h1>{roomId}ルームへようこそ！</h1>;
+}
+```
+
+`useEffect`は外部システムとの同期のために使われるのが一般的だ。上のケースではチャットルームとのコネクションがそれにあたる。
+`createConnection`でコネクションを確立し、`connection.on`で`connected`、つまり接続されたときに通知を表示するようにしている。
+切断時にも通知を表示するようにした。通知を呼び出すときは引数としてメッセージとthemeを受け取る。
+
+問題は`theme`が変わったときだ。`theme`が変わると`useEffect`が再実行されてコネクションを切断し、再接続を試みてしまう。
+非常に非効率的だし、notificationのthemeとコネクションはまったく別の関心事だ。ではこれをどう解決すればいいだろうか？
+
+下の例題でthemeを切り替えてみよう。
+
+<Sandpack
+  client:visible
+  files={example1}
+  dependencies={{ "toastify-js": "1.12.0" }}
+/>
+
+（他にも問題がありそうだが、まずは接続の問題に集中しよう）
+`theme`を変えただけで接続がやり直されるのが分かる。
+
+### ケース2. ルールを破って依存配列から除外した場合
+
+`theme`を`useEffect`の依存配列から外したら改善するだろうか？
+外した瞬間、'React Hook useEffect has a missing dependency'というeslint警告が出るはずだ。
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on("connected", () => {
+      showNotification("接続しました！", theme);
+    });
+    connection.connect();
+    return () => {
+      showNotification("切断されました！", theme);
+      connection.disconnect();
+    };
+    // eslint-disable-next-line
+  }, [roomId]);
+
+  return <h1>{roomId}ルームへようこそ！</h1>;
+}
+```
+
+裏技ではあるが、こうすれば`theme`が変わっても新しいコネクションは張らなくなる。ただし、そのためにはまずReactのルールを破る必要があった。\
+ではこれで問題は解決しただろうか？実行してみよう。
+
+<Sandpack
+  client:visible
+  files={example2}
+  dependencies={{ "toastify-js": "1.12.0" }}
+/>
+
+`theme`を変えてから別のチャットルームに接続してみてほしい。
+今度は`theme`を変えてもコネクションが再確立されることはない。しかしまだ問題がある。themeを変えた後に別のチャットルームに接続すると、
+新しい接続時の`切断されました`通知は依然として古いthemeで表示され、新しい`接続しました！`通知は更新されたthemeで表示される。
+
+### ケース3. useEffectEventを適用した場合
+
+では`useEffectEvent`を使ってみたら、この問題は解消されるだろうか？
+
+```jsx
+import { useEffect, useEffectEvent } from "react";
+
+function ChatRoom({ roomId, theme }) {
+  const onConnect = useEffectEvent(() => {
+    showNotification("接続しました！", theme);
+  }); // useEffectEventでラップした
+  const onDisconnect = useEffectEvent(() => {
+    showNotification("切断されました！", theme);
+  });
+
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on("connected", () => {
+      onConnect();
+    });
+    connection.connect();
+    return () => {
+      onDisconnect();
+      connection.disconnect();
+    };
+  }, [roomId]);
+
+  return <h1>{roomId}ルームへようこそ！</h1>;
+}
+```
+
+上のように各ハンドラを`useEffectEvent`でラップした。そしてこれを`useEffect`内で参照するようにしたことで、eslint警告も出なくなった。
+`theme`を変えてからチャットルームを切り替えてみよう。
+
+<Sandpack
+  client:visible
+  files={example3}
+  dependencies={{ "toastify-js": "1.12.0" }}
+/>
+
+おお！意図した通り、トーストが最新の`theme`値に合わせて表示されるようになった。
+`useEffect`内のコードも、roomIdが変わったときだけcleanupされるという意図がより明確に表現できるようになった。
+
+では、なぜこの問題が起きるのか？\
+そしてどうやってこれを解決しているのか？\
+JavaScriptが持つクロージャの特性に原因がある。
+
+## Stale Closure（古いクロージャ）
+
+クロージャ（Closure）についてはすでに知っている方が多いと思うので、ここでは簡単におさらいするに留める。
+
+クロージャとは？
+
+> 関数が生成された時点で、外部スコープの変数を記憶する特性
+
+と定義できる。
+
+簡単な例を通じてクロージャの特性を見てみよう。
+
+```jsx
+function makeCounter() {
+  let count = 0;
+  return function () {
+    count++;
+    console.log(count);
+  };
+}
+const counter = makeCounter();
+counter(); // 1
+counter(); // 2
+counter(); // 3
+```
+
+上の例で `makeCounter` 関数は内部に `count` 変数を持っている。そして `makeCounter` 関数は内部で別の関数を返す。
+この返された関数は `count` 変数をインクリメントし、その値を出力する。重要なのは、`makeCounter` 関数の呼び出しが終わった後も、返された関数が `count` 変数にアクセスできるという点である。\
+これはクロージャの特性によるものだ。`makeCounter` 関数が実行される際、内部関数は `count` 変数を記憶しているため、
+返された関数が呼び出されるたびに `count` 変数にアクセスして値をインクリメントし、出力することができる。
+
+我々の状況に近い例でもう一度見てみよう。
+
+```js
+let theme = "light";
+
+const showMessage = () => {
+  console.log(`Current theme: ${theme}`);
+};
+
+// themeを変更
+theme = "dark";
+
+// しかし関数は…
+showMessage(); // "Current theme: dark" ✅
+```
+
+```js
+// しかしこうすると：
+let theme = "light";
+
+const captureTheme = theme; // この時点の「値」をコピー
+const showMessage = () => {
+  console.log(`Current theme: ${captureTheme}`); // コピーされた値を参照
+};
+
+theme = "dark";
+
+showMessage(); // "Current theme: light" 😱
+```
+
+上の2つの例の違いは何だろうか？
+1つ目の例では、`showMessage` 関数が `theme` 変数を直接参照している。そのため `theme` 変数が変更されると、`showMessage` 関数を呼び出した時に最新の値が出力される。
+一方、2つ目の例では `captureTheme` 変数が `theme` 変数の値をコピーして保持している。そのため `theme` 変数が変更されても、`showMessage` 関数は依然として `captureTheme` 変数に格納された初期値を出力してしまう。
+
+では、Reactではこれがどのように適用されるのだろうか？
+
+## Reactコンポーネントとクロージャ
+
+Reactコンポーネントは結局のところJavaScript関数である。コンポーネントがレンダリングされるということはその関数が呼び出されるということであり、呼び出しのたびに新しい実行コンテキストとともにローカル変数が新たに生成される。
+
+```jsx
+// レンダリング1: theme="light"
+function ChatRoom({ roomId, theme }) {
+  // このスコープではthemeは"light"
+}
+
+// レンダリング2: theme="dark"
+function ChatRoom({ roomId, theme }) {
+  // 完全に新しいスコープ、themeは"dark"
+}
+```
+
+レンダリング1とレンダリング2は同じコンポーネントだが、それぞれの `theme` は異なる変数である。レンダリング1の `theme` が"dark"に変わるのではなく、レンダリング2で新しい `theme` 変数が"dark"という値で生成されるのだ。
+
+ここで、先ほど見た依存性を意図的に除外した**ケース2**をもう一度見てみよう。
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on("connected", () => {
+      showNotification("接続しました！", theme);
+    });
+    connection.connect();
+    return () => {
+      showNotification("切断されました！", theme);
+      connection.disconnect();
+    };
+  }, [roomId]); // themeが依存性配列にない
+
+  return <h1>{roomId}ルームへようこそ！</h1>;
+}
+```
+
+`theme` を依存性配列から除外した。ではシナリオを追ってみよう。
+
+### レンダリング1: roomId="general", theme="light"
+
+コンポーネント関数が呼び出され、新しいスコープが生成される。このスコープ内では：
+
+```jsx
+// スコープ1
+const roomId = "general";
+const theme = "light";
+
+const effectFn = () => {
+  const connection = createConnection(serverUrl, roomId);
+  connection.on("connected", () => {
+    showNotification("接続しました！", theme); // "light"をキャプチャ
+  });
+  connection.connect();
+  return () => {
+    showNotification("切断されました！", theme); // "light"をキャプチャ
+    connection.disconnect();
+  };
+};
+```
+
+`effectFn` 内で参照される `theme` はスコープ1の `theme` である。このEffect関数は実行され、cleanup関数が返される。Reactはこのcleanup関数を内部的に保存する。
+
+### レンダリング2: roomId="general", theme="dark"
+
+ユーザーがテーマを変更した。コンポーネントが再レンダリングされ、新しいスコープが生成される。
+
+```jsx
+// スコープ2
+const roomId = "general";
+const theme = "dark";
+
+const effectFn = () => {
+  // ...
+  showNotification("接続しました！", theme); // "dark"をキャプチャ
+  return () => {
+    showNotification("切断されました！", theme); // "dark"をキャプチャ
+  };
+};
+```
+
+JavaScriptでは関数リテラルは毎回新しいオブジェクトを生成する。そのため `useEffect` に渡されるアロー関数はレンダリングのたびに新しく作られる。この新しい関数はスコープ2の `theme`（"dark"）をキャプチャしている。
+
+しかしReactは依存性配列を比較する。
+
+```js
+// 前回の依存性: ["general"]
+// 今回の依存性: ["general"]
+// → 同じ！
+```
+
+**ここで重要なことが起きる。** React内部では新しいEffectオブジェクトが生成され `hook.memoizedState` に保存される。しかし依存性が同じであるため `HookHasEffect` フラグは設定されない。
+
+```typescript
+// React内部 (updateEffectImpl)
+if (areHookInputsEqual(nextDeps, prevDeps)) {
+  // 依存性が同じ場合：HookHasEffectフラグなしで保存
+  hook.memoizedState = pushSimpleEffect(
+    hookFlags, // HookHasEffectなし！
+    inst, // 既存のinstを再利用（cleanupがここに保存されている）
+    create, // 新しいEffect関数 (theme="dark")
+    nextDeps
+  );
+  return;
+}
+```
+
+コミットフェーズでReactは `HookHasEffect` フラグを確認する。
+
+```typescript
+// React内部 (commitHookEffectListMount)
+if ((effect.tag & HookHasEffect) === HookHasEffect) {
+  // この条件はfalse！実行されない
+  const create = effect.create;
+  create(); // ← 呼び出されない！
+}
+```
+
+フラグがないため**新しいEffect関数は実行されない**。実行されなかったため新しいcleanupも返されず、`inst.destroy` は更新されない。レンダリング2のEffect関数は次のレンダリングでまた新しいEffectオブジェクトが作られる際に上書きされる。
+
+現在の状態：
+
+- `effect.create`: スコープ2の関数 (theme="dark") — 保存されたが実行されていない
+- `inst.destroy`: スコープ1のcleanup (theme="light") — そのまま維持！
+- 実行中のconnection: スコープ1で生成されたもの
+
+### レンダリング3: roomId="random", theme="dark"
+
+ユーザーが別のチャットルームに移動した。再び新しいスコープが生成され、新しいEffect関数が作られる。
+
+```jsx
+// スコープ3
+const roomId = "random";
+const theme = "dark";
+
+const effectFn = () => {
+  const connection = createConnection(serverUrl, "random");
+  connection.on("connected", () => {
+    showNotification("接続しました！", theme); // "dark"をキャプチャ
+  });
+  connection.connect();
+  return () => {
+    showNotification("切断されました！", theme); // "dark"をキャプチャ
+    connection.disconnect();
+  };
+};
+```
+
+今回は依存性が異なる。
+
+```js
+// 前回の依存性: ["general"]
+// 今回の依存性: ["random"]
+// → 異なる！HookHasEffectフラグ設定！
+```
+
+`HookHasEffect` フラグが設定されたため、コミットフェーズでEffectが実行される。順序は以下の通りである：
+
+**ステップ1: cleanupの実行**
+
+Reactはまず `inst.destroy` に保存されたcleanupを実行する。このcleanupは**レンダリング1で作られたもの**である。
+
+```jsx
+// inst.destroyが指す関数（レンダリング1で生成）
+() => {
+  showNotification("切断されました！", theme); // themeはスコープ1の"light"
+  connection.disconnect();
+};
+```
+
+cleanupが実行されると `"切断されました！"` 通知が**"light"テーマ**で表示される。現在の `theme` は"dark"であるにもかかわらず！
+
+**ステップ2: 新しいEffectの実行**
+
+次にReactは**レンダリング3で作られたEffect関数**を実行する。
+
+```jsx
+// effect.create（レンダリング3で生成）
+() => {
+  const connection = createConnection(serverUrl, "random");
+  connection.on("connected", () => {
+    showNotification("接続しました！", theme); // themeはスコープ3の"dark"
+  });
+  connection.connect();
+  return () => {
+    /* 新しいcleanup */
+  };
+};
+```
+
+接続が完了すると `"接続しました！"` 通知が**"dark"テーマ**で表示される。
+
+**ステップ3: 新しいcleanupの保存**
+
+Effect関数が返した新しいcleanupが `inst.destroy` に保存される。これで `inst.destroy` はスコープ3のcleanup（theme="dark"）を指すようになる。
+
+### cleanupはどこに保存されるのか？
+
+ここで疑問が生じるかもしれない。コンポーネント関数のスコープは関数の実行が終わると消えるはずなのに、cleanup関数はどうやってレンダリング1のスコープを保持し続けているのだろうか？
+
+答えは**ReactのFiber構造**にある。各コンポーネントインスタンスにはFiberノードがあり、その中にHookがリンクドリストとして連結されている。
+
+```
+Fiber（コンポーネントインスタンス）
+  └─ memoizedState → Hook1 (useState)
+                       └─ next → Hook2 (useEffect)
+                                   └─ memoizedState: Effectオブジェクト
+                                        └─ inst: { destroy: cleanup関数 }
+```
+
+`useEffect` の場合、Effectオブジェクト内に `inst` というオブジェクトがあり、そこに `destroy` プロパティとして**cleanup関数が保存**される。
+
+```typescript
+// Reactソースコード (ReactFiberHooks.js)
+type EffectInstance = {
+  destroy: void | (() => void); // cleanup関数がここに保存される
+};
+
+type Effect = {
+  tag: HookFlags;
+  create: () => (() => void) | void; // setup関数
+  inst: EffectInstance; // cleanupを保持するオブジェクト
+  deps: Array<mixed> | null;
+  next: Effect;
+};
+```
+
+cleanup関数が `inst.destroy` に保存されており、その関数がスコープをクロージャとしてキャプチャしているため、**スコープもガベージコレクションされずに生き残る**のである。
+
+### Stale Closureが発生する理由
+
+ここまでの内容を整理すると：
+
+1. **JavaScriptのクロージャ**: 関数は生成時点のスコープをキャプチャする
+2. **Reactのレンダリング**: レンダリングのたびにローカル変数が新たに生成される（同じ変数名だが異なる変数）
+3. **Effectの再利用**: 依存性が同じであれば新しいEffect関数は作られるが実行されず、`inst.destroy` は以前のcleanupを指し続ける
+
+この3つが組み合わさってStale Closureが発生する。
+
+| タイミング                 | 実際のtheme | cleanupが参照するtheme       |
+| ------------------------- | ---------- | --------------------------- |
+| レンダリング1              | "light"    | "light"                     |
+| レンダリング2              | "dark"     | "light"（更新されていない）    |
+| レンダリング3 cleanup実行時 | "dark"     | "light" ← Stale!            |
+
+cleanupが実行される時点の実際の`theme`は"dark"であるにもかかわらず、cleanupは"light"を出力する。関数がキャプチャした値と現在の値が異なる状況、これがStale Closureである。
+
+## useEffectEventはどのように解決するのか？
+
+ここで、ケース3において`useEffectEvent`がこの問題をどのように解決するのかを見ていこう。
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  const onConnect = useEffectEvent(() => {
+    showNotification("接続しました！", theme);
+  });
+  const onDisconnect = useEffectEvent(() => {
+    showNotification("切断されました！", theme);
+  });
+
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.on("connected", () => {
+      onConnect();
+    });
+    connection.connect();
+    return () => {
+      onDisconnect();
+      connection.disconnect();
+    };
+  }, [roomId]);
+
+  return <h1>{roomId}ルームへようこそ！</h1>;
+}
+```
+
+### キック：オブジェクトラッパー
+
+`useEffectEvent`の核心は**オブジェクトを介した間接参照**である。
+
+```js
+// 関数を直接キャプチャする代わりに
+const callback = () => console.log(theme); // themeの値をキャプチャ
+
+// オブジェクトを介して間接参照
+const ref = { impl: callback };
+const eventFn = () => ref.impl(); // refオブジェクトをキャプチャ（値ではなく参照）
+```
+
+`eventFn`は`ref`オブジェクトをキャプチャする。`ref`オブジェクト自体は変わらず、`ref.impl`だけが更新される。`eventFn`を呼び出すと常にその時点の`ref.impl`を実行するため、最新のコールバックを使用できる。
+
+なぜこのパターンが機能するのか？ JavaScriptエンジン（V8）の観点から見ると、クロージャは外部変数を**Contextスロット**に格納する。プリミティブ値はスロットに直接コピーされるが、オブジェクトは**ヒープメモリへのポインタ**が格納される。
+
+```
+クロージャのContext:
+┌─────────────────────┐
+│ slot[0]: 0x7f3a... ─┼──→ { impl: callback }
+└─────────────────────┘       ↑
+                              └── ポインタは不変、implプロパティのみ変更
+```
+
+`ref.impl = newCallback`はContextスロットには触れず、ヒープ上のオブジェクトのプロパティのみを変更する。したがってクロージャがいつ実行されようと、`ref.impl()`は**その時点の最新の関数**を呼び出すことになる。
+
+### Reactの実装分析
+
+実際のReactソースコードを見ていこう。
+
+**Mount（初回レンダリング）**
+
+```typescript
+// ReactFiberHooks.js
+function mountEvent<Args, Return, F: (...Array<Args>) => Return>(
+  callback: F
+): F {
+  const hook = mountWorkInProgressHook();
+  const ref = { impl: callback }; // オブジェクトラッパーを生成
+  hook.memoizedState = ref; // Hookに格納
+
+  return function eventFn() {
+    if (isInvalidExecutionContextForEventFunction()) {
+      throw new Error(
+        "A function wrapped in useEffectEvent can't be called during rendering."
+      );
+    }
+    return ref.impl.apply(undefined, arguments); // ref.implを呼び出し
+  };
+}
+```
+
+- `{ impl: callback }`オブジェクトを生成し、Hookに格納する
+- `eventFn`は`ref`オブジェクトをクロージャでキャプチャする
+- `eventFn`呼び出し時に`ref.impl()`を実行する
+
+**Update（再レンダリング）**
+
+```typescript
+function updateEvent<Args, Return, F: (...Array<Args>) => Return>(
+  callback: F
+): F {
+  const hook = updateWorkInProgressHook();
+  const ref = hook.memoizedState; // 既存のrefオブジェクトを再利用！
+  useEffectEventImpl({ ref, nextImpl: callback }); // 更新を予約
+
+  return function eventFn() {
+    if (isInvalidExecutionContextForEventFunction()) {
+      throw new Error(
+        "A function wrapped in useEffectEvent can't be called during rendering."
+      );
+    }
+    return ref.impl.apply(undefined, arguments);
+  };
+}
+```
+
+- **同じ`ref`オブジェクトを再利用**する（`hook.memoizedState`）
+- `useEffectEventImpl`を呼び出して更新を予約する
+
+**更新の予約**
+
+```typescript
+function useEffectEventImpl<Args, Return, F: (...Array<Args>) => Return>(
+  payload: EventFunctionPayload<Args, Return, F>
+) {
+  currentlyRenderingFiber.flags |= UpdateEffect;
+  let componentUpdateQueue: null | FunctionComponentUpdateQueue =
+    (currentlyRenderingFiber.updateQueue: any);
+
+  if (componentUpdateQueue === null) {
+    componentUpdateQueue = createFunctionComponentUpdateQueue();
+    currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
+    componentUpdateQueue.events = [payload];
+  } else {
+    const events = componentUpdateQueue.events;
+    if (events === null) {
+      componentUpdateQueue.events = [payload];
+    } else {
+      events.push(payload);
+    }
+  }
+}
+```
+
+- `{ ref, nextImpl: callback }`ペイロードを`updateQueue.events`に追加する
+- レンダリングフェーズでは実際の更新は行わず、**予約のみ**を行う
+
+**コミットフェーズでの実際の更新**
+
+```typescript
+// ReactFiberCommitWork.js
+const updateQueue: FunctionComponentUpdateQueue | null =
+  (finishedWork.updateQueue: any);
+const eventPayloads = updateQueue !== null ? updateQueue.events : null;
+
+if (eventPayloads !== null) {
+  for (let ii = 0; ii < eventPayloads.length; ii++) {
+    const { ref, nextImpl } = eventPayloads[ii];
+    ref.impl = nextImpl; // ここで実際に更新！
+  }
+}
+```
+
+- コミットフェーズで`ref.impl = nextImpl`によって実際の更新を行う
+- この時点は**すべてのEffectよりも先に**実行される
+
+### なぜコミットフェーズで更新するのか？
+
+```
+Render Phase（レンダリングフェーズ）
+  - useEffectEvent呼び出し
+  - 更新を予約（updateQueue.eventsに追加）
+  - まだref.implは以前の値
+                    ↓
+Commit Phase（コミットフェーズ）
+  - ref.impl = nextImpl（ここで更新！）
+                    ↓
+Passive Effect Phase
+  - useEffect cleanup/setupが実行
+  - この時点でref.implはすでに最新！
+```
+
+コミットフェーズで更新することで、**すべてのEffectが実行される前に**`ref.impl`が最新のコールバックに更新される。したがってEffect内で`eventFn()`を呼び出すと、常に最新の値を参照できる。
+
+### シナリオで再確認する
+
+`useEffectEvent`を適用したコードで、レンダリング1 → 2 → 3のシナリオを再度見ていこう。
+
+**レンダリング1: roomId="general", theme="light"**
+
+```
+[Render Phase]
+  - mountEvent呼び出し
+  - ref = { impl: () => showNotification("切断されました！", "light") }
+  - hook.memoizedState = ref
+  - eventFn = () => ref.impl()  ← refオブジェクトをキャプチャ
+
+[Commit Phase]
+  - （初回レンダリングのため更新するものなし）
+
+[Passive Effect Phase]
+  - setup実行
+  - inst.destroy = cleanup  ← このcleanupはeventFnを呼び出す
+```
+
+**レンダリング2: roomId="general", theme="dark"**
+
+```
+[Render Phase]
+  - updateEvent呼び出し
+  - ref = hook.memoizedState  ← 同じrefオブジェクト！
+  - useEffectEventImpl({ ref, nextImpl: () => showNotification("切断されました！", "dark") })
+  - updateQueue.eventsにペイロード追加（予約）
+
+[Commit Phase]
+  - ref.impl = nextImpl  ← ここで更新！
+  - ref.implはtheme="dark"をキャプチャした新しい関数に
+
+[Passive Effect Phase]
+  - 依存配列が同じ → Effect実行なし
+  - inst.destroyはそのまま（レンダリング1のcleanup）
+  - しかしそのcleanupが呼び出すeventFnのref.implは更新済み！
+```
+
+**レンダリング3: roomId="random", theme="dark"**
+
+```
+[Render Phase]
+  - 依存配列の比較: ["general"] !== ["random"]
+  - HookHasEffectフラグ設定
+
+[Commit Phase]
+  - ref.impl更新（今回も）
+
+[Passive Effect Phase]
+  - cleanup実行: inst.destroy()
+    → eventFn()呼び出し
+    → ref.impl()呼び出し
+    → 最新のコールバック実行！ theme="dark"！
+```
+
+### 核心的な違い
+
+**useEffectEventなし：**
+
+```
+inst.destroy = () => {
+  showNotification("切断されました！", theme);  // theme="light"を直接キャプチャ
+};
+// themeの値がクロージャに固定される
+```
+
+**useEffectEvent使用：**
+
+```
+inst.destroy = () => {
+  onDisconnect();  // eventFnを呼び出し
+};
+
+// eventFnの内部:
+// return ref.impl();  // refオブジェクトをキャプチャ、implは毎回更新される
+```
+
+| 区分                | 直接キャプチャ          | useEffectEvent                     |
+| ------------------- | ----------------------- | ---------------------------------- |
+| キャプチャ対象      | `theme`の値 ("light")   | `ref`オブジェクト                  |
+| 更新                | されない（値がコピー）  | `ref.impl`のみ更新                 |
+| cleanup実行時       | キャプチャされた古い値  | `ref.impl()` → 最新の値を使用     |
+
+### まとめ
+
+`useEffectEvent`がStale Closureを解決する方法：
+
+1. **オブジェクトラッパー**: `{ impl: callback }`オブジェクトを生成
+2. **参照キャプチャ**: `eventFn`は`ref`オブジェクトをキャプチャ（値ではなく参照）
+3. **コミットフェーズでの更新**: 毎レンダリングごとに`ref.impl`を最新のコールバックに更新
+4. **間接呼び出し**: `eventFn()` → `ref.impl()` → 常に最新のコールバックを実行
+
+この方式のおかげで、Effectが再実行されなくても、cleanupやイベントハンドラで常に最新のprops/stateを参照できる。
+
+## useEffectEvent 使用時の注意点
+
+`useEffectEvent`は強力だが、いくつかの制約がある。
+
+### ルール1：Effect内でのみ呼び出す
+
+`useEffectEvent`でラップした関数は、必ずEffect内部でのみ呼び出さなければならない。
+
+```jsx
+function Component() {
+  const onEvent = useEffectEvent(() => {
+    console.log("event");
+  });
+
+  // ❌ レンダリング中の呼び出し - エラー！
+  onEvent();
+
+  // ❌ JSXで直接使用 - エラー！
+  return <button onClick={onEvent}>Click</button>;
+}
+```
+
+Reactはランタイムでこれを検証する。
+
+```typescript
+// ReactFiberHooks.js
+return function eventFn() {
+  if (isInvalidExecutionContextForEventFunction()) {
+    throw new Error(
+      "A function wrapped in useEffectEvent can't be called during rendering."
+    );
+  }
+  return ref.impl.apply(undefined, arguments);
+};
+```
+
+正しい使い方：
+
+```jsx
+function Component() {
+  const onEvent = useEffectEvent(() => {
+    console.log("event");
+  });
+
+  // ✅ Effect内で呼び出す
+  useEffect(() => {
+    onEvent();
+  }, []);
+
+  // 通常のイベントハンドラは別途定義する
+  const handleClick = () => {
+    console.log("clicked");
+  };
+
+  return <button onClick={handleClick}>Click</button>;
+}
+```
+
+### ルール2：他のコンポーネントへの受け渡し禁止
+
+`useEffectEvent`で生成した関数を、propsやcontextを通じて他のコンポーネントに渡してはならない。
+
+```jsx
+function Parent() {
+  const onEvent = useEffectEvent(() => {});
+
+  // ❌ ESLint警告！
+  return <Child callback={onEvent} />;
+}
+```
+
+Event Functionは、そのコンポーネントのライフサイクルに依存しているためである。他のコンポーネントに関数を渡す必要がある場合は、`useCallback`を使おう。
+
+```jsx
+function Parent() {
+  const callback = useCallback(() => {
+    // ロジック
+  }, [deps]);
+
+  // ✅ useCallbackは渡すことができる
+  return <Child callback={callback} />;
+}
+```
+
+### ルール3：依存性配列への追加禁止
+
+`useEffectEvent`で生成した関数は、依存性配列に追加してはならない。
+
+```jsx
+function Component() {
+  const onEvent = useEffectEvent(() => {});
+
+  useEffect(() => {
+    onEvent();
+  }, [onEvent]); // ❌ ESLint警告！
+}
+```
+
+ESLintプラグイン（`eslint-plugin-react-hooks`）が自動的に`useEffectEvent`関数を依存性配列から除外してくれる。手動で追加すると警告が発生する。
+
+```jsx
+function Component() {
+  const onEvent = useEffectEvent(() => {});
+
+  useEffect(() => {
+    onEvent();
+  }, []); // ✅ 依存性配列から除外
+}
+```
+
+## 未来：React Compilerとfire
+
+`useEffectEvent`はStale Closure問題を解決するが、開発者が自分で関数をラップしなければならないという点で手動最適化である。\
+どこかで見たパターンではないだろうか。useMemo、useCallback、memoといった手動メモ化を思い起こさせる。であれば、これもまたコンパイラを通じて最適化したように半自動化を実現できるのだろうか。
+いくつかの痕跡からそれを垣間見ることができた。React Compilerは、このプロセスをより簡潔にする`fire()`というアプローチをテスト中である。
+
+まだ実験的機能であり実際のランタイム実装体は存在しないが、表面的なものだけを見ても推測することができる。
+
+<figure>
+  <img src="/post/images/useEffectEvent/question.png" />
+  <figcaption>
+    今後の計画についてReact Teamに聞いてみたところ、まだ具体的な計画はないようである
+  </figcaption>
+</figure>
+
+### fire()とは？
+
+`fire()`はuseEffectの中で**「この関数呼び出しはEffectの再実行の原因ではない」**と宣言する方法である。`useEffectEvent`が関数定義時にラップする方式だとすれば、`fire()`は使用時に印を付ける方式である。
+
+```jsx
+// @enableFire
+import { fire } from "react";
+
+function ChatRoom({ roomId, theme }) {
+  const showMessage = () => {
+    showToast(theme, `Connected to ${roomId}`);
+  };
+
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    connection.on("connected", () => {
+      fire(showMessage()); // 「この呼び出しは非リアクティブ」と宣言
+    });
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, showMessage]); // showMessageが依存性にあってもOK
+}
+```
+
+核心は、**開発者は`fire()`で意図を示すだけで、コンパイラが残りを自動処理する**ということである。
+
+### useEffectEvent vs fire() の比較
+
+**useEffectEvent方式（手動）**
+
+```jsx
+function ChatRoom({ roomId, theme }) {
+  // 1. 手動でuseEffectEventでラップ
+  const onConnected = useEffectEvent(() => {
+    showToast(theme, "Connected");
+  });
+
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    connection.on("connected", () => onConnected()); // 2. 呼び出し
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId]); // 3. 手動で依存性を管理
+}
+```
+
+**fire()方式（自動）**
+
+```jsx
+// @enableFire
+import { fire } from "react";
+
+function ChatRoom({ roomId, theme }) {
+  // 1. ただの普通の関数
+  const onConnected = () => {
+    showToast(theme, "Connected");
+  };
+
+  useEffect(() => {
+    const connection = createConnection(roomId);
+    connection.on("connected", () => {
+      fire(onConnected()); // 2. fire()で印を付けるだけ
+    });
+    connection.connect();
+    return () => connection.disconnect();
+  }, [roomId, onConnected]); // 3. 依存性に含めてもOK
+}
+```
+
+### fire()の動作原理
+
+React Compilerは`fire()`を`useFire()`に自動変換する。このとき`useFire`が`useEffectEvent`になると考えれば、ピンとくるのではないだろうか。
+
+**開発者が書いたコード：**
+
+```jsx
+// @enableFire
+import { fire } from "react";
+
+function Component({ props }) {
+  const foo = (p) => console.log(p);
+
+  useEffect(() => {
+    fire(foo(props));
+  }, [foo, props]);
+}
+```
+
+**コンパイラが変換したコード：**
+
+```jsx
+import { useFire } from "react/compiler-runtime";
+
+function Component({ props }) {
+  const foo = _temp;
+
+  // 1. Compilerが自動でuseFire追加
+  const t0 = useFire(foo);
+
+  let t1;
+  if ($[0] !== props || $[1] !== t0) {
+    t1 = () => {
+      t0(props); // 2. fire()除去、useFire結果で呼び出し
+    };
+    $[0] = props;
+    $[1] = t0;
+    $[2] = t1;
+  } else {
+    t1 = $[2];
+  }
+
+  useEffect(t1, [props]); // 3. 依存性配列を自動修正（foo除去！）
+}
+
+function _temp(p) {
+  console.log(p);
+}
+```
+
+コンパイラが行うこと：
+
+1. `fire(foo())` → `useFire(foo)` 呼び出しを挿入
+2. `fire()` を除去し `useFire` の結果で置き換え
+3. 依存性配列からfire関数を自動除去
+
+### 依存性配列の自動管理
+
+fire()の最大の利点は、**依存性配列を自動的に整理してくれる**ことである。コンパイラを背負っているからこそ可能なことだと言える。
+
+```
+開発者が記述:  [foo, props]
+                  ↓
+コンパイラ処理: [props]  ← fooを自動除去！
+```
+
+この設計について[PR #32532](https://github.com/facebook/react/pull/32532)でReactチームは次のように説明している：
+
+> "We landed on **not including fire functions in dep arrays**. They aren't needed because **all values returned from the useFire hook call will read from the same ref**."
+>
+> 「我々は**fire関数を依存性配列に含めない**ことに決定した。useFireフック呼び出しから返されるすべての値は**同一のrefを読み取る**ため、含める必要がないのである。」
+
+`useFire()`が返す関数は常に同一のrefを参照する。関数内部で読み取る値は変わりうるが、関数のidentity自体は変わらない。したがって依存性配列に含める必要がなく、コンパイラがこれを理解して自動的に除外してくれる。
+
+**useEffectEventとの違い：**
+
+```jsx
+// useEffectEvent - 誤って依存性に追加するとESLint警告
+useEffect(() => {
+  onConnected();
+}, [roomId, onConnected]); // ⚠️ ESLint警告
+
+// fire() - 追加してもコンパイラが自動で除去
+useEffect(() => {
+  fire(onConnected());
+}, [roomId, onConnected]); // ✅ コンパイル後は[roomId]だけが残る
+```
+
+### fire()の制約事項
+
+fire()にもルールがある。ルールもまた似た部分がある。
+
+```jsx
+// ✅ 許可：useEffect内での関数呼び出し
+useEffect(() => {
+  fire(foo());
+  fire(bar(a, b, c));
+});
+
+// ❌ 禁止：useEffect外での使用
+function Component() {
+  fire(foo()); // Error!
+}
+
+// ❌ 禁止：メソッド呼び出し
+fire(obj.method()); // Error!
+
+// ❌ 禁止：関数呼び出しでない式
+fire(foo); // Error!
+fire(foo() + bar()); // Error!
+```
+
+### 現在の実装状況
+
+`fire()`はまだ実験的機能である。
+React CompilerのTransformFireパスは完成しているが、実際の`useFire()`ランタイム実装はまだReactコードベースに存在しない。
+Compilerがメモ化する過程とは異なり、既存の`useEffect`上で非リアクティブな部分だけをfireでラップすればよいという点は、若干手間がかかる。
+逆に、関数を外部に切り出さなければならない`useEffectEvent`方式に比べて、凝集性を保てるという利点もある。
+
+そもそもこの複雑さは、Effectという大きな潮流そのものが生み出した業（ごう）ではないだろうか。
+
+**fire() 関連PRの履歴**
+
+fire()機能がどのように発展してきたかをPRで確認できる：
+
+| PR                                                     | 日付    | 内容                                   |
+| ------------------------------------------------------ | ------- | -------------------------------------- |
+| [#31796](https://github.com/facebook/react/pull/31796) | 2024-12 | 初期実装（TransformFire.ts）           |
+| [#31797](https://github.com/facebook/react/pull/31797) | 2024-12 | useFire importの追加                   |
+| [#31798](https://github.com/facebook/react/pull/31798) | 2024-12 | Effect外での使用時のエラー処理         |
+| [#31811](https://github.com/facebook/react/pull/31811) | 2024-12 | 依存性配列の自動書き換え               |
+| [#32532](https://github.com/facebook/react/pull/32532) | 2025-04 | fire関数の依存性除外ポリシー           |
+
+試してみたい場合は：
+
+```js
+// babel.config.js
+{
+  plugins: [
+    [
+      "babel-plugin-react-compiler",
+      {
+        enableFire: true,
+      },
+    ],
+  ];
+}
+```
+
+## まとめ
+
+核心となる原理を改めて整理すると：
+
+1. **問題**：Effectが再実行されないと、クロージャが古い値をキャプチャしたまま残る
+2. **原因**：JavaScriptのクロージャ + ReactのEffect再利用メカニズム
+3. **解決**：`{ impl: callback }` オブジェクトラッパーによる間接参照、コミットフェーズで `impl` を更新
+
+`useEffectEvent`は、開発者に`useEffect`のルールを破らせていた複雑なケースに、少し息をつける余地を与えてくれた。
+しかし動作方式を見ると、少し裏技（？）のようでもある。適切に使う調味料としては非常に必要な機能だが、不要な場面でも乱用すれば予測可能性が薄れるだろう。
+むしろ流れの分岐をさらに増やしてしまうのではないかという懸念もある。そういう意味で、やはり黒魔術ではないかと考えをまとめてみた。
+
+将来Compilerが完全に解決してくれるのだろうか。Reactの大きな方向性を見る限り、そちらに向かっているように思われる。

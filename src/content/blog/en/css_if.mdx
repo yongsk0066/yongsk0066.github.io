@@ -1,0 +1,453 @@
+---
+title: "Building Logic Gates with CSS - Using the if() Function"
+description: "Implementing conditional styling with the newly added CSS if() function, and a walkthrough of building logic gates purely in CSS."
+author: "Yongseok"
+categories: ["css"]
+date: "2025-07-02T10:56:25.258Z"
+heroImage: "/post/images/css_if/thumb.png"
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import YouTube from '@components/embeds/YouTube.astro';
+import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
+import CSSLogicGates from "../../../components/article/CSSLogicGates.astro";
+import CSSIfSupport from "../../../components/article/CSSIfSupport.astro";
+
+<LinkPreview src="https://developer.chrome.com/blog/if-article?hl=en" />
+
+<CSSIfSupport />
+
+
+## The New CSS `if()` Function
+
+Recently, a new `if()` function was added to CSS.\
+This means we can now use conditionals in CSS.\
+How tempting is that!
+
+## CSS Logic Gates
+
+I believe you could already handle conditions using selectors,
+but being able to express them this directly opens up a lot of possibilities.
+
+Could we use this to build logic gates in CSS?
+
+First, let's think about how you'd build logic gates with CSS before `if()` existed. How would you do it?\
+You'd use selectors -- `:has()` and `:not()`, to be specific. Roughly, it would look something like this.
+Or you could find a clever trick using `calc()`.\
+Taking the AND gate as an example, it would look like this:
+
+```css
+/* :has() */
+
+.and {
+  --out: 0;
+}
+
+.and:has(.a, .b) {
+  --out: 1;
+}
+
+/* calc() */
+
+.and {
+  --out: calc(var(--a) * var(--b));
+}
+```
+
+The `calc()` approach looks more concise, at least.\
+But with the addition of `if()`, I thought we could now build these much more explicitly.
+
+Let's start by defining the basic unit: a bit. A bit is displayed as black or white depending on the variable `--value`.\
+This is where we'll use `if()` for the first time.
+
+```css
+.bit {
+  /* black if value is 1, white if 0 */
+  background: if(style(--value: 1): black; else: white);
+}
+```
+
+Next, let's build the logic gates.\
+I made the gate a parent element and passed in `--a` and `--b` values from the parent.
+Then I decided to output the result in `.out`.
+
+```html
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+```
+
+First, I defined the input bits (`a`, `b`).\
+Each bit takes the `--a` or `--b` value passed from the parent and assigns it to `--value`.
+
+```css
+/* Input blocks */
+.a {
+  --value: var(--a, 0);
+}
+.b {
+  --value: var(--b, 0);
+}
+```
+
+Now let's define the output bit (`.out`).\
+Since this is an AND gate, the output should be 1 only when both `--a` and `--b` are 1.\
+Let's define the condition using `if()`.
+
+If `--a` is 0, it immediately evaluates to 0.\
+If `--b` is 0, it also outputs 0.\
+Only in the remaining case -- when both `--a` and `--b` are 1 -- does it output 1.
+
+```css
+/* AND Gate */
+.and .out {
+  --value: if(style(--a: 0): 0; style(--b: 0): 0; else: 1);
+}
+```
+
+With the above in place, it renders as shown below.\
+Try inspecting it with devtools yourself.
+
+<CSSLogicGates>
+<div class="gate">
+<b>AND</b>
+
+<div class="and symbol" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="and" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+</CSSLogicGates>
+
+I drew the gate shapes myself.\
+Let's move on and build the OR, NOT, and XOR gates too.
+Using `if()`, let's first define the behavior of each logic gate.
+
+```css
+/* OR Gate */
+.or .out {
+  --value: if(style(--a: 1): 1; style(--b: 1): 1; else: 0);
+}
+
+/* NOT Gate */
+.not .out {
+  --value: if(style(--a: 1): 0; else: 1);
+}
+
+/* XOR Gate */
+.xor .out {
+  --value: if(
+    style(--a: 0): if(style(--b: 1): 1; else: 0);
+    style(--a: 1): if(style(--b: 0): 1; else: 0);
+    else: 0
+  );
+```
+
+Rendering them on screen gives us the following:
+
+<CSSLogicGates>
+<div class="gate">
+<b>OR</b>
+
+<div class="or symbol" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="or" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+
+<div class="gate">
+<b>NOT</b>
+
+<div class="not symbol unary" style="--a: 1">
+  <div class="bit a"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="not" style="--a: 0">
+  <div class="bit a"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="not" style="--a: 1">
+  <div class="bit a"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+
+<div class="gate">
+<b>XOR</b>
+
+<div class="xor symbol" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="xor" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+</CSSLogicGates>
+
+The XOR gate was hard to draw, so I just used a square.\
+Now that we have the basic gates built,
+can we combine them too? I went ahead and tried a few.
+
+I set it up so the output value gets inherited as the first input of any gate nested below it.
+```css
+.out:has(.bit) > .and, .or, .not, .xor {
+  --a: var(--value);
+}
+```
+
+<CSSLogicGates>
+<div class="gate">
+<b>(a AND b) OR c</b>
+<div class="and" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 1">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="gate">
+  <b>NAND (NOT AND)</b>
+  <div class="and" style="--a: 0; --b: 0">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 0; --b: 1">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 1; --b: 0">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 1; --b: 1">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gate">
+<b>NOR (NOT OR)</b>
+<div class="or" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+  </div>
+</div>
+</CSSLogicGates>
+
+After building all this, I realized I had done it backwards.\
+The DOM is a tree that flows downward, but logic gates should form a tree that flows upward.\
+The parent should be the output, but I had it the other way around. Because of this, a gate can't receive multiple input values.
+
+If I were to fix it so that the parent receives the child's value, things get a lot more complicated. The variable inheritance logic would probably turn into a tangled mess...
+
+## Anyway...
+
+I built some logic gates to celebrate the release of the `if()` function. Things have been so hectic lately that posts I need to write keep piling up.\
+This one wasn't planned at all, but on my way home from work, I suddenly thought it would be fun to try.
+
+When I impulsively build something like this, I end up spending all my energy on the building part, and the writing turns out a bit all over the place.\
+But if I don't wrap it up now, I feel like I'll never get to it, so I'm calling this post done in its unfinished state. I'm not sure if I'll ever come back to polish it.
+> Norwegian word of the day: Det vanskeligste er å komme i gang. (The hardest part is getting started.)
+
+Next time, I plan to take a deeper look at the `if()` function. But for today, that's a wrap.
+
+## Up Next: What is the `if()` Function...
+
+<LinkPreview src="https://drafts.csswg.org/css-conditional-values-1/#funcdef-if" />
+
+<LinkPreview src="https://groups.google.com/a/chromium.org/g/blink-dev/c/ySEBHgVlhBM" />
+
+<LinkPreview src="https://docs.google.com/document/d/1mbHBUR40jUBay7QZxgbjX7qixs5UZXkdL9tVwGvbmt0/edit?tab=t.0#heading=h.xzptrog8pyxf" />

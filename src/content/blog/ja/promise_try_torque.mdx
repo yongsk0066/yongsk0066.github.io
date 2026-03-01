@@ -1,0 +1,1356 @@
+---
+title: "Promise.try()、Torqueを添えて"
+description: "Promise.tryの起源と提案過程、そして実装について一緒に見ていこう。Promise.tryが標準に組み込まれたと聞いたとき、調べてはみたものの、何のためのものなのかすぐには理解できなかった。何かしらの目的を持って生まれたはずなのに…むしろ画期的な機能ならともかく、こうした小さな追加にはきっと物語があるはずだと感じた。たとえ大した話ではなくとも。今日は考古学者となって、その起源と提案過程、そして実装について一緒に見ていこう。"
+author: "Yongseok"
+categories: ["javascript"]
+date: "2025-05-06T09:36:26.907Z"
+heroImage: "/post/images/promise_try_torque/thumb.png"
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import ChatContainer from "../../../components/article/ChatContainer.astro";
+import ChatBubble from "../../../components/article/ChatBubble.astro";
+import ChatInfo from "../../../components/article/ChatInfo.astro";
+import YouTube from "../../../components/embeds/YouTube.astro";
+import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
+
+<AudioPlayer
+  src="/post/audio/promise_try_torque/promise_try_torque.wav"
+  title="Promise.try()、Torqueを添えて"
+/>
+<LinkPreview src="https://web.dev/blog/promise-try-baseline?hl=ko" />
+
+Promise.tryが標準に組み込まれたと聞いたとき、調べてはみたものの、何のためのものなのかすぐには理解できなかった。何かしらの目的を持って生まれたはずなのに…むしろ画期的な機能ならともかく、こうした小さな追加にはきっと物語があるはずだと感じた。たとえ大した話ではなくとも。
+今日は考古学者となって、その起源と提案過程、そして実装について一緒に見ていこう。
+
+## Promise.try()
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+Promiseの静的メソッドのラインナップに新たに追加されたメソッドである。
+簡単に説明すると、Promise.try(fn, …args)はコールバックfnを即座に（同期的に）実行し、その結果をPromiseで包んで返す。
+どういうことか。例を見てみよう。
+
+同期かもしれないし非同期かもしれない関数`f`があるとする（async awaitはいったん脇に置いておこう）。
+
+```js
+function f() {
+  // 同期かもしれないし非同期かもしれない
+  if (Math.random() < 0.5) {
+    throw new Error("sync fail");
+  }
+  return Promise.reject(new Error("async fail"));
+}
+```
+
+もし`f`がただの同期関数であれば、エラーはこのように処理していただろう。
+
+```js
+try {
+  f();
+} catch (e) {
+  console.log(e.message);
+}
+```
+
+逆に`f`がPromiseを返す関数であれば、このように処理していただろう。
+
+```js
+f().catch(console.log);
+```
+
+では、もし`f`が同期かもしれないし非同期かもしれない場合はどうすればよいだろうか。
+まあそんな状況はそう多くはないだろうが、もしあるとすれば、こうする必要があるだろう。
+
+```js
+Promise.resolve().then(f).catch(console.log);
+```
+
+このように使うと何が問題になるだろうか。\
+`f`の実行タイミングが変わってしまう。イベントループの動作順序を考えてみよう。
+`Promise.resolve().then(f).catch(console.log)` の実行フローは以下の通りである。
+
+1. `Promise.resolve()`は**すでにfulfilled状態のPromise**を即座に返す。
+2. `.then(f)`は`f`をonFulfilledハンドラとして登録し、**対応するReaction Job**をmicrotaskキューに入れる。
+3. 現在のコールスタックがすべてクリアされた後、イベントループがそのmicrotaskを処理し、`f`を実行する。
+4. `f`が同期的に例外をスローした場合、その例外は`.then`が返した**新しいPromiseのreject**状態に変換され、続く`.catch`がそれを受け取る。
+
+結果として`f`は**次のtickで実行**されることになる。
+これによりコールスタックが途切れ、デバッグが困難になり、例外の伝播も一拍遅れてしまう。
+
+ここで`Promise.try`がこのすべてを正すために登場する。
+
+```js
+Promise.try(f).catch(console.log);
+```
+
+このように使うと、`Promise.try`の内部で`f`を即座に実行し、値であればresolve、throwであればrejectとして処理してくれる。もちろん非同期であればそのまま非同期として処理される。
+同期の場合を非同期と均一に処理するためのものだと考えればよい。
+こうすれば`f`の実行タイミングがずれることもなく、同期的なエラーに遭遇した場合でも現在のコールスタック上で実行され、トレースが途切れない。
+
+しかし疑問に思うかもしれない。
+
+<b>
+  <i>「同期かもしれないし非同期かもしれないケースって何があるのだろう？」</i>
+</b>
+<br />
+<b>
+  <i>「async awaitで処理すればtry catchで対応できるのでは？」</i>
+</b>
+
+まずPromiseのタイムラインを簡単に振り返ろう。
+
+ES6でPromiseが登場した。その後、ES2017でasync awaitが登場した。
+
+あなたは今、その間の時代、async awaitが登場する以前の開発者だと想像してみてほしい。
+
+ファイルを読み込んでJSONをパースするコードを書く必要があるとしよう。
+ファイルがJSONファイルかどうかを確認し、そうであればパースし、そうでなければエラーをスローするコードを書かなければならない。
+以下のように書けるだろう。
+
+```js
+const fs = require("fs").promises;
+
+const readFile = (file) => {
+  if (!file.endsWith(".json")) {
+    throw new Error("not json");
+  }
+  return fs.readFile(file, "utf8");
+};
+```
+
+この関数はファイル名に応じて同期的に処理されたり非同期的に処理されたりする。
+それに応じて上で見た方法で処理すると、以下のようになる。
+
+```js
+Promise.resolve()
+  .then(() => readFile("some.json"))
+  .then(JSON.parse)
+  .catch(handleError);
+```
+
+コードの意図を把握するのに不要な要素が介入してしまう。`resolve`と`then`は単にPromiseで包む役割を果たしているだけで、一種のトリックである。
+
+<aside>
+  私たちが知りたいのは、**readFile**が成功したら**parse**を行い、エラーが発生したらエラーを処理する、ただそれだけである。
+</aside>
+
+当時もこのような問題を解決するために、現在の`Promise.try`と同様の形のライブラリが作られて使われていた。
+代表的なものとして、Bluebirdライブラリでは以下のように使うことができた。
+
+<LinkPreview src="http://bluebirdjs.com/docs/api/promise.try.html"/>
+```js
+Bluebird.try(readJsonFile, "some.json").catch(handleError);
+```
+実装を見てみると、throwされた値を再びPromiseで包んで返す形で実装されている（コードは少し簡略化した）。
+```js
+// https://github.com/petkaantonov/bluebird/blob/master/src/method.js
+Promise.attempt = Promise["try"] = function (fn) {
+  var ret = new Promise(INTERNAL);
+  ret._captureStackTrace();
+  ret._pushContext();
+
+// 同期呼び出し
+var value = tryCatch(fn)();
+
+// 結果をPromiseで包んで返す
+ret.\_resolveFromSyncValue(value);
+return ret;
+};
+
+````
+こう見ると`Promise.try`はなかなか画期的で便利なメソッドに見える。\
+しかし上記のような不便さを感じたことが多いだろうか？ 私はそれほど多くはなかった。
+
+なぜなら、私たちには`async await`があるからである。
+上のコードを`async await`で書き直すと以下のようになる。
+
+```js
+const readJsonFile = async (file) => {
+  if (!file.endsWith('.json')) {
+    throw new Error('not json');
+  }
+  return fs.readFile(file, 'utf8');
+}
+
+const processJsonFile = async () => {
+  try {
+    const data = await readFile('some.json');
+    return JSON.parse(data);
+  } catch (e) {
+    console.log(e.message);
+  }
+}
+````
+
+こうすれば同期の場合も非同期の場合も同じように処理できる。
+
+別の例としてcopyも挙げられるだろう。
+
+```js
+const copy = (text) => {
+  return Promise.try(() => {
+    if (navigator.clipboard) return navigator.clipboard.writeText(text);
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  });
+};
+```
+
+clipboardがサポートされている場合はPromiseを返すメソッドである`navigator.clipboard.writeText`を使い、
+サポートされていない場合は同期メソッドである`document.execCommand`を使う。こういった場面で使えるだろう。
+しかし`async await`を使えばもっとすっきりと処理できる。
+
+```js
+const copy = async (text) => {
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    // ... some code for document.execCommand
+    document.execCommand("copy");
+  }
+};
+```
+
+ではなぜ今になってPromise.tryが登場したのだろうか。
+上でも触れたが、Promise.tryはPromiseの登場以後、そしてasync awaitが登場する以前のあの間に提案されたものである。
+[**[tc39]Proposal Promise-try**](https://github.com/tc39/proposal-promise-try?tab=readme-ov-file)の最初のコミットを見ると、2016年にさかのぼる。
+そしてライブラリ形態の実装はそれよりも前から存在していた。
+
+<LinkPreview src="http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/" />
+
+2016年に提案されたのに、なぜ今になって登場したのだろうか。
+
+## 熾烈な説得
+
+Promise.tryが2016年に提案され、2024年に最終的にStage 4へ昇格しデプロイされるまで、どのような過程があったのかを見ていこう。
+
+### Stage 1 - 2016.9~11
+
+上で触れたように、`Promise.try`は2016年に**Jordan Harband**(https://github.com/ljharb)によって提案された。\
+2016年9月に最初にStage 1として提案されたが、当時は他のアジェンダに押されて議論されず、その年の11月に本格的な議論が行われた。
+
+<LinkPreview src="https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md" />
+当時の根拠も、先ほど見た例の通り、「色」が分からない関数に対して不要なsyntaxを使うことを防ぐためであった。
+
+以下のミーティング内容は、当時のミーティング記録を読みやすく整理したものである。
+
+<details>
+<summary>2016年11月29日 TC39 ミーティング内容 - Promise.try 議論</summary>
+https://github.com/tc39/notes/blob/main/meetings/2016-11/nov-29.md#11iib-promisetry
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    この機能は.thenの呼び出しチェーンを開始できます。コードを同じティック（tick）で実行しPromiseを返すという点で、Promise.resolve().then()とは異なります。
+  </ChatBubble>
+
+  <ChatInfo>ジョブループ（job loop）のセマンティクスに関する議論</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    この方式は、即時実行される非同期関数（immediately invoked async function）を作ったり、Promiseコンストラクタを使ったりする煩わしさを回避できます。
+  </ChatBubble>
+
+<ChatBubble author="DD">
+  ユーザー空間（userspace）のコードで非常に多く使われるパターンです。常に同期的に実行され、決定的に重要なのは、すべての例外をキャッチしてリジェクトされたPromise（rejected Promise）に変換してくれることです。
+</ChatBubble>
+
+  <ChatBubble author="MM">
+    これに曖昧な点はないのでしょうか？常に同期的に実行されるのですか、それとも場合によるのですか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    常に同期的に実行されます。
+  </ChatBubble>
+
+  <ChatBubble author="MM">
+    そのように処理されるという点が重要です。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    ほぼすべてのPromiseライブラリにこの機能があります。
+  </ChatBubble>
+
+  <ChatBubble author="DD">
+    動機づけの例を挙げます。Promiseを返す関数があるとしましょう。この関数は例外をスローしてはいけません。関数の本体をPromise.try()で囲めば、例外が発生した場合にリジェクトされたPromiseに変換され、正しい結果を得ることができます。
+  </ChatBubble>
+</ChatContainer>
+
+```js
+function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+foo("http:0"); // 例外発生!! しまった
+
+function foo(relativeURL) {
+  return Promise.try(() => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  });
+}
+
+function foo(relativeURL) {
+  return (async () => {
+    const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    return fetch(absoluteURL);
+  })();
+}
+
+async function foo(relativeURL) {
+  const absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+  return fetch(absoluteURL);
+}
+
+function foo(relativeURL) {
+  return async do {
+    // ?!?!?!
+    var absoluteURL = new URL(relativeURL, someBaseURL).href;
+
+    fetch(absoluteURL);
+  };
+}
+```
+
+<ChatContainer>
+  <ChatBubble author="YK">
+    非同期関数（async functions）があるのに、Promise.tryは中途半端な解決策にすぎないのではないですか？非同期関数の方が使いやすくないですか？
+  </ChatBubble>
+
+  <ChatBubble author="DD">
+    私の考えでは、実際のほとんどのケースでは、普通の非同期関数を使うのがよいでしょう。即時実行される非同期関数は必要ないはずです。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    この提案は、関数の作成者がうっかりPromiseを返す関数が絶対に例外をスローしないように保証し損ねた場合に対処するためのものです。関数の利用者の立場からの話です。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    あるユースケースでは、Promiseを扱いつつもPromiseを返したくない場合があります。こうした場合、Promise.tryは即時実行される非同期関数より便利かもしれません。
+  </ChatBubble>
+
+  <ChatBubble author="KG">
+    例えば、Promiseの配列を返す場合などですね。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    非同期関数が常に望ましい解決策とは限りません。だからこそ私はfinallyのようなメソッドの作業をしているのです。
+  </ChatBubble>
+
+  <ChatBubble author="YK">
+    こうした拡張のためのライブラリをそのまま配布すればいいのではないですか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    ポリフィル（polyfill）を配布しましたが、開発者たちはすべての機能が含まれた一つのものを好むようです。
+  </ChatBubble>
+
+  <ChatBubble author="MM" isRight={true}>
+    全体的にこの機能にそれだけの価値があるかは分かりませんが、Stage 1の基準は満たしていると思います。
+  </ChatBubble>
+
+  <ChatBubble author="BT">
+    非同期関数が存在する状況で、あなた（MM）を満足させるほど有用なPromise APIはあるのでしょうか？
+  </ChatBubble>
+
+  <ChatBubble author="YK">
+    Promise.anyです。
+  </ChatBubble>
+
+  <ChatBubble author="MM">
+    Promiseパイプライニングのための Promise.post/send/get などです。
+  </ChatBubble>
+
+  <ChatBubble author="BT">
+    しかし非同期関数で実装できるものについてはどうでしょうか？
+  </ChatBubble>
+
+  <ChatBubble author="MM">
+    包括的に言っているわけではありませんが、非同期関数はハードルを非常に高くしました。非同期関数と比較して、強力な根拠があり多くの価値を加えなければならないでしょう。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    トランスパイラ（transpiler）とは無関係に、新しい機能を導入するにはハードルがあります。非同期関数はこのライブラリ機能よりも導入が難しいかもしれません。私たちAirBnBではregeneratorへの依存を望まないため、非同期関数を使用していません。
+  </ChatBubble>
+
+  <ChatBubble author="AR">
+    Promiseや非同期関数のように理解しやすい共通基盤の上で、段階的に採用できる多様な機能を持つことは良いことです。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    new Promiseは理解するのが難しいです。
+  </ChatBubble>
+
+  <ChatBubble author="YK">
+    非同期関数を使うプロジェクトでは、常に非同期関数だけを使いたくないケースを見つけるのが難しいです。そして認知的負荷（cognitive overhead）もずっと少ないです。
+  </ChatBubble>
+
+  <ChatInfo>時間制限の通知</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    Stage 1に進みましょうか？
+  </ChatBubble>
+
+  <ChatBubble author="WH">
+    Stage 1に反対はしませんが、有用性については確信がありません。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    有用性に対する懸念からStage 2はまだ早いようです。説得のために何が必要でしょうか？
+  </ChatBubble>
+
+  <ChatBubble author="MM">
+    賛成論拠：この提案はシンタックス（syntax）に類似しており、直交性（orthogonality）の観点から期待されうるものなので、認知的負荷を増やすのではなく、むしろ減らせるかもしれません。
+  </ChatBubble>
+
+  <ChatBubble author="BT">
+    tryを使っている人々のコードベース、つまり標準Promiseはまだ準備ができていないと言う人々のコードベースを見てみましょう。
+  </ChatBubble>
+</ChatContainer>
+
+<ChatContainer title="結論">
+  <ChatInfo>結論/決定</ChatInfo>
+  <ChatBubble author="TC39">
+    <ul>
+      <li>Stage 1 承認。</li>
+      <li>動機づけに関するさらなる証拠が必要なため、Stage 2にはまだ準備ができていない。</li>
+    </ul>
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+上で見てきたように、このミーティングでもPromise.tryが必要なケースに対する疑問が強く提起された。\
+そうしてひとまずStage 1にとどまったまま、8年の月日が流れた。
+
+### Stage 2 - 2024.2
+
+2024年2月、長い時間を経てPromise.tryのStage 2に関する議論が始まった。
+
+<details>
+<summary>2024年2月6日 TC39 ミーティング内容 - Promise.try Stage 2 議論</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-02/feb-6.md#promisetry-for-stage-2
+
+<ChatContainer>
+  <ChatInfo>Promise.try Stage 2提案 - 発表者: Jordan Harband (JHD)</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    遠い昔の2016年、私はPromise.tryを提案した。基本的な考え方はこうだ。ある関数があって、それが同期か非同期か、Promiseを返すかどうか、例外をスローするかどうか――そういったことを気にしたくないが、Promiseで包んで例外が発生した場合に適切に処理されるようにしたい、というものだ。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    覚えやすい方法がここにある。Promise.resolveの後に.then内で関数を実行する方法だ。これはうまく動くが、望まないタイミングで非同期的に実行されてしまうという欠点がある。より現代的なアプローチは即時実行非同期関数（IIAFE）を使うことで、関数をawaitすれば実際に望んだセマンティクスが得られる。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    この発表をしたとき、一般的な反応は、await構文で問題を解決できることを考慮すると、Stage 2に到達するにはより説得力のある有用性の証拠が必要だ、というものだった。
+
+    当時、この提案のユーザーランド版はそこそこ使われている程度で、一般的な期待、少なくとも希望は、誰もこの機能を必要とせず構文だけで十分だろう、というものだったと思う。
+
+    だがそれから2年後、このパッケージが公開され、週間4600万ダウンロードを記録している。時間とともにこのグラフは上がり続け、NPMのデータエラーを除けば、週間4500万ダウンロードで安定している。明らかにある程度は使われている。
+
+    もちろん、これは一人の開発者が作った一つのパッケージだ。そしてその開発者は他にも多くのパッケージを持っているので、使用頻度の高い別のパッケージに含まれているのかもしれない。それでも、この機能は必要だと感じている。
+
+    私の回避策は、ここにあるnew Promiseのコードスニペットだ。new Promiseのexecutor内でresolveに関数を渡す方法だ。動くが、醜いし、エラーが起きやすく、初心者にとっては混乱する。
+
+    このパッケージを見つけ、現在非常に頻繁に使われていることを確認した上で、この提案を再度持ってきてStage 2を要請するか、Stage 2に必要な条件について委員会がどう考えているか新たな回答を得たい。以上だ。
+
+  </ChatBubble>
+
+  <ChatBubble author="NCL">
+    はい。これは私のトピックなので、おそらく明確な質問が必要だろう。これがなぜ必要かを示してくれると思っていたが、このケースでは本当に必要なのか？ value = await synchronousfunction() とすればいいのではないか？ 同じことではないのか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    この特定のコードスニペットでは、そうだ。トップレベルawaitがあれば同じように動く。だが、Promiseコンビネータで使いたいPromiseを取得することが目的である場合、そう単純ではない。awaitした値ではなくPromiseそのものが必要なユースケースは常に存在し、そこでPromise.tryが有用になる。
+  </ChatBubble>
+
+  <ChatInfo>キューは空だ。</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    キューが空であれば、Stage 2を要請したい。仕様は非常にシンプルだ。[仕様リンクを表示] これがすべてだ。最近、最新の仕様バージョンに合わせてリベースした。
+  </ChatBubble>
+
+  <ChatBubble author="KG">
+    はい。なぜこれが必要なのか、まだ理解できない。なぜ必要なのか、もう少し説明してもらえるか。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    はい。特にAPIを書いているとき。APIのユーザーがコールバック関数を渡してくるとき、NCLへの応答で述べたように、本質的にはそこからPromiseを作成してから追加の作業をしたい。例えば、何かとraceさせたり、Promise.allを使ったり、追加の作業をしたりする。ある時点からはawait構文が残りを処理してくれるが、初期のセットアップフェーズでは、私のユースケースの多くでPromiseを直接扱う必要がある。回避策はあるので、これは新しい機能ではない。時々やらなければならないことを、より直感的でエレガントに表現する方法にすぎない。
+  </ChatBubble>
+
+  <ChatBubble author="KG">
+    具体的には、APIがコールバック関数を受け取り、ユーザーが同期関数を渡す可能性があり、その関数が同期的に例外をスローする可能性がある状況のことか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    そうだ。ユーザーが関数を渡してくるが、それが同期か非同期か、例外をスローするかどうか確実には分からない――いわゆる「色なし」の関数だ。そして気にしたくない。ただPromiseを受け取って、最善を尽くして処理したいだけだ。
+  </ChatBubble>
+
+  <ChatBubble author="KG">
+    理解した。
+  </ChatBubble>
+
+  <ChatBubble author="JRL">
+    我々がAMP（ampproject/amphtml#15107）で遭遇した別のケースは、非同期エラーハンドリングだった。エラーがPromiseで包まれていたときはすべて適切に処理できていた。だがコード変更により、Promise.resolveを使って関数を呼び出すようになり、その関数自体が同期的にエラーをスローしていた。同期的なcatchハンドリングがなく、Promiseチェーンの非同期catchしかなかったため、これらのケースを適切に処理できなかった。開発者たちはその違いを理解しておらず、Promiseにキャッチされて非同期のPromise処理ロジックで処理されると思っていた。そこで、Promise.resolve(fn())を使っているすべてのケースを我々のバージョンのpromise.tryに強制的に置き換えたところ、バグが修正された。それ以来、非同期エラーハンドリングに自信を持てるようになった。
+  </ChatBubble>
+
+  <ChatBubble author="SYG">
+    これはユーザースペースのコードで多用されるパターンだ。常に同期的に実行され、決定的に重要なのは、すべての例外をキャッチしてリジェクトされたPromiseに変換してくれることだ。
+  </ChatBubble>
+
+  <ChatBubble author="EAD">
+    一点、NPMのダウンロード数について。週間4600万ダウンロードがどこに行くのか知りたい。他のライブラリのメインコンテナに包まれていたとしても、どのライブラリで使われているのか、何が……4600万は膨大な数だ！ 何かが使っている。ではそれは何なのか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    以前からパッケージの依存関係をインストール数でソートする方法が欲しかった。まさにその質問に委員会で答えるためだ。やり方が分からない。もし誰か知っていたら教えてほしい。
+  </ChatBubble>
+
+  <ChatBubble author="DE">
+    これが極端に短いものではないことを考慮すると、標準ライブラリに入れるべきかどうかについて我々が問うべき質問は、コードを書くときの人々のメンタルモデルにどれだけ役立つか、ということだろう。個人的にコードを読むとき。比較の基準として考えるのはPromise withResolversとtry-catchの使用だ。もしかするとこの構文は、例外をスローする可能性のあるもので値を取得したいとき、正しいイディオムを使うよう人々を導いて、ベストプラクティスに従う助けになるかもしれない。あるいは、デコードがより難しい凝ったコンビネータかもしれない。では、そのような比較をどうすべきか？
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    学習しやすさと可読性の観点からは、それが正しい考え方だと思う。関係する文字数に大きな差はない。withResolversを使うのは、この問題を解決するためや即時実行非同期関数のためにnew Promiseを使うよりも何倍も悪いだろう。だからこの議論に影響を与えないと思う。ただ、可読性は重要だという点には同意する。もしnew Promiseとexecutor引数で関数呼び出しを包むことがpromise.tryより可読性が高いと考える人がいれば、それは言語に追加することに対する非常に強力な反論になるだろう。だが、誰かがそういう主張をするとは懐疑的だ。
+  </ChatBubble>
+
+  <ChatInfo>NROがダウンロードの半分はjestからだと述べた。</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    そうだ。jestがテスティングフレームワークであるという事実は、tapeにも当てはまるだろうという私の直感とある程度一致する。
+  </ChatBubble>
+
+  <ChatInfo>キューは空だ。</ChatInfo>
+
+  <ChatBubble author="JHD" isRight={true}>
+    では引き続きStage 2を要請したい。はい？
+  </ChatBubble>
+
+  <ChatBubble author="CDA">
+    promise.try Stage 2昇格に対する明示的な支持はあるか？
+  </ChatBubble>
+
+  <ChatBubble author="SYG">
+    私が提案したのは、（具体的な例を）見せてくれれば、Stage 2かStage 2.7にそのまま進めるかもしれない、ということだった。ただ、おそらくStage 2が……具体的なコードを見るまではStage 2に不安がある。基本的にどんなコードでもいいので、それがどこで使われるか読みたい。そしてそれは、例えば今日か明日でもいい、そして……引数を渡さない以外に引数を渡すことについてもう少し考えたい。
+  </ChatBubble>
+
+  <ChatBubble author="JHD" isRight={true}>
+    はい。記録のために、Promise.tryは今回は昇格しない。だが、Shuと、そしてより広い委員会に、評価のためのより具体的な例をいくつか提供する。Shuだけがこれを具体的に示したが、もし他の誰かが同意を伝えてくれれば、事前にアジェンダに載せていなくても、時間があればミーティングの後半で戻ってきてStage 2かStage 2.7を要請するかもしれない。ありがとう。
+  </ChatBubble>
+</ChatContainer>
+</details>
+
+Stage 2に進入するために、Promise.try関連ライブラリの使用量で説得を試みたが、Promise.tryに対する疑問は依然として残っていた。\
+使用先の大半はjestだったという。Jordan Harband自身もtapeというテスティングライブラリを扱っていたことを考えれば、納得できる部分である。
+テスティングライブラリの立場からすれば、テストのコールバックが同期的か非同期的か分からないことがありうるため、こうした方法が必要だったのではないかと推測する。
+
+### Stage 2.7 - 2024.04
+
+Stage 2に入ってからは、とんとん拍子で進んでいった。\
+しかし、以前と同じ疑問は依然として存在していた。
+Promiseには既にcatch、finallyがあるのだから、tryもあれば自然だという意見もあった一方、
+あれば便利だとは思うが、自分は実際にはあまり使わないだろうという意見が主流であった。
+
+async IIFEと同等ではないかという意見もあった。この部分は、我々が時折使うパターンにも当てはまりそうである。\
+頻繁ではないが、たまに以下のようにeffect内で非同期処理を行うために以下のようなパターンが使われることがある（あくまで例である）。\
+筆者もIIFEパターンの方が馴染みがあるが、認知的にコードを読む過程では後者も十分に直感的であると感じる。
+この議論では、await構文のトランスパイルコストがより高いという点が根拠として挙げられている。
+
+```jsx
+// ① async IIFE パターン
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("https://api.example.com/data");
+      const data = await res.json();
+      console.log(data);
+    } catch (err) {
+      console.error(err);
+    }
+  })();
+}, []);
+
+// ② Promise.try パターン
+useEffect(() => {
+  Promise.try(() => fetch("https://api.example.com/data"))
+    .then((res) => res.json())
+    .then(console.log)
+    .catch(console.error);
+}, []);
+```
+
+<details>
+<summary>2024年4月8日 TC39ミーティング議事録 - Promise.try Stage 2.7 議論</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-04/april-08.md#promisetry-for-stage-27
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    はい、Promise.tryについて話す。今回のミーティングでStage 2.7昇格を要請したいと考えていた。レビュアーの一人はまだ確認していないが、もう一人のレビュアーと全エディタは確認済みだ。解決すべき懸案事項が一つある。関数に引数を渡すかどうかだ。具体的には、この比較的小さなプルリクエストがあり、生成されたアーティファクトを除いたものだ。このPRは引数渡し機能を追加する。メインブランチ上の提案はコールバックを受け取って引数なしで呼び出す。このプルリクエストは、複数のデリゲートの要請により作成されたもので、Promise.tryに提供された追加引数をコールバックに渡す。他の変更はない。このプルリクエストを含めたStage 2.7のコンセンサスを得ることが私の望みだ。コンセンサスが得られたら、このPRをマージしてテスト作業を開始する。
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>CDAがMarkに発言権を渡す。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  引数の追加は気に入った。だがその機能があると、catchやthenにも同じものを期待するのではないか？ つまり――認知的負荷の問題ではないか？ then以外で、これは実際にcatchに追加できる機能なのか？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  catchやthenとの違いは、それらが既存のPromiseに追加されるコールバックだということだと思う。すでにthen/catch/finallyを使ったPromiseパイプラインの中にある。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">なるほど。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  一方、Promise.tryはPromiseパイプラインを作成する、あるいはそこに入る際に使われる。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">よい。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  だから同意する。表面的には似ている。だが、then、catch、finally APIと構文（async/await）の類似性の方が、Promise.tryとthen/catch/finallyの類似性よりも重要だと考える。概念的に違いがないとしても（違いはあると思うが）。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  はい。それを受け入れよう。それは適切な推論だと思う。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  もう一つ質問がある。Promise.tryはasync IIFE（即時実行非同期関数）でコードを包むことと同等か？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。（タイプして示す）
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  async IIFEとの対称性を踏まえて、async IIFEの使用を推奨するのではなく、tryを追加する価値がある理由を説明してほしい。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  もちろん。これはStage 1の議論で2ラウンドほど議論されたことだ。だが本質的に、最初の理由は、古い環境をサポートする必要がある場合、構文はトランスパイルコストがより高いということだ。しかしもう一つの点は、この疑問がこの提案をほぼ9年間Stage 1に留めていたということだ。この機能（ポリフィルなど）は440億ダウンロードを記録している。単にasync IIFEを使うのではなく、関数形式が多くの人に好まれる、あるいは必要とされている実証的な証拠がある。私の主観的な美的感覚では、即時実行関数の使用は雑然としており、モジュールのある環境では時代遅れのアプローチになっており、そのままであってほしいと思う。これは主観的な意見であり、誰も同意する必要はない。つまり、そのパッケージとその機能を（標準化によって）不要にしようとしているのだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  実証的な証拠は気に入った。反対はしない。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  先ほどMMが提起したことへの応答だ。これはthenやcatchとは異なることを明確にしたい。それらはコールバックを取るメソッドだが、これはより一般的な関数呼び出しメソッドだ。Function.prototype.callやFunction.prototype.applyのような関数呼び出し用のメソッドのように、特定の型の関数を取るものは引数を渡すのが理にかなう。catchのように特定の形式を期待するものは（引数渡しの）意味が薄い。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  レガシー環境の議論について理解できなかった点を明確にしたい。JHDは構文のトランスパイルはコストが高いと言った。では、async/awaitがなくトランスパイルが必要な古い環境が存在するが、それらの環境には新しく標準化されたPromise.tryメソッドがある、という状況なのか？ 理解できない。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  Promise.tryはポリフィルできる。asyncはできない。つまり、環境にインストールされている必要がない。関数として存在できる。Promise.tryは非同期関数がサポートするものの非常に小さなサブセットだ。だから、それが唯一の問題であれば、即時実行非同期関数がこの目的で使われていることを検出して、その関数に置き換える静的解析変換を誰かが書けるだろう。実際にはそんなものは存在しないが。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="SYG">
+  なるほど。具体的に、私の懸念は――了解だ。モダンJSをソースコード（トランスパイル前のソース）で書いているが、ネイティブのasync/awaitをサポートしない古い環境もターゲットにしているユーザーがいる場合、Promise.tryを標準化すると、awaitのトランスパイルよりこちらの方がよい選択肢になりうるか？ 私の理解は正しいか？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  それが意図したことだ。だが、それがこの提案のメインの動機だとは思っていない。そういう作業をしている我々にとっての副次的な利点にすぎない。メインの動機は、私がやろうとしていることが、あらゆる形の即時実行関数よりも明確だということだ。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDAがKGに発言権を渡す。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="KG">
+  はい。この提案のメインの動機には同意する。ポリフィル可能性の部分は混乱する。そういうことをするパッケージがありうる。もし――
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  その通り。私がそれに触れたことでかえって混乱を招いた。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">なるほど。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。ポリフィル可能性は、委員会として設計判断の動機づけや何かの採用の正当化に使うことに合意したことのない動機であり、ここでもそれを主張しているわけではない。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">それを確認したかっただけだ。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  つまり、ここでの議論の一つは明確さだと思う。そして――このユースケースには完全には確信が持てない。だが、もしこれを進めるなら、全体的な目標が明確さであるなら、tryという名前はPromiseに関する例外と何か関係があるように本当に聞こえる。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  その通りだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">はい。だがそれは……</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  これがより便利にしようとしている具体的なケースは、関数が同期的に例外をスローする場合だ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  つまりそれを処理するのか。Promise.resolveを使いながら関数自体を呼び出すようなことはできないのか。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  できない。例外をスローするからだ。Promise.catchなどで包む必要がある。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  なるほど。理解した。これは本質的に関数を呼び出し、try-catchで包み、（例外が発生した場合に）リジェクトするということだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">
+  なるほど。はい。名前がadaptのようなものだったらよかったのだが。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  名前にこだわりはない。他のユーザーを見ると、常にtryと呼ばれている。まあ、リストにはattemptもあるし、fcallもある（だがfcallを支持する人はいないだろう）。attemptは興味深い代替案だが、リストに一度しか現れず、そのライブラリにもやはりtryがある。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DRR">はい。理解した。よい。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  では、引数渡しのプルリクエストをマージすることを条件に、Stage 2.7のコンセンサスを要請したい。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDAがMMの支持を確認した。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Promise.tryのStage 2.7昇格を明示的に支持する他の声はあるか？ DE？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  議論の中で、動機についてやや曖昧に疑問を呈する人が何人かいた。この提案に対して私も同様に感じている。悪くは見えないが、個人的に使うとは思えない。委員会の中でこの提案の動機がどの程度受け入れられているか理解するために、温度チェックか何かをすべきかと思う。通常、温度チェックをそのようには使わないことは分かっているが、懐疑的な見方と明示的な支持の比率が少し気になる。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  つまり、適切だと思えばそうすることはできるだろう。だが、それはStage 2に進むときに問うべき質問だと思う。Stage 2の承認は、委員会が動機に同意していることを意味する。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  もちろん。だが、Stage 2.7を提案するときにはこれはごく一般的なことだ。Stage 2に到達した私の提案がStage 2の後にさらなる動機づけを必要としなかったなら、はるかに少ない作業で済んだだろう。はい。だからこそ、委員会で反復的なコンセンサスを要求するという保守的な基本原則がある。確認するためだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。つまり、委員会の時間を有効に使えると思えば、そのプロセスを踏むことはできる。だが――否定的な意見がなく肯定的な意見があり、ユーザーランドで必要とされている相当な証拠がある以上、私にはかなり明確に見える。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  では――温度チェックを許可するかどうかは任せる。ここでは不適切だと思うなら、やめよう。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>CDAがキューのMMに発言権を渡す。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  はい。温度チェックに同意する。温度チェックの前に、この提案を支持する認知的負荷の議論を一つ追加したい。Promiseにはcatchとfinallyがある。だからそれを見た人はPromise.tryを自然に探すだろうし、catchやfinallyとうまく連携する形で存在する方が、存在しないよりも驚きが少ないと思う。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。それに同意する。提案者として、提案された温度チェックを許可しないのは利己的な行動であり、利己的に振る舞いたくない。委員会の時間を有効に使えると思えば、そうすることはできる。有効だという兆候は見えないが、部屋全体の意見に委ねよう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">温度チェックをやろう。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  よい。やろう。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>温度チェックの議論が進行する。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  パラメータを正確に定義しよう。各選択肢の意味を。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  温度チェックの質問は「この提案は有用に見えるか？」でどうだろう。「非常に肯定的」から「不確か/困惑」まで――このスペクトラムがこの種の質問には適切だと思う。JHD、こういう質問でどうだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。もしより否定的な感覚を持つ人がいれば、キューに入って強調してほしい。そうでなければ、デフォルトの絵文字ラベルで十分だ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">「この提案は有用に見えるか？」</ChatBubble>
+
+{" "}
+
+<ChatBubble author="KG">
+  明確にできるか？ 「この提案はあなたにとって有用に見えるか？」なのか「この提案は有用に見えるか？」なのか？ 個人的には絶対使わないが、明らかに有用に見えるものは多くある。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  よい。「有用に見えるか」の方がより包括的だ。はい。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  つまり、誰かにとって有用か、ということだ。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>温度チェックの投票が進行する。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="NRO">
+  私の立場は「悪くない」だが、一般的な有用性には確信がない。私と同じような立場の人が「関心なし」を選んだが、意味の違いは何か？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  例えば、議論に納得しなかった、ということだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="NRO">
+  パッケージの利点がよく見えないので人気には納得できなかったし、他の人が述べたのと同じ立場のようだ。例えば、悪くないが有用とは思えない。DEも同じ立場を示していたので、「関心なし」を選んだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。つまり、十分な数の人にとって有用だと思うかどうかに近い。明らかに「自分にとって有用だ」と言っている人はいるし、それは否定できない。誰かにとっては確実に有用だ。だが、はい、つまり、分からない。両方とも問題ないと思う。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>温度チェック結果: 肯定6票、否定10票</ChatInfo>
+
+{" "}
+
+<ChatBubble author="DE">
+  「関心なし」は完全に否定的ではない。もう少し証拠を持って戻ってくるのが最善だと思う。もちろん、投票自体が何かの結論を導くわけではない。だが、提案者に対する推奨としてはそうだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  はい。つまり、私の議論は完了したと思う。追加でどんな証拠を提出できるか分からない。そしてStage 2に到達したときにその発表はしたと思っていた。だからそれがどんな価値を加えるか分からない。そのためにStage 2.7のコンセンサスを保留するなら、それはそれでいい。だが本当に――何を持って戻ればいいか具体的なアクションアイテムが必要だ。すべてが既に提示されたように見えるからだ。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  CDAが時間がほぼ終了したことを通知し、MMに発言権を渡す。
+</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">
+  はい。私はindifferent（関心なし）であって、abstain（棄権）ではない。否定的な意見ではない。別に否定的な意見というものがある。この結果に基づいて、今すぐコンセンサスを求めるべきだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  では、はい、再度Stage 2.7のコンセンサスを要請する。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>複数の出席者が支持を表明する。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="MM">支持する。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="WH">支持する。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="BSH">支持する。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  TKPから+1。よい。反対する人は？ 明示的に反対はしないが、記録のために他の意見を表明したい人は？
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">
+  Markの「関心なし」を棄権と解釈することに少し異議を唱えたい。棄権したければ棄権できる。私はNicoloが言った意味で「関心なし」に投票したが、コンセンサスには反対しない。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  （投票画面は）もう目の前にないが、棄権オプションがあったかどうか覚えていない。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">投票しなければいいだけだ。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MM">
+  棄権のつもりではなかった。Nicoloが今説明したのと同じ理由で投票した。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  明確にすると、私にとってそれは弱い否定であり、コンセンサスをブロックする意思はないが支持票は入れないだろう、ということを意味する。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="DE">その通り。はい。その解釈は正しいと思う。</ChatBubble>
+
+{" "}
+
+<ChatInfo>コンセンサスが成立した。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  よい。Promise.try Stage 2.7昇格おめでとう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  <strong>発表者要約:</strong> 動機についてやや躊躇があった。多くの人が有用性に確信を持てなかったが、反対する人はおらず、複数の委員が有用性に確信を持っていた。
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>結論:</strong> Promise.tryがStage 2.7に昇格した。
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 3 - 2024.06
+
+ここからは既に多くのことが合意されており、実装が始まっていたため、大きな異論なく昇格された。
+test262にテストがマージされ、ブラウザが実装を開始した。（ECMA-262に対するテストという意味でtest262と呼ばれている。）
+https://github.com/tc39/test262/tree/main/test/built-ins/Promise/try
+
+<details>
+<summary>2024年6月11日 TC39ミーティング議事録 - Promise.try Stage 3 議論</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-06/june-11.md#promisetry-for-stage-3
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    よい。皆さん、こんにちは。ここ数回のミーティングで覚えているように、Promise.tryはtest262のテストがマージされ、すでに複数のエンジンに実装されている。フラグの背後ではあるが。今日はStage 4に急ぐつもりはない。まずStage 3を達成する必要があるし、特にブラウザにもっと実装の時間を与える必要がある。すべて準備ができているので、Stage 3へ容易に進めることを期待している。はい。昇格を要請する前に質問キューに何かあるか？
+  </ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">キューに質問はない。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  了解。では、Stage 3昇格を要請する。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>複数の委員が支持を表明する。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  Dan MinorがStage 3を支持。私もStage 3を支持する。RGNも同意（+1）。Duncan McGregorも同意（+1）。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="MLS">私もStage 3を支持する。</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  よい。Michael Saboff、Tom Koppも同意（+1）。明確にコンセンサスがあるようだ。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  よい。ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>
+  SYGの意見（不在）: V8としてStage 3昇格に懸念事項はない。
+</ChatInfo>
+
+  <ChatInfo>
+    <strong>要約と結論:</strong> Promise.tryはtest262のテストがマージされ、Stage 3昇格のコンセンサスを達成した。
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+### Stage 4 - 2024.10
+
+2024年10月、ついに最終的な昇格が実現した。
+
+<details>
+<summary>2024年10月9日 TC39ミーティング議事録 - Promise.try Stage 4 議論</summary>
+https://github.com/tc39/notes/blob/main/meetings/2024-10/october-09.md#promisetry-for-stage-4
+
+<ChatContainer>
+  <ChatBubble author="JHD" isRight={true}>
+    はい、もう一度Promise.tryについて話す。この機能はコールバック関数とオプションの可変長引数リストを取る。関数を呼び出し、関数がエラーをスローした場合はリジェクトされたPromiseを返す。関数が値を返した場合はその値をPromise-resolveする。この提案には承認済みのspec PRがあり、Cloudflare Workers、bun、node、Chromeに実装されている。Firefoxではバージョン132からフラグ付きで利用可能で、バージョン133と134でフラグなしで公式にサポートされる。LibJS、Boa、Kieselにも実装されており、WebKitではフラグ付きでサポートされていたが、最近フラグが削除された。Stage 4への昇格を期待している。
+  </ChatBubble>
+
+{" "}
+
+<ChatInfo>追加の質問はない。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  この提案を支持する人はいるか？
+</ChatBubble>
+
+{" "}
+
+<ChatInfo>複数の委員が支持を表明する。</ChatInfo>
+
+{" "}
+
+<ChatBubble author="CDA">
+  NRO、OMT、YSVをはじめ多くの人が支持を表明した。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  LGHは「3箇所で実装に参加したので意見が偏っているかもしれないが、支持する」と述べ、RKGは「おお！」と言い、MFは「要件を満たしている」と述べた。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="JHD" isRight={true}>
+  ありがとう。
+</ChatBubble>
+
+{" "}
+
+<ChatBubble author="CDA">
+  KMも同意した。私も支持する。他に「万歳」や「やった」というリアクションはあるか？ WHも同意した。KM、Tomも同意した。はい、ほぼ完了のようだ。閾値を超えた。
+</ChatBubble>
+
+  <ChatInfo>
+    <strong>結論:</strong> Stage 4昇格おめでとう。
+  </ChatInfo>
+</ChatContainer>
+</details>
+
+## どのように実装されたのか？
+
+ミーティングノートをずっと追いかけながら、提案が発議され最終承認されるまでの過程を見てきた。
+では、実際の実装はどうなっているのだろうか？
+まず仕様を見てみよう。
+
+<LinkPreview src="https://tc39.es/proposal-promise-try/#sec-promise.try" />
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b>
+
+1. Let C be the this value.
+2. If C is not an Object, throw a TypeError exception.
+3. Let promiseCapability be ? NewPromiseCapability(C).
+4. Let status be Completion(Call(callbackfn, undefined, args)).
+5. If status is an abrupt completion, then\
+   a. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
+6. Else,\
+   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] »).
+7. Return promiseCapability.[[Promise]].
+
+</aside>
+
+日本語に訳すと以下のようになる。
+
+<aside>
+<b>Promise.try ( callbackfn, ...args )</b><br/>
+tryメソッドはcallbackfn引数を受け取り、以下の手順を実行する：
+
+1. Cをthis値とする。
+2. Cがオブジェクト（Object）でなければTypeError例外をスローする。
+3. promiseCapabilityを ? NewPromiseCapability(C) で設定する。
+4. statusを Completion(Call(callbackfn, undefined, args)) で設定する。
+5. statusがabrupt completion（異常完了）であれば\
+   a. ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] ») を実行する。
+6. そうでなければ\
+   a. ? Call(promiseCapability.[[Resolve]], undefined, « status.[[Value]] ») を実行する。
+7. promiseCapability.[[Promise]] を返す。
+
+</aside>
+
+仕様の疑似コードの読み方については、以下の2つのドキュメントを参考にしてほしい。
+
+<LinkPreview src="https://tc39.es/ecma262/multipage/notational-conventions.html#sec-algorithm-conventions" />
+<LinkPreview src="https://timothygu.me/es-howto/" />
+
+簡単に説明すると、コールバックを受け取って実行し、その結果に応じてPromiseとして包んで返すというものである。
+
+ではさっそくV8上の実装に移ろう。まずはコメントに注目してほしい。
+
+https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq\
+https://github.com/v8/v8/blob/main/src/builtins/promise-reaction-job.tq
+
+```js
+// Copyright 2024 the V8 project authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+namespace promise {
+
+// https://tc39.es/proposal-promise-try/#sec-promise.try
+@incrementUseCounter('v8::Isolate::kPromiseTry')
+transitioning javascript builtin PromiseTry(
+    js-implicit context: Context, receiver: JSAny)(...arguments): JSAny {
+  // 1. Let C be the this value.
+  // 2. If C is not an Object, throw a TypeError exception.
+  const receiver = Cast<JSReceiver>(receiver)
+      otherwise ThrowTypeError(MessageTemplate::kCalledOnNonObject, 'Promise.try');
+
+  // 3. Let promiseCapability be ? NewPromiseCapability(C).
+  const capability = NewPromiseCapability(receiver, False);
+
+  // 4. Let status be Completion(Call(callbackfn, undefined, args)).
+  const callbackfn = arguments[0];
+  let result: JSAny;
+  try {
+    if (arguments.length <= 1) {
+      result = Call(context, callbackfn, Undefined);
+    } else {
+      const rest = NewRestArgumentsFromArguments(arguments, 1);
+      result = Call(
+          context, GetReflectApply(), Undefined, callbackfn, Undefined, rest);
+    }
+  } catch (e, _message) {
+    // 5. If status is an abrupt completion, then
+    //   a. Perform ? Call(promiseCapability.[[Reject]], undefined, «
+    //      status.[[Value]] »).
+    Call(context, UnsafeCast<Callable>(capability.reject), Undefined, e);
+
+    // 7. Return promiseCapability.[[Promise]].
+    return capability.promise;
+  }
+
+  // 6. Else,
+  //   a. Perform ? Call(promiseCapability.[[Resolve]], undefined, «
+  //      status.[[Value]] »).
+  Call(context, UnsafeCast<Callable>(capability.resolve), Undefined, result);
+
+  // 7. Return promiseCapability.[[Promise]].
+  return capability.promise;
+}
+
+}  // namespace promise
+```
+
+V8上のコードをよく見ると、先ほど確認した仕様の疑似コードがそのままコメントとしてコード上に記録されている。
+おおまかにコードを眺めてみると、コメントの疑似コードとほぼ同一に実装されていることがわかる。
+このコードはTypeScriptに似ているが、拡張子を見ると.tqという拡張子が使われている。この tq は torque の略である。
+実装を探してみた時、てっきりC++に出会うものと思っていたのだが、torqueという言語は一体何なのか？
+
+## Torque
+
+TorqueはV8でのみ使用されるDSL（Domain Specific Language）である。
+Torqueのマニュアルを参照すると、上記の疑問に対する答えが見つかる。(https://v8.dev/docs/torque)
+
+> V8 Torque is a language that allows developers contributing to the V8 project to express changes in the VM by focusing on the intent of their changes to the VM, rather than preoccupying themselves with unrelated implementation details. The language was designed to be simple enough to make it easy to directly translate the ECMAScript specification into an implementation in V8, but powerful enough to express the low-level V8 optimization tricks in a robust way, like creating fast-paths based on tests for specific object-shapes.
+
+> V8 Torqueは、V8プロジェクトに貢献する開発者が実装の詳細に囚われることなく、「何を変えたいのか」という意図に集中してVMのロジックを記述できるようにする言語である。ECMAScriptの仕様をV8のコードへ容易に変換できるほどシンプルでありながら、特定のオブジェクト形状を判別して高速実行パスを生成するなど、V8の低レベル最適化手法も堅牢に表現できるほど強力に設計されている。
+
+Torqueの目的自体が、既存の実装をよりhuman readableにすることを目標としている。
+その手段として、仕様の疑似コードの意図をできる限りそのまま表現できるように作られた。
+
+### 誕生の背景
+
+初期のV8は、組み込み関数の大半をセルフホスティングJavaScript（V8専用の方言）で記述していた。
+このアプローチ自体は悪くなかったが、Arrayのメソッドのように呼び出し頻度が高く仕様が複雑な関数は、ウォームアップ過程を経なければ速くならなかった。
+そこで、こうしたコアの組み込み関数をアーキテクチャ別のアセンブリで直接書いて**「初回呼び出しから最高のパフォーマンス」**を出そうと懸命に記述されていた。
+ところが問題は、アセンブリで書いていたために各プラットフォームごとに数万行ものコードを複製しなければならず、保守がどんどん困難になっていったことである。
+
+2015年、TurboFan最適化コンパイラの導入により状況が変わることになる。
+TurboFanバックエンドが使用する共通の低レベルIRを人間が直接扱えるようにしたC++ DSL **CodeStubAssembler（CSA、2016）**が登場した。
+おかげで一度書いたコードがすべてのプラットフォーム向けに最適化されたアセンブリへ変換されるようになり、多くの手書きアセンブリコードを削除できた。
+
+しかしCSAでさえ、人間が逐一書かなければならず依然として難しく、それに伴うリスクも存在した。
+そこで2019年、ECMAScriptの疑似コードをほぼそのまま書き写せば、残りのボイラープレートや安全性チェックをコンパイラが自動生成してくれる上位DSL Torqueが登場することになったのである。
+Torqueのコードは中間段階であるCSA C++コードに変換され、TurboFanがさらにマシンコードへ変換してくれる。
+
+まとめると、JSセルフホスティング → アセンブリのfast-path → CSA（CodeStubAssembler） → Torque という順に幾重にも積み重なってきたということである。
+
+具体的な内容は、以下のTobias Tebbiの発表を見るとよくわかる。
+
+<YouTube src="https://youtu.be/YcroNGHHqtU?si=y6AsIxZ6tJq_kUt1" />
+
+<LinkPreview src="https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf" />
+
+では、Torqueで実装されたコードはどのように変換されるのだろうか？
+V8のソース内を見ると、Torqueのコンパイラも存在する。
+https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc
+
+### 名前の由来
+
+V8関連ツールの名前は、そのほとんどがエンジンに関連する用語から名付けられている。
+代表的なものにIgnition、Sparkplug、TurboFanなどがある。Torqueも回転力を意味するためエンジンの力に関係はあるが、
+他の命名に比べるとそこまでピンとこない気がする。直接的にエンジンに関連しているというよりは、トルクを加えてCSAへとねじり込むという、そういうメタファーなのではないだろうか？
+
+## ふむ
+
+Promise.tryの使い道を探っているうちに、あれこれ多くのことを調べることになった。
+提案の過程を追いかける中で何度も疑問を投げかけられているのを見ながら、なぜか自分まで息が詰まる思いがした。
+さまざまなメソッドがどのようにして私たちのもとに届くのか、それが気になる人の参考になれば幸いである。
+
+## 参考文献
+
+1. [Promise.try - MDN Web Docs](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/try)
+2. [Promise.try() support now enabled in Chrome (web.dev)](https://web.dev/blog/promise-try-baseline)
+3. [TC39 Proposal - Promise.try specification](https://tc39.es/proposal-promise-try/#sec-promise.try)
+4. [Original TC39 Promise.try Proposal README](https://github.com/tc39/proposal-promise-try/blob/f2c8fdca4b09305a0c2dbcf16c1339b9d1ce8a58/README.md)
+5. [Bluebird - Promise.try documentation](http://bluebirdjs.com/docs/api/promise.try.html)
+6. [What is Promise.try, and why does it matter? (Joepie91's blog)](http://cryto.net/~joepie91/blog/2016/05/11/what-is-promise-try-and-why-does-it-matter/)
+7. [GitHub - TC39 Promise.try issue discussion](https://github.com/tc39/proposal-promise-try/issues/15)
+8. [V8 Torque documentation](https://v8.dev/docs/torque)
+9. [V8 Torque Builtins documentation](https://v8.dev/docs/torque-builtins)
+10. [V8 CodeStubAssembler blog post](https://v8.dev/blog/csa)
+11. [Chromium Source - Promise.try implementation in Torque](https://source.chromium.org/chromium/chromium/src/+/main:v8/src/builtins/promise-try.tq)
+12. [V8 Torque Compiler source code](https://github.com/v8/v8/blob/main/src/torque/torque-compiler.cc)
+13. [Jfokus 2020 - V8 Torque: A Typed Language to Implement JavaScript (slides)](https://www.jfokus.se/jfokus20-preso/V8-Torque--A-Typed-Language-to-Implement-JavaScript.pdf)

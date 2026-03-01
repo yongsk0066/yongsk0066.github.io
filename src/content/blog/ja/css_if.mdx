@@ -1,0 +1,453 @@
+---
+title: "CSSで論理ゲートを作る - if()関数を活用して"
+description: "CSSに新しく追加されたif()関数を使って条件付きスタイリングを実装し、CSSで論理ゲートを構築する方法を紹介する。"
+author: "Yongseok"
+categories: ["css"]
+date: "2025-07-02T10:56:25.258Z"
+heroImage: "/post/images/css_if/thumb.png"
+---
+
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import YouTube from '@components/embeds/YouTube.astro';
+import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
+import CSSLogicGates from "../../../components/article/CSSLogicGates.astro";
+import CSSIfSupport from "../../../components/article/CSSIfSupport.astro";
+
+<LinkPreview src="https://developer.chrome.com/blog/if-article?hl=en" />
+
+<CSSIfSupport />
+
+
+## 新登場のCSS `if()` 関数
+
+最近、CSSに新しく`if()`関数が追加された。\
+CSSで条件分岐が使えるようになったのである。\
+なんと食指が動く機能だろうか！
+
+## CSS Logic Gates
+
+これまでもセレクタを駆使すれば事実上条件を扱うことはできたと思うが、
+このように直接的に条件を記述できるとなると、多くの可能性が開かれる。
+
+これを使えば、CSSで論理ゲートも表現できるのではないだろうか？
+
+まず、`if()`が存在しなかった時代にCSSで論理ゲートを作ろうとしたらどうしていただろう。\
+セレクタを使って作っていたはずだ。`:has()`セレクタと`:not()`セレクタを駆使して。大まかには以下のような形になるだろう。
+あるいは`calc()`を使って妙手を見出すこともできただろう。\
+ANDゲートを例に取ると、このような形になる。
+
+```css
+/* :has() */
+
+.and {
+  --out: 0;
+}
+
+.and:has(.a, .b) {
+  --out: 1;
+}
+
+/* calc() */
+
+.and {
+  --out: calc(var(--a) * var(--b));
+}
+```
+
+まだ`calc()`を使ったアプローチの方が簡潔に見える。\
+だが`if()`関数が追加されたことで、もっと明示的に作れるようになったと感じた。
+
+基本単位であるビットから定義しよう。ビットは変数`--value`の値に応じて黒か白で表示される。\
+ここで初めて`if()`関数を使ってみよう。
+
+```css
+.bit {
+  /* valueが1なら黒、0なら白 */
+  background: if(style(--value: 1): black; else: white);
+}
+```
+
+次に論理ゲートを組み立ててみよう。\
+ゲートを親要素にして、親から`--a`、`--b`の値を渡すようにした。
+そして`.out`に結果を出力することにした。
+
+```html
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+```
+
+まず入力ビット（`a`、`b`）を定義した。\
+各ビットは親から受け取った`--a`、`--b`の値を`--value`に割り当てて表現する。
+
+```css
+/* 入力ブロック */
+.a {
+  --value: var(--a, 0);
+}
+.b {
+  --value: var(--b, 0);
+}
+```
+
+次は出力ビット（`.out`）を定義しよう。\
+ANDゲートなので、`--a`と`--b`の両方が1のときだけ1を出力する必要がある。\
+`if()`関数を使って条件を定義してみよう。
+
+`--a`が0なら即座に0と評価される。\
+`--b`が0の場合も同様に0を出力する。\
+それ以外のケース、つまり`--a`と`--b`が共に1のときだけ1を出力するようにする。
+
+```css
+/* AND Gate */
+.and .out {
+  --value: if(style(--a: 0): 0; style(--b: 0): 0; else: 1);
+}
+```
+
+上記のように作ると、以下のように表示される。\
+devtoolで直接確認してみてほしい。
+
+<CSSLogicGates>
+<div class="gate">
+<b>AND</b>
+
+<div class="and symbol" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="and" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+</CSSLogicGates>
+
+ゲートの形状は自分で描いてみた。\
+続いてOR、NOT、XORゲートも作ってみよう。
+`if()`を使って、まず各論理ゲートの動作を定義してみよう。
+
+```css
+/* OR Gate */
+.or .out {
+  --value: if(style(--a: 1): 1; style(--b: 1): 1; else: 0);
+}
+
+/* NOT Gate */
+.not .out {
+  --value: if(style(--a: 1): 0; else: 1);
+}
+
+/* XOR Gate */
+.xor .out {
+  --value: if(
+    style(--a: 0): if(style(--b: 1): 1; else: 0);
+    style(--a: 1): if(style(--b: 0): 1; else: 0);
+    else: 0
+  );
+```
+
+画面に描画すると以下のようになる。
+
+<CSSLogicGates>
+<div class="gate">
+<b>OR</b>
+
+<div class="or symbol" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="or" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="or" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+
+<div class="gate">
+<b>NOT</b>
+
+<div class="not symbol unary" style="--a: 1">
+  <div class="bit a"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="not" style="--a: 0">
+  <div class="bit a"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="not" style="--a: 1">
+  <div class="bit a"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+
+<div class="gate">
+<b>XOR</b>
+
+<div class="xor symbol" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  <div class="bit out"></div>
+</div>
+
+<div class="xor" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+<div class="xor" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out"></div>
+</div>
+</div>
+</CSSLogicGates>
+
+XORゲートは描くのが難しかったので、ただの四角で済ませた。\
+こうして基本的なゲートを作ってみたわけだが、
+組み合わせも可能だろうか？いくつか続けて試してみた。
+
+出力値の配下にあるゲートの最初のinputに値を継承するように処理してみた。
+```css
+.out:has(.bit) > .and, .or, .not, .xor {
+  --a: var(--value);
+}
+```
+
+<CSSLogicGates>
+<div class="gate">
+<b>(a AND b) OR c</b>
+<div class="and" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 1">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="and" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="or" style="--b: 0">
+      <div class="bit a"></div>
+      <div class="bit b"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="gate">
+  <b>NAND (NOT AND)</b>
+  <div class="and" style="--a: 0; --b: 0">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 0; --b: 1">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 1; --b: 0">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+  <div class="and" style="--a: 1; --b: 1">
+    <div class="bit a"></div>
+    <div class="bit b"></div>→
+    <div class="bit out">
+      <div class="not">
+        <div class="bit a"></div>→<div class="bit out"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gate">
+<b>NOR (NOT OR)</b>
+<div class="or" style="--a: 0; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 0; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 1; --b: 0">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+</div>
+<div class="or" style="--a: 1; --b: 1">
+  <div class="bit a"></div>
+  <div class="bit b"></div>
+  →
+  <div class="bit out">
+    <div class="not">
+      <div class="bit a"></div>
+      →
+      <div class="bit out"></div>
+    </div>
+  </div>
+  </div>
+</div>
+</CSSLogicGates>
+
+作ってみて気づいたのだが、逆向きに作ってしまっていた。\
+DOMは下方向に伸びるツリー構造だが、論理ゲートは上方向に向かうツリー構造で作るべきだった。\
+親が出力値になるべきなのに、逆になっている。そのため複数の値をinputとして受け取ることができない。
+
+だが、子の値を親が受け取る構造にしようとすると、だいぶ複雑になる。おそらく変数の継承ロジックあたりがこんがらがるだろう...
+
+## とにかく...
+
+if関数の登場を記念して論理ゲートを作ってみた。最近あまりに忙しく、書くべき記事もたまっている。\
+この記事は予定にはなかったのだが、帰り道にふと面白そうだと思って作ってみたものだ。
+
+こうやって衝動的に作ってしまうと、作る方にエネルギーを使い果たして文章がまとまりなくなるようである。\
+だがここでまとめておかないと永遠に書けなくなりそうなので、未完成のまま締めくくることにする。いつか手直しするかどうかは分からない。
+> 今日のノルウェー語：Det vanskeligste er å komme i gang.（始めることが最も難しい。）
+
+次回はif関数をもう少し深く掘り下げてみる予定を立てつつ、今日はこのあたりで。
+
+## 次に見ていくもの：`if()` 関数とは...
+
+<LinkPreview src="https://drafts.csswg.org/css-conditional-values-1/#funcdef-if" />
+
+<LinkPreview src="https://groups.google.com/a/chromium.org/g/blink-dev/c/ySEBHgVlhBM" />
+
+<LinkPreview src="https://docs.google.com/document/d/1mbHBUR40jUBay7QZxgbjX7qixs5UZXkdL9tVwGvbmt0/edit?tab=t.0#heading=h.xzptrog8pyxf" />

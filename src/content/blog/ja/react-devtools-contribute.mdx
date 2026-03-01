@@ -1,0 +1,265 @@
+---
+title: "React DevToolsに機能を追加する"
+description: "TopLayer（dialog、popover API）を使用する際にReact DevToolsのハイライトやインスペクタが正しく表示されない問題と、それを解決するためにReactオープンソースに直接コントリビュートした経験を共有する。"
+author: "Yongseok"
+date: "2025-03-31T00:00:00.000Z"
+categories: ["react", "dev"]
+heroImage: "/post/images/react-devtools/thumb.png"
+---
+
+import LinkPreview from "@components/embeds/LinkPreview.astro";
+import YouTube from '@components/embeds/YouTube.astro';
+
+## [発端] Top Layerの登場
+
+登場してからしばらく経ち、最近は積極的に使っている**TopLayer**というものがある。
+
+<LinkPreview src="https://developer.mozilla.org/en-US/docs/Glossary/Top_layer" />
+
+**dialogタグ**や**popover API**などで、特定の要素を現在のすべての要素の上に表示できる機能である。複数呼び出すと、呼び出した順にスタックされる。\
+**z-index地獄から救ってくれる、まさに光のような機能**だ。
+
+そのため、最近の開発ではモーダルには**dialog**を積極的に使い、**popover**や**dropdown**のような要素には**popover API**を使っている。\
+ただし、開閉の仕組みは以下のように**命令的に使う**形で実装されている。
+
+```js
+dialog.showModal();
+dialog.close();
+```
+
+そこで、[overlay-kit](https://github.com/toss/overlay-kit)のような**宣言的にoverlayを扱うツール**とも上手く連携できるように、それなりに整えて使っている。
+
+```tsx
+const SomeDialog = ({ onClose, children, ...rest }) => {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  return (
+    <dialog
+      ref={(node) => {
+        if (!node) return;
+
+        dialogRef.current = node;
+        node.showModal();
+        // マウント時に開くように実装
+      }}
+      onClick={(e) => {
+        if (e.target instanceof HTMLElement && e.target.nodeName === "DIALOG") {
+          ref.current?.close();
+        }
+      }}
+      {...rest}
+    >
+      {children}
+    </dialog>
+  );
+};
+```
+
+```tsx
+const SomeButton = ()=>{
+
+  const handleClick = ()=>{
+    overlay.open(({ unmount })=> <SomeDialog onClose={unmount}>)
+  }
+
+  return <button onClick={handleClick}>ボタン</button>
+}
+```
+
+このように使っている。とはいえ、TopLayerの活用方法について語りたいわけではなく、**TopLayerをReactで使う際に遭遇する問題**がある。
+
+## [展開/クライマックス] 問題の発見
+
+React自体の問題というよりは、**React DevToolsの問題**である。\
+DevToolsにはビューポートに表示される**2つの機能**がある。
+
+1. **Reactレンダリングハイライト**
+2. **Reactコンポーネントインスペクタ**
+
+レンダリングハイライトは、**レンダリングされるコンポーネントをハイライトする機能**であり、
+
+<div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+  <figure>
+    <img src="/post/images/react-devtools/image_1.png" />
+  </figure>
+  <figure>
+    <img src="/post/images/react-devtools/image_2.png" />
+  </figure>
+</div>
+
+インスペクタは、**対象のコンポーネントの上にオーバーレイを表示して情報を見せる機能**である。
+
+<figure>
+  <img src="/post/images/react-devtools/gif_1.gif" />
+</figure>
+
+これらの機能が、**TopLayerの導入によって問題が発生**するようになった。
+
+これらの機能は、**高いz-indexを持つcanvasの上に描画する形**で実装されている。
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+function initialize(): void {
+  canvas = window.document.createElement("canvas");
+  canvas.style.cssText = `
+    xx-background-color: red;
+    xx-opacity: 0.5;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 1000000000;
+  `;
+
+  const root = window.document.documentElement;
+  root.insertBefore(canvas, root.firstChild);
+}
+```
+
+https://github.com/facebook/react/blob/6377903074d4b3a2de48c4da91783a5af9fc5237/packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js#L216
+
+従来の環境では大抵のz-indexの上に位置していたが、**TopLayerの導入により、最上位に位置できなくなる問題**が発生した。
+
+<aside>
+  再現はここで確認できる。
+  <ul>
+    <li>ページ : https://devtools-toplayer-demo.vercel.app/</li>
+    <li>
+      コード :
+      https://github.com/yongsk0066/devtools-toplayer-demo/blob/main/src/App.jsx
+    </li>
+  </ul>
+</aside>
+
+<figure>
+  <img src="/post/images/react-devtools/devtool_as.gif" />
+  <figcaption>
+    <span>Dialogの後ろに隠れてしまったハイライト</span>
+  </figcaption>
+</figure>
+
+上の映像でも見られるように、**Dialogの背後でハイライトが更新されているが、DialogはTopLayerに位置しているため表示されない**。\
+React-DevTools側を修正する必要があるが、これをどう解決できるだろうか。
+
+## [下降] 解決方法
+
+作業自体はすでに完了しているので、該当のPRで確認できる。
+
+<LinkPreview src="https://github.com/facebook/react/pull/32614/" />
+<LinkPreview src="https://github.com/facebook/react/pull/32703" />
+
+まず検討した**要件**は以下の通りである。
+
+1. **highlight、inspectorをTopLayerに表示する必要がある。**
+2. **ユーザーのアクションやスタイルに干渉してはならない。**
+3. **DevToolsの要素を除く、他のTopLayer要素よりも上位に位置する必要がある。**
+
+### 1. highlight、inspectorをTopLayerに表示する
+
+このために、DevToolsのキャンバスを**Dialogで囲んで表示するか検討**したが、**popover APIを使う方が構造への影響が少ない方向**だと判断し、こちらで進めることにした。\
+この実装には、**canvasにpopover属性を付与し、DOMに追加された後にshowPopover関数を呼び出す**だけでよい。
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function initialize(): void {
+  canvas = window.document.createElement('canvas');
+  canvas.setAttribute('popover', 'manual');
+
+  // $FlowFixMe[incompatible-use]: Flow doesn't recognize Popover API
+  canvas.style.cssText = `
+    xx-background-color: red;
+    xx-opacity: 0.5;
+    position: fixed;
+    right: 0;
+    top: 0;
+    background-color: transparent;
+    outline: none;
+    box-shadow: none;
+    border: none;
+  `;
+
+// ...
+canvas.showPopover();
+
+```
+
+### 2. ユーザーのアクションやスタイルに干渉してはならない
+
+dialogやpopoverには基本的に**Escキーで閉じるなどの指定されたアクション**がある。そのため、単純にpopoverを使うと、ユーザーがEscを押した際に、**意図したTopLayer要素ではなく、DevToolsのハイライトが先にイベントを受け取って閉じてしまう不具合**が発生し得る。\
+これを防ぐために、**popoverをmanual属性に設定して干渉しないように**した。
+
+スタイルについても同様に、**デフォルトスタイルを除去**した。
+
+### 3. DevToolsの要素を除く、他のTopLayer要素よりも上位に位置する
+
+初回の実装では気づかず、**レビュー過程で発見したケース**である。TraceUpdateの仕組みを見ると、**レンダリングのたびにキャンバスが再生成されるのではなく、その上に更新される形で動作**する。
+そして認識のために一定時間残り続ける。そのため、**素早くDialogを閉じて再度開いた場合、DevToolsのハイライトはTopLayerに残存したまま優先順位で押し出され、再び背後に表示される状況**が発生する。
+
+これを防ぐには、**popoverの更新タイミングを調整**する必要がある。**ハイライトが表示されるタイミングであるdrawWebメソッド側で調整**しなければならない。
+
+```js
+// packages/react-devtools-shared/src/backend/views/TraceUpdates/canvas.js
+
+// ...
+function drawWeb(nodeToData: Map<HostInstance, Data>) {
+  if (canvas === null) {
+    initialize();
+  }
+  // ...
+  if (canvas !== null) {
+    if (nodeToData.size === 0 && canvas.matches(':popover-open')) {
+      canvas.hidePopover();
+      return;
+    }
+    if (canvas.matches(':popover-open')) {
+      canvas.hidePopover();
+    }
+  canvas.showPopover();
+}
+```
+
+レンダリングされた要素を描画する際に**hidePopoverしてから再度すぐに開く形**で実装した。\
+こうすることで、**再描画のたびにTopLayerに再追加されるため、TopLayer上での優先順位を維持**できるようになる。
+
+<figure>
+  <img src="/post/images/react-devtools/devtool_tobe.gif" />
+  <figcaption>
+    <span>TopLayerでも正常に表示されるハイライト</span>
+  </figcaption>
+</figure>
+
+Inspector Overlay側でも同様の実装を行った。
+
+## [結末] マージを待つ
+
+この機能を追加したビルドで**テストを兼ねて一週間ほど実際の業務で使用**してみたが、大きな問題なく満足して使うことができた。\
+実際に使ってみたい場合は、**該当PRのブランチを取得してビルド**すれば使用できる。
+
+これらのPRはまだ**マージされていない**。\
+投稿してから2週間ほど経っており、**メンテナーと一週間ほどのやり取り**があったが、思ったより好意的な反応だったので、マージされるのをただ待っていた。\
+メンテナーが自分のコードが気に入らなくて別途作っているのではないかとヒヤヒヤもしたが、**GPTとの深い心理カウンセリング**を経て回復し、あまり気にしないことにした。
+
+とにかく、**必要な機能を自分で追加して使った意味のある経験**だったので、短くではあるが記録として残すことにした。
+
+## [アップデート] 2025.05.07
+
+機能がupstreamにマージされた！DevToolsのデプロイはまだ行われていないが、コミットがReactに反映されたことが嬉しい。
+
+## [番外] Flowの型問題
+
+PRの内容を見ると、**Flow関連のignoreコメントが多い**が、これは**Flowではまだpopover関連のプロパティが定義されていないため、型エラー**が発生するからである。\
+**React Compilerのようなコードはtypescriptで書かれているが、React自体やDevToolsはFlowで型チェック**を行っている。
+セットアップなしにReactリポジトリをクローンすると、JSファイルなのに型が書かれていて赤線が大量に表示されるのは、Flowベースだからである。
+これは[Flow LSP](https://github.com/facebook/flow/tree/main/packages/flow-for-vscode)をインストールし、型チェックを実行すれば解消される。
+
+いつか**FlowFixMeもなくなることを願って**、**Flow側にもpopover関連の型を直接追加**してみた。
+
+<LinkPreview src="https://github.com/flow-typed/flow-typed/pull/4607" />
+
+この作業は思ったより早く**一発でマージ**された。\
+ReactのFlowバージョンが低いためすぐにコメントが削除されることはないが、いつかバージョンが上がれば、コメントも削除できるだろう。\
+あるいは、まさかその間に**TypeScriptへの移行**が起きることは…ないだろうが？

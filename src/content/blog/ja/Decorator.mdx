@@ -1,0 +1,1010 @@
+---
+title: 'Decoratorで織りなすコード'
+description: "ある暑い日、図形の国の開発者「三角（セモ）」は4歳の時に「パパ ママ」より先に「hello world」と叫んだ天才開発者である。三角は成長して図形の国の中核開発者となり、一気呵成にコードを暗算のように書き上げる開発者として名を馳せた。"
+author: "Yongseok"
+categories: ["javascript"]
+date: '2024-10-21T22:00:00.000Z'
+heroImage: "/post/images/decorator/thumb.png"
+---
+import LinkPreview from '@components/embeds/LinkPreview.astro'
+import { YouTube } from "@components/lit/youtube-element"
+
+# ある暑い日、新人開発者の悩み
+
+ある暑い日、図形の国にて。
+
+図形の国の開発者「三角（セモ）」は4歳の時に「パパ ママ」より先に「hello world」と叫んだ天才開発者である。\
+三角は成長して図形の国の中核開発者となり、一気呵成にコードを暗算のように書き上げる開発者として名を馳せた。
+
+三角の唯一の仕事は「図形福祉部」所属として、図形の国の国民の面積を計算するロジックを開発することである。
+
+<figure><img src="/post/images/decorator/triangle_1.png" /></figure>
+
+厳格な三角にはしばらく後輩がいなかったが、「四角（ネモ）」という後輩が入ってきた。\
+新しく入った四角の課題は、三角のロジックを把握し拡張することであった。
+
+四角は三角のコードを見て驚いた。
+
+```ts
+class 正多角形 {
+  constructor(private 辺の数: number, private 辺の長さ: number) {
+    if (辺の数 < 3) {
+      throw new Error("図形の国の国民には最低3つの辺が必要です。");
+    }
+  }
+
+  面積計算(): number {
+    const 中心角 = this.中心角_求める();
+    const 三角形の高さ = this.三角形の高さ_計算(中心角);
+    const 三角形の面積 = this.三角形の面積_計算(三角形の高さ);
+    const 多角形の面積 = this.多角形の面積_計算(三角形の面積);
+    return 多角形の面積;
+  }
+
+  private 中心角_求める(): number {
+    return (2 * Math.PI) / this.辺の数;
+  }
+
+  private 三角形の高さ_計算(中心角: number): number {
+    const 半辺の長さ = this.辺の長さ / 2;
+    return 半辺の長さ / Math.tan(中心角 / 2);
+  }
+
+  private 三角形の面積_計算(高さ: number): number {
+    return (this.辺の長さ * 高さ) / 2;
+  }
+
+  private 多角形の面積_計算(三角形の面積: number): number {
+    return this.辺の数 * 三角形の面積;
+  }
+}
+
+// 使用例:
+const 五角形 = new 正多角形(5, 10);
+console.log("Area:", 五角形.面積計算());
+```
+
+何やら複数の過程を経て面積を計算するロジックのようだが、四角には一度で理解するのが難しかった。
+そこで四角は過程を知るために `console.log` を入れてみることにした。
+
+```ts
+class 正多角形 {
+  constructor(private 辺の数: number, private 辺の長さ: number) {
+    if (辺の数 < 3) {
+      throw new Error("図形の国の国民には最低3つの辺が必要です。");
+    }
+  }
+
+  面積計算(): number {
+    const 中心角 = this.中心角_求める();
+    console.log("中心角:", 中心角);
+    const 三角形の高さ = this.三角形の高さ_計算(中心角);
+    console.log("三角形の高さ:", 三角形の高さ);
+    // ...
+  }
+}
+```
+その瞬間、後ろから三角の視線が感じられた。厳格な三角は自分のコードに手を入れることを許さなかった。
+<figure><img src="/post/images/decorator/story_2.png" /></figure>
+四角はなんとか三角のコードに触れずに、過程を解明することにした。
+
+アイデアを思い出してみることにした。まず以前読んだ記事が思い浮かんだ。
+<LinkPreview src="https://yongseok.me/blog/proxy_reflect_case" />
+
+Proxyのようにオブジェクトをラップする方法を使えば、ロジックを途中に挟み込むことができそうだった。\
+同様の概念で、Classで使える方法はないだろうか？
+
+かつてPython開発をしていた記憶が蘇った。\
+Pythonでは `@` デコレータを使って関数をラップする方法があった。
+関数を直接触らずに、関数の呼び出し前後にロジックを追加できたのである。
+
+```python
+def logger(func):
+  def wrapper(*args, **kwargs):
+    print(f"関数 {func.__name__} が呼び出されました。")
+    return func(*args, **kwargs)
+  return wrapper
+
+@logger
+def func():
+  print("hello world")
+
+# 使用例:
+func()
+# 出力: 関数 func が呼び出されました。
+# 出力: hello world
+```
+それなら、JavaScriptにもデコレータがあれば、三角のコードに触れずにロジックを追加できるはずだ。
+
+そこで四角はデコレータを探してみることにした。
+
+# Decorator
+
+<LinkPreview src="https://github.com/tc39/proposal-decorators" />
+decoratorはまだECMAScript標準には含まれていないが、stage 3まで進行している。
+すでにTypeScript（5.0以上）ではdecoratorを使用できるため、TypeScriptを使ってみることにした。
+
+<LinkPreview src="https://www.typescriptlang.org/ko/docs/handbook/decorators.html"/>
+
+## デコレータを使って三角のコードに触れずにロジックを追加する
+
+四角はドキュメントをより深く読み込む前に、まず簡単に作ってみることにした。
+
+```ts
+function log(value: any, context: ClassMethodDecoratorContext) {
+  const methodName = String(context.name);
+
+  return function(this: any, ...args: any[]) {
+    console.group(`[${methodName}]`);
+    console.log('==> 入力:', args);
+    const result = value.call(this, ...args);
+    console.log("<== 出力:", result);
+    console.groupEnd();
+    return result;
+  };
+}
+```
+
+簡単に `log` デコレータを作成した。\
+このデコレータはメソッドデコレータであり、メソッドの呼び出し前後に `console.group` を通じてログを出力する。
+
+では三角のコードにデコレータを適用してみよう。
+
+```ts
+class 正多角形 {
+  constructor(private 辺の数: number, private 辺の長さ: number) {
+    if (辺の数 < 3) {
+      throw new Error("図形の国の国民には最低3つの辺が必要です。");
+    }
+  }
+
+  @log // <= デコレータ適用
+  面積計算(): number {
+    const 中心角 = this.中心角_求める();
+    const 三角形の高さ = this.三角形の高さ_計算(中心角);
+    const 三角形の面積 = this.三角形の面積_計算(三角形の高さ);
+    const 多角形の面積 = this.多角形の面積_計算(三角形の面積);
+    return 多角形の面積;
+  }
+
+  @log
+  中心角_求める(): number {
+    return (2 * Math.PI) / this.辺の数;
+  }
+
+  @log
+  private 三角形の高さ_計算(中心角: number): number {
+    const 半辺の長さ = this.辺の長さ / 2;
+    return 半辺の長さ / Math.tan(中心角 / 2);
+  }
+
+  @log
+  private 三角形の面積_計算(高さ: number): number {
+    return (this.辺の長さ * 高さ) / 2;
+  }
+
+  @log
+  private 多角形の面積_計算(三角形の面積: number): number {
+    return this.辺の数 * 三角形の面積;
+  }
+}
+
+// 使用例:
+const 五角形 = new 正多角形(5, 10);
+console.log("Area:", 五角形.面積計算());
+```
+すべてのメソッドに `@log` デコレータを適用した。\
+そしてコードを実行してみた。
+
+```plaintext
+|[面積計算]
+|==> 入力: []
+  |[中心角_求める]
+  |==> 入力: []
+  |<== 出力: 1.25
+
+  |[三角形の高さ_計算]
+  |==> 入力: [1.25]
+  |<== 出力: 6.88
+
+  |[三角形の面積_計算]
+  |==> 入力: [6.88]
+  |<== 出力: 34.40
+
+  |[多角形の面積_計算]
+  |==> 入力: [34.40]
+  |<== 出力: 172.00
+|<== 出力: 172
+Area: 172.00
+```
+おお！ロジックに手を加えることなく、四角が望んでいたログを出力できるようになった。
+
+単純にメソッド内部に `console.log` を入れることでも解決できたが、三角の反発があった。\
+そのため遠回りして `Decorator` を使って問題を解決することになった。
+
+<figure><img src="/post/images/decorator/triangle_2.png" /></figure>
+
+三角の反発がなかったとしても、四角自身もコードに直接ログを入れることにはどこか違和感を感じていた。\
+その理由は何だろうか。じっくり考えてみた。
+
+<figure><img src="/post/images/decorator/deco_1.png" /><figcaption>多角形面積ドメイン</figcaption></figure>
+
+既存のロジックは上図のように、多角形の面積計算に関するドメインを持っている。\
+内部メソッドはそれぞれの役割を持ち、これらを通じて多角形の面積を計算する。
+
+<figure><img src="/post/images/decorator/deco_2.png" /><figcaption>ログを追加した様子</figcaption></figure>
+
+しかし、メソッド内部にログを追加すると、既存のドメインロジックとログが混在してしまう。\
+異なる目的のロジックが結合されることで、単なる「面積計算」ではなく「面積計算withLogging」という新たなメソッドになってしまう。
+
+このような違和感が生じるのは、ロギングロジックが多角形の面積計算とは別の役割を持つ**横断的関心事（Cross-cutting Concern）**だからである。
+縦方向に伸びるドメインロジックとは無関係に、適用されるべきロジックなのだ。\
+今回の場合はその対象が `Class` であり、実装のために `Decorator` を使用した。
+
+<figure><img src="/post/images/decorator/deco_3.png" /><figcaption>織り込まれるロジック</figcaption></figure>
+
+ロギングは縦の線に触れることなく、横方向に織り込まれた。他のロジックも同様に横方向に織り込むことができる。\
+この過程は一種の**織り（weaving）**と言えるだろう。
+
+<figure><img src="/post/images/decorator/weaving.png" /><figcaption>織り weaving</figcaption></figure>
+
+<figure><img src="/post/images/decorator/example_1.png" /></figure>
+構造的にも既存のロジックを侵さないため、認知的な負担も少ない。
+
+このような方法論は `AOP（Aspect Oriented Programming、アスペクト指向プログラミング）` の実装方法の一つである。
+
+## アスペクト指向プログラミング
+
+<LinkPreview
+  src="https://www.cs.ubc.ca/~gregor/papers/kiczales-ECOOP1997-AOP.pdf"
+  title="Aspect-Oriented Programming"
+  description='Gregor Kiczales, John Lamping, Anurag Mendhekar, Chris Maeda, Cristina Videira Lopes, Jean-Marc Loingtier, John Irwin'
+/>
+
+**AOP**について検索すると、多くの場合 `Spring` のような例が出てくるだろう。\
+そのためアスペクト指向プログラミングはOOPに限定されたもののように見えるが、論文でも明記されているように独立した概念として捉えることができる。
+
+ここで**アスペクト（Aspect）**の核心は、**「何を」**するかと**「どこに」**適用するかを分離することである。\
+一種の関心事の分離を通じて、結合度を下げ、再利用性を高めるのである。
+
+似た目的を持つ**Dependency Injection**が思い浮かぶかもしれない。\
+**DI**は主にオブジェクト間の関係と生成に焦点を当てるのに対し、**AOP**はオブジェクトの振る舞いに焦点を当てる。\
+オブジェクト間の関係の結合度よりも、振る舞いというアクションから付随的なものを分離して結合度を下げるのである。\
+混同する要素はないが、一緒に想起されうる概念なので参考にすると良いだろう。
+
+## デコレータとは？
+
+**「Decorate」**という単語は**「装飾する」**という意味を持つ。\
+**「装飾」**するということは、**既存のものを飾る**という意味がある。
+その意味で、プログラミングにおける「decorate」もまた、**既存のものを飾ること**を意味する。
+
+既存のコードを修正せずに、機能を追加または変更することだと理解すればよい。
+
+### デコレータパターン
+
+おそらくその由来は**デザインパターン**から来ているのではないだろうか。\
+デザインパターンの名著として知られる1994年刊行の**['Design Patterns: Elements of Reusable Object-Oriented Software'](https://www.amazon.com/Design-Patterns-Elements-Reusable-Object-Oriented/dp/0201633612)**において、**Structural Patterns**の一部として**Decorator Pattern**が紹介されている。
+
+Structural Patterns（構造パターン）とは、クラスとオブジェクトがどのように構成されてより大きな構造を形成するかに関心を持つパターンである。\
+その中で**デコレータパターン**は、**オブジェクトに動的に責任を追加するパターン**として紹介されている。
+
+責任を追加する方法としては**継承**が思い浮かぶかもしれない。
+
+例を挙げてみよう。\
+スターバックスでコーヒーを注文したとしよう。\
+普段はブラックコーヒーを注文して飲んでいたが、今日は特別にシロップを追加して飲みたい。
+
+```python
+class アメリカーノ:
+  def 説明(self):
+    return "アメリカーノ"
+
+私のコーヒー = アメリカーノ()
+私のコーヒー.説明() # アメリカーノ
+```
+
+`アメリカーノ`クラスを継承した`シロップ入りアメリカーノ`クラスを作ることで、シロップ入りのアメリカーノを注文できるだろう。
+
+```python
+class シロップ入りアメリカーノ(アメリカーノ):
+  def 説明(self):
+    return "シロップ入りアメリカーノ"
+
+
+私のコーヒー = シロップ入りアメリカーノ()
+私のコーヒー.説明() # シロップ入りアメリカーノ
+```
+しかし、メニューに `シロップ入りアメリカーノ` を追加するわけにはいかない。\
+我々はただ、受け取った `アメリカーノ` のインスタンスにシロップを追加したいだけなのだ。
+
+継承は**静的**である。コンパイル時に決定され、実行時に変更できない。
+
+こういう時にデコレータパターンを使うことができる。
+
+```python
+class アメリカーノ:
+  def 説明(self):
+    return "アメリカーノ"
+
+class コーヒーデコレータ:
+  def __init__(self, コーヒー):
+    self.コーヒー = コーヒー
+
+  def 説明(self):
+    return self.コーヒー.説明()
+
+class シロップ追加デコレータ(コーヒーデコレータ):
+  def 説明(self):
+    return self.コーヒー.説明() + "にシロップ追加"
+
+class ホイップクリーム追加デコレータ(コーヒーデコレータ):
+  def 説明(self):
+    return self.コーヒー.説明() + "にホイップクリーム追加"
+
+私のコーヒー = アメリカーノ()
+私のコーヒー = シロップ追加デコレータ(私のコーヒー) # 動的にシロップを追加
+
+print(私のコーヒー.説明()) # アメリカーノにシロップ追加
+
+友達のコーヒー = ホイップクリーム追加デコレータ(シロップ追加デコレータ(アメリカーノ()))
+```
+元のコーヒーと同じインターフェースを持ちながら、動的に責任を追加できる。
+
+少し難しい言い方だが、補足すると**「デコレータはオブジェクトを再帰的に構成することで、開放的な追加責任を許容する構造パターン」**と書籍で説明されている。\
+一種の**Wrapper**とも見ることができるだろう。
+
+### デコレータとデコレータパターン
+
+**デコレータ**と**デコレータパターン**は、言語レベルの構文とデザインパターンであり、直接的に対等な概念として見るのは難しい。
+
+<LinkPreview src="https://stackoverflow.com/questions/8328824/what-is-the-difference-between-python-decorators-and-the-decorator-pattern"/>
+
+書籍で説明された**デコレータパターン**が克服しようとした問題を考えると、主に**静的型付け言語**で発生する問題を**動的な**タイミングで解決できるようにするパターンだと見ることができる。
+
+他の言語での**デコレータ**のような要素を見てみよう。
+
+
+### Python
+
+まずPythonのデコレータについて見ていこう。\
+デコレータに関する言及の中で、**PEP 318**に記載された内容が最も気に入っている。一緒に少し読んでみよう。
+<LinkPreview src="https://peps.python.org/pep-0318/"/>
+
+
+<aside>
+<h4>要約</h4>
+関数やメソッドを変形する現在の方法はぎこちなく、理解しづらいコードにつながる可能性がある。
+理想的には、これらの変形は**宣言**そのものが行われるコードの同じ地点で行われるべきである。このPEPは関数やメソッドの宣言を変形するための新しい構文を導入する。
+
+<h4>動機（Motivation）</h4>
+関数やメソッドに変形を適用する現在の方法は、実際の変形を関数本体の後に配置する。大きな関数の場合、これは関数の動作の核心要素を関数の残りの外部インターフェース定義から分離させてしまう。例えば：
+```python
+def foo(self):
+    メソッドの演算を実行
+foo = classmethod(foo)
+```
+メソッドが長くなるほど可読性が低下する。また概念的にも、<b>一つの宣言に対して関数名を三度も言及する</b>のはPythonicではない。この問題の解決策は、<b>メソッドの変形をメソッド自体の宣言により近い場所に移動させること</b>である。新しい構文の意図は、次のようなコードを：
+```python
+def foo(cls):
+    pass
+foo = synchronized(lock)(foo)
+foo = classmethod(foo)
+```
+次のように関数宣言にデコレーションを配置する代替手段に置き換えることである：
+```python
+@classmethod
+@synchronized(lock)
+def foo(cls):
+    pass
+```
+*中略...*\
+<h4>なぜこれほど難しいのか？ (Why Is This So Hard?)</h4>
+1. <b>「意図の宣言（declaration of intent）」</b>がどこに属すべきかについての意見の不一致。ほぼ全員が関数定義の末尾で関数をデコレート/変形するのが最適ではないことに同意している。それ以上に、この情報をどこに配置すべきかについて明確な合意がないように見える。
+2. 構文的制約。Pythonは構文的にシンプルな言語であり、<b>「物事を台無しにせずに（messing things up）」</b>（視覚的にも言語パーサーに関しても）できることとできないことについてかなり強い制約がある。この情報を構造化して、この概念に初めて触れるユーザーが<b>「ああ、なるほど、何をしているかわかるよ（Oh yeah, I know what you're doing.）」</b>と思えるような明確な方法がない。可能な最善の方法は、新しいユーザーがこの構文の意味について大きく誤ったメンタルモデルを構築しないようにすることである。
+3. 概念全体の馴染みのなさ。代数学（または基本的な算術）についてある程度の知識があるか、少なくとも他のプログラミング言語を一つ以上使ったことがある人にとって、Pythonの多くの部分は直感的である。しかし、Pythonでデコレータの概念に触れる前にこれについて経験がある人はほとんどいないだろう。この概念を捉える強力な既存のミーム（meme）が存在しない。
+
+<h4>背景</h4>
+*中略 ...*\
+GuidoはEuroPython 2004に提案リストを持ち込み、そこで議論が行われた。その後、彼はJavaスタイルの@decorator構文を使用することを決定し、これは2.4a2で初めて登場した。Barry Warsawはこれを「pie-decorator」構文と名付けたが、これはデコレータ構文と同時期に行われたPie-thon Parrotコンテストを記念し、@が少しパイのように見えるからである。GuidoはPython-devで自身の立場を説明したが、そこには（多くの）却下された形式の一部に関する内容が含まれている。
+<LinkPreview src="https://legacy.python.org/doc/essays/ppt/euro2004/euro2004.pdf"/>
+訳者注：EuroPython 2004でGuido van Rossumが発表した内容を収めた文書である。Guido van RossumはPythonの創設者でありBDFL（Benevolent Dictator For Life）である。
+
+<h4>「Decorator」という名前について</h4>
+この機能に「decorator」という名前を選んだことについて、いくつかの不満があった。主な不満は、この名前がGoF書籍での使用と一貫性がないということである。「decorator」という名前はおそらくコンパイラ領域での使用に負うところが大きいだろう -- 構文木が走査されアノテーションが付けられる。より良い名前が出てくる可能性は十分にある。
+
+<h4>設計目標</h4>
+*中略 ...*\
+<b>3.</b> 何が起きているかが明確でなければならない。少なくとも、新しいユーザーが自分のコードを書く際にこれを安全に無視できることが明らかでなければならない。\
+<b>4.</b> 「説明されれば覚えやすい」構文でなければならない。\
+<b>5.</b> 将来の拡張をより困難にしてはならない。\
+<b>6.</b> 入力しやすくなければならない。これを使用するプログラムは非常に頻繁に使用することが予想される。\
+<b>7.</b> コードを素早く見渡すことをより困難にしてはならない。すべての定義、特定の定義、または関数が受け取る引数を検索することが依然として容易でなければならない。
+</aside>
+
+これは言語レベルでの新しい構文に関する提案であるが、コードを書く実装レベルにおいても参考になる概念的な内容を含んでいる点が気に入った。\
+ここで「構文」というキーワードを「コード」あるいは「実装」に置き換えて読んでみても良いだろう。
+
+**良い設計**は領域を超えて貫通する概念だと考える。
+
+脱線してしまったが、PEPに言及されている内容を参考にすると、デコレータは関数やメソッドを変形するツールであり、<b>宣言に近い場所に配置することでコードの可読性を高めること</b>が目的である。\
+コードを読む人に対して、より宣言的にコードを表現することで凝集度を高め、結合度を下げるのである。
+
+それでは、我々のJavaScriptデコレータはどのような目的を持っているのだろうか？
+
+### JavaScript
+
+<LinkPreview src="https://github.com/tc39/proposal-decorators?tab=readme-ov-file"/>
+
+<aside>
+<h4>紹介</h4>
+**デコレータ**は、定義中にクラス、クラス要素、またはその他のJavaScript構文形式で呼び出される関数である。
+```javascript
+@defineElement("my-class")
+class C extends HTMLElement {
+  @reactive accessor clicked = false;
+}
+```
+本質的にデコレータはメタプログラミングに使用され、<b>値の外部的な振る舞いを根本的に変更することなく機能を追加</b>できる。
+<h4>設計目標</h4>
+- デコレータの使用と作成が容易でなければならない
+- デコレータはデコレートする対象に影響を与え、混乱を招くような非局所的な副作用を避けるべきである
+
+<h4>動機（Motivation）</h4>
+<b>「なぜこれが必要なのか？」</b>と疑問に思うかもしれない。デコレータは強力なメタプログラミング機能であり、コードを大幅に簡素化できるが、詳細をユーザーから隠すため「魔法のような」印象を与え、内部で何が起きているのか理解しにくくなる場合がある。
+あらゆる抽象化と同様に、場合によってはデコレータは<b>その価値以上の問題を引き起こす可能性がある。</b>
+しかし、今日でもデコレータが追求される主な理由の一つ、特にクラスデコレータが重要な言語機能である主な理由は、JavaScriptにおける<b>メタプログラミング能力のギャップを埋める</b>からである。
+```javascript
+function logResult(fn) {
+  return function(...args) {
+    let result;
+    try {
+      result = fn.call(this, ...args);
+      console.log(result);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+    return result;
+  }
+}
+
+const plusOne = logResult((x) => x + 1);
+
+plusOne(1); // 2
+```
+これはJavaScriptで日常的に使われる一般的なパターンであり、クロージャをサポートする言語における基本的な力である。
+これは通常のJavaScriptにおける[デコレータパターン](https://en.wikipedia.org/wiki/Decorator_pattern)の実装例である。logResultを使えば、どんな関数定義にも簡単にロギングを追加でき、複数の「デコレータ」関数と組み合わせて使用できる：
+```javascript
+const foo = bar(baz(qux(() => /* 素晴らしいことをしよう */)))
+```
+Pythonなどの他の言語では、デコレータはこのパターンに対するシンタックスシュガーである — `@`記号を使って追加の振る舞いを付与するか、直接呼び出して他の関数に適用できる関数である。
+したがって、現状のJavaScriptでは関数に対してデコレータパターンを使用することは可能である。ただし、洗練された`@`構文なしで、ではあるが。
+<b>このパターンはまた宣言的であり、これは重要である</b> — 関数の定義とデコレーションの間にステップがない。これにより、誰かが誤ってデコレートされていないバージョンの関数を使用する可能性がなくなり、重大なバグを防ぎ、デバッグをはるかに容易にする。
+しかし、このパターンを全く使用できない場所がある — <b>オブジェクトとクラス</b>である。次のクラスを考えてみよう：
+
+```javascript
+class MyClass {
+  x = 0;
+}
+```
+`x`にロギング機能を追加して、アクセスのたびにそのアクセスをログに記録するにはどうすればよいだろうか？手動で行うことはできる：
+```javascript
+class MyClass {
+  #x = 0; // privateに変えてgetter/setterを使用できる
+
+  get x() {
+    console.log('getting x');
+    return this.#x;
+  }
+
+  set x(v) {
+    console.log('setting x');
+    this.#x = v;
+  }
+}
+```
+しかし、これを頻繁に行うのであれば、あらゆる場所にこれらのgetterとsetterを追加するのは煩わしくなるだろう。
+クラスを定義した後にこれを行うヘルパー関数を作ることもできる：
+```javascript
+function logResult(Class, property) {
+  Object.defineProperty(Class.prototype, property, {
+    get() {
+      console.log(`getting ${property}`);
+      return this[`_${property}`];
+    },
+
+    set(v) {
+      console.log(`setting ${property}`);
+      this[`_${property}`] = v;
+    }
+  })
+}
+
+class MyClass {
+  constructor() {
+    this.x = 0;
+  }
+}
+
+logResult(MyClass, 'x');
+```
+
+これは動作するが、クラスフィールドを使うとプロトタイプに定義したgetter/setterを上書きしてしまうため、代入をコンストラクタに移す必要がある。
+また、複数の文で構成されているため、定義自体が時間をかけて行われ、<b>宣言的ではない。</b>
+アプリケーションの起動時にそれぞれ異なるデコレーションを追加する複数のファイルで<b>「定義された」</b>クラスをデバッグすることを想像してみよう。それは本当にひどい設計に聞こえるかもしれないが、クラスが導入される前は珍しいことではなかった。
+最後に、これをprivateフィールドやメソッドに使用する方法がない。定義を単純に置き換えることはできないのである。
+メソッドはもう少しましである。次のようにできる：
+```javascript
+function logResult(fn) {
+  return function(...args) {
+    const result = fn.call(this, ...args);
+    console.log(result);
+    return result;
+  }
+}
+
+class MyClass {
+  x = 0;
+  plusOne = logResult(() => this.x + 1);
+}
+```
+これは宣言的ではあるが、クラスの各インスタンスごとに新しいクロージャを生成するため、規模が大きくなると多くの追加オーバーヘッドが発生する。
+クラスデコレータを言語機能として導入することで、このギャップを埋め、クラスメソッド、フィールド、アクセサ、そしてクラス自体に対するデコレータパターンを可能にする。
+これにより開発者は、デバッグロギング、リアクティブプログラミング、動的型チェックなどの一般的なタスクに対する抽象化を容易に記述できるようになる。
+
+</aside>
+
+**TC39 Proposal**で見られるように、JavaScriptでは従来、関数に対してデコレータパターンを適用することは簡単にラッピングして使用できた。\
+ドキュメント内の例のように、このように書くことができた。
+```javascript
+const foo = bar(baz(qux(() => /* 素晴らしいことをしよう */)))
+```
+しかし、クラスやオブジェクトに対してはこれを適用するのが困難であった。これを解決するために`Decorator`構文が提案された。
+
+では、デコレータはJavaScriptにおいて本質的にどのような意味を持つのだろうか？
+
+まず、簡単なメソッドデコレータを例に見てみよう。
+
+```javascript
+function logged(value, { kind, name }) {
+  if (kind === "method") {
+    return function (...args) {
+      console.log(`starting ${name} with arguments ${args.join(", ")}`);
+      const ret = value.call(this, ...args);
+      console.log(`ending ${name}`);
+      return ret;
+    };
+  }
+}
+
+class C {
+  @logged
+  m(arg) {}
+}
+
+new C().m(1);
+// starting m with arguments 1
+// ending m
+```
+
+まず対象である**Class**から分解してみよう。JavaScript（ES6）ではメソッドは以下のようにも表現できるだろう。
+
+```javascript
+function C() {}
+
+C.prototype.m = function(arg) {};
+
+new C().m(1);
+```
+
+であれば、先ほど見た関数でのデコレータパターンの実装と同様に、メソッドにもデコレータパターンを適用できるはずである。\
+デコレータをdesugarすると、おおよそ以下のように表現できるだろう。
+```javascript
+class C {
+  m(arg) {}
+}
+
+C.prototype.m = logged(C.prototype.m, {
+  kind: "method",
+  name: "m",
+  static: false,
+  private: false,
+}) ?? C.prototype.m;
+```
+
+### 現状
+
+<LinkPreview src="https://tc39.es/process-document/"/>
+
+現在、JavaScriptデコレータはStage 3の段階に入っている。Stage 3はほぼ最終仕様に近い段階と言える。\
+しかし、まだ正式な構文として取り入れられていないため、BabelやTypeScriptのトランスパイラに依存して使用する必要がある。
+
+Babelの場合は以下のようなプラグインが提供されている。
+https://babeljs.io/docs/babel-plugin-proposal-decorators
+
+TypeScriptの場合はどうだろうか？
+
+TypeScriptはかなり以前からデコレータをサポートしていた。馴染みは薄いかもしれないが聞いたことがあるであろうオプションとして、tsconfigで
+`"experimentalDecorators": true`オプションを通じてデコレータを使用できた。
+
+<LinkPreview src="https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#differences-with-experimental-legacy-decorators
+"
+  title="differences-with-experimental-legacy-decorators"
+/>
+
+このオプションは`Stage 2`段階のデコレータを使用可能にするオプションである。\
+TypeScript 5.0からは`Stage 3`段階のデコレータが使用可能になったため、`experimentalDecorators`オプションはレガシー用として残ることになった。
+
+<LinkPreview src="https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#decorators"/>
+
+正式な構文として取り入れられれば、ターゲットが最新の場合はエンジンで直接実行できるようになるだろう。\
+V8側でも以下のような作業が進行中のようである。
+<LinkPreview title="Implement the decorators proposal"
+description='The decorators proposal (https://github.com/tc39/proposal-decorators) reached Stage 3 at the March 2022 TC39.'
+src="https://issues.chromium.org/issues/42202709"/>
+<LinkPreview src="https://chromium-review.googlesource.com/q/hashtag:%22decorators%22"/>
+
+## メタデータ
+
+デコレータは自身がデコレートする対象に対して最善を尽くして責任を果たす。\
+しかし、デコレータをより効果的に活用するためには、対象となるクラスやメソッドに関する追加情報が必要になる場合がある。\
+例えば、デコレータを通じてクラスを装飾しつつ、他のデコレータの存在を確認したり、
+クラス全体に関する情報を活用したい場合にメタデータが有用となる。
+
+現在のJavaScriptのStage 3デコレータでは、自身が装飾する対象に関する情報に限定的にしかアクセスできない。\
+デコレータは基本的に、自身が装飾するメソッド、フィールド、またはクラスに関する情報を含むcontextオブジェクトを受け取る。\
+このcontextはデコレータが装飾する対象に関する情報のみを提供し、クラス自体や他のフィールドに関する情報にはアクセスできない。
+
+### Stage 2 vs Stage 3 メタデータアクセス方式
+
+過去のStage 2デコレータでは、targetを通じてクラスプロトタイプ全体にアクセスすることが可能であった。\
+これにより、クラスレベルでメタデータを保存し、それを活用する方式でデコレータを構成することができた。\
+例えば、特定のクラスをデコレータで装飾する際、そのクラス自体をキーとするWeakMapを使用して関連メタデータを保存・参照することが可能であった。
+
+```javascript
+const metadataMap = new WeakMap();
+
+function myDecorator(target, key, descriptor) {
+  // クラスプロトタイプにアクセス可能
+  const metadata = metadataMap.get(target) || {};
+  metadata[key] = { someMetadata: 'value' };
+  metadataMap.set(target, metadata);
+
+  return descriptor;
+}
+
+class MyClass {
+  @myDecorator
+  myMethod() {}
+}
+
+```
+上記の例では、targetを使用してクラスのプロトタイプにアクセスし、
+そのクラスに関するメタデータをmetadataMapに保存して再利用することができた。
+
+Stage 3では以下のように変更された。
+```typescript
+function someDecorator(originalMethod:any, context: ClassMethodDecoratorContext){
+  const methodName = String(context.name);
+  // ...
+}
+```
+targetが廃止され、デコレータが装飾する対象に関する情報のみを持つようになった。
+
+このようになった理由はproposalで確認できる。
+<aside>
+https://github.com/tc39/proposal-decorators?tab=readme-ov-file#if-the-previous-tc39-decorators-proposals-didnt-work-out-why-not-go-back-and-standardize-tsbabel-legacy-decorators
+> The incomplete class under construction is not exposed to decorators, so it does not need to observably undergo shape changes during class definition evaluation.
+> 構築中の不完全なクラスがデコレータに公開されないため、クラス定義の評価中に観測可能な形状変化を経る必要がない。
+</aside>
+
+デコレータがクラス自体に変更を加えると、クラスの振る舞いの予測が困難になる。\
+これを避けるため、デコレータはデコレートする対象に関する情報のみを持つようになった。
+
+では、デコレータがクラス自体に関する情報を取得する必要がある場合はどうすればよいのだろうか？
+
+理屈だけで理解するのでは不十分である。具体的なケースとともに見ていこう。\
+デコレータが他の情報を知る必要がある場合とはどのような場合だろうか？
+
+### 依存性注入（Dependency Injection）とメタデータ
+
+メタデータは<b>依存性注入（Dependency Injection）</b>パターンを実装する上でも重要な役割を果たす。\
+依存性注入とは、クラスが他のクラスに依存する際、クラス内部で依存性を生成するのではなく外部から注入を受ける方式である。\
+JavaScript領域で**依存性注入**を実装するためにデコレータを使用するケースを見てみよう。
+
+まず思い浮かべられるのは<b>NestJS</b>の**依存性注入**である。
+
+<LinkPreview src="https://docs.nestjs.com/providers#dependency-injection"/>
+
+<aside>
+#### Dependency injection
+Nest is built around the strong design pattern commonly known as Dependency injection. \
+We recommend reading a great article about this concept in the official Angular documentation.
+</aside>
+
+ドキュメントにも記載されているように、Nestは依存性注入を基盤として構築されたフレームワークである。\
+以下のようなケースで使用される。\
+簡単な例として、NestJSを始めた際に最初に目にするサンプルコードを見てみよう。
+```typescript
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  getHello(): string {
+    return 'Hello World!';
+  }
+}
+
+// app.controller.ts
+import { Controller, Get } from '@nestjs/common';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+}
+
+
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+@Module({
+  imports: [],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+構造を見てみよう。
+
+このコードだけを見ると、`AppController`で`AppService`を使用していることは分かるが、\
+`AppService`がどのように注入されて使用されているかは分からない。
+
+我々が把握できる手がかりとしては、注入される対象である`AppService`が`@Injectable()`デコレータを使用していることと、\
+`AppModule`で`providers`に`AppService`を登録していることである。
+
+`@Injectable()`、`@Controller`デコレータや、`@Module`デコレータが魔法を生み出しているのだろうか？
+
+```ts
+export function Injectable(options?: InjectableOptions): ClassDecorator {
+  return (target: object) => {
+    Reflect.defineMetadata(INJECTABLE_WATERMARK, true, target);
+    Reflect.defineMetadata(SCOPE_OPTIONS_METADATA, options, target);
+  };
+}
+
+export function Module(metadata: ModuleMetadata): ClassDecorator {
+  const propsKeys = Object.keys(metadata);
+  validateModuleKeys(propsKeys);
+
+  return (target: Function) => {
+    for (const property in metadata) {
+      if (metadata.hasOwnProperty(property)) {
+        Reflect.defineMetadata(property, (metadata as any)[property], target);
+      }
+    }
+  };
+}
+```
+
+実際にコードを見てみると、わずか数行にすぎない。魔法のようなことは起きておらず、何かを設定しているだけである。\
+確かにNestJSを実行すると、どこかで`AppService`を生成し`AppController`に注入しているはずである。\
+しかし実質的な結合の仕組みは、表面からは把握できなかった。ただモジュールで登録する際に`AppService`を登録しただけである。
+
+表面的には直接注入していないということは、「情報」だけを通じて誰かが注入しているということである。\
+ここで我々は`@Injectable`デコレータを通じて注入可能であるという「情報」を表示し、`@Module`デコレータを通じてこの「情報」を伝達した。\
+これによりNestJSは内部的に`AppService`を生成し`AppController`に注入したのである。
+
+<aside>Nest.jsの詳細な動作過程は以下の記事で確認できる。<LinkPreview src="https://velog.io/@coalery/nest-injection-how"/></aside>
+
+ここで重要なのは、「情報」の媒介としてメタデータが使用されたということである。
+```ts
+Reflect.defineMetadata(INJECTABLE_WATERMARK, true, target);
+```
+メタデータは一種の「情報の情報」と見なすことができる。
+
+ここではReflect metadataが使用されているが、これはStage 3以前に使用されていた方式である。
+<LinkPreview src="https://www.npmjs.com/package/reflect-metadata" />
+
+メタデータもデコレータとは別に、独自のproposalが進行中である。\
+現在Stage 3として進行中であり、TypeScriptでは5.2バージョンからStage 3に合わせてメタデータをサポートしている。
+<LinkPreview src="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#decorator-metadata" description='Decorator Metadata'/>
+<LinkPreview src="https://github.com/tc39/proposal-decorator-metadata"/>
+
+### Stage 3 メタデータ
+
+Stage 3ではどのように変わったのか、依存性注入の例を改めて作ってみよう。
+
+まず`Injectable`デコレータを作ってみよう。
+```typescript
+(Symbol as any).metadata ??= Symbol('Symbol.metadata');
+
+const METADATA_KEY = Symbol('DI:METADATA');
+
+function Injectable() {
+  return function (_: unknown, context: ClassDecoratorContext) {
+    const metadata = (context.metadata[METADATA_KEY] as any) ?? { injectable: true };
+    metadata.injectable = true;
+    context.metadata[METADATA_KEY] = metadata;
+  };
+}
+```
+`Injectable`デコレータは、該当クラスのメタデータに`injectable`キーを追加し、`true`に設定する。\
+注入可能なクラスであることを表示するものである。
+
+次に`Inject`デコレータを作ってみよう。
+```typescript
+function Inject(dependencyName: string) {
+  return function (_: unknown, context: ClassFieldDecoratorContext) {
+    const metadata = (context.metadata[METADATA_KEY] as any) ?? { dependencies: {} };
+    metadata.dependencies = metadata.dependencies ?? {};
+    metadata.dependencies[context.name] = dependencyName;
+    context.metadata[METADATA_KEY] = metadata;
+  };
+}
+```
+
+`Inject`デコレータは`dependencyName`を受け取り、該当クラスのメタデータに`dependencies`キーを追加し、そのクラスのフィールド名をキーとして`dependencyName`を保存する。\
+これにより、そのクラスがどのような依存性を持っているかを表示できる。
+
+それぞれの表示子が準備できたので、中央で管理する`Container`クラスを作ってみよう。
+```typescript
+class Container {
+  private services: Map<string, any>;
+
+  constructor() {
+    this.services = new Map();
+  }
+
+  register(name: string, ServiceClass: any): void {
+    console.log(`Registering service ${name}`);
+    this.services.set(name, ServiceClass);
+  }
+
+  resolve(name: string): any {
+    console.log(`Resolving service ${name}`);
+    const ServiceClass = this.services.get(name);
+    if (!ServiceClass) {
+      throw new Error(`Service ${name} not found`);
+    }
+
+    const metadata = (ServiceClass as any)[Symbol.metadata]?.[METADATA_KEY];
+    if (!metadata || !metadata.injectable) {
+      throw new Error(`Service ${name} is not injectable`);
+    }
+
+    const instance = new ServiceClass();
+
+    if (metadata.dependencies) {
+      for (const [propertyKey, dependencyName] of Object.entries(metadata.dependencies)) {
+        instance[propertyKey] = this.resolve(dependencyName as string);
+      }
+    }
+
+    return instance;
+  }
+}
+```
+`Container`クラスは`register`メソッドを通じてサービスを登録し、`resolve`メソッドを通じてサービスを取得する。\
+nameで入力されたサービスを`resolve`する過程で、メタデータを通じて該当サービスの依存性情報を取得し、再帰的に依存性を解決する。
+
+```ts
+// ...
+const instance = new ServiceClass(); // ServiceClassのインスタンスを生成
+
+if (metadata.dependencies) { // 依存性がある場合
+  for (const [propertyKey, dependencyName] of Object.entries(metadata.dependencies)) {
+    instance[propertyKey] = this.resolve(dependencyName as string); // 依存性を解決
+  }
+}
+return instance;
+```
+
+実際に使用する部分を作ってみよう。
+```typescript
+@Injectable()
+class ProductService {
+  constructor() {
+    console.log('ProductService created');
+  }
+
+  getName() {
+    return 'Product Service';
+  }
+}
+
+@Injectable()
+class PriceService {
+  constructor() {
+    console.log('PriceService created');
+  }
+  getPrice() {
+    return 100;
+  }
+}
+
+@Injectable()
+class ShopService {
+  @Inject('productService')
+  productService!: ProductService;
+
+  @Inject('priceService')
+  priceService!: PriceService;
+
+  listProductsWithPrices() {
+    return `${this.productService.getName()} costs ${this.priceService.getPrice()}`;
+  }
+}
+
+const container = new Container();
+
+container.register('productService', ProductService);
+container.register('priceService', PriceService);
+container.register('shopService', ShopService);
+
+const shopService = container.resolve('shopService');
+
+console.log(shopService instanceof ShopService); // true
+console.log(shopService.productService instanceof ProductService); // true
+console.log(shopService.priceService instanceof PriceService); // true
+console.log(shopService.listProductsWithPrices()); // Product Service costs 100
+```
+3つのクラスを作成し、すべてContainerに登録した後、`ShopService`をresolveして使用してみた。\
+この過程で直接的に依存性を注入していないにもかかわらず、Containerを通じて依存性の注入を受けて使用することができた。
+
+このように構造を作ると、ShopServiceはProductServiceとPriceServiceに依存しているが、どのように生成され注入されるかといった具体的な実装には依存しなくなる。\
+結合度を下げたのである。
+
+我々はこのように結合度を下げる手段として、中間に第三者であるContainerと、情報をやり取りする媒介としてのメタデータを使用した。\
+「情報の情報」という観点から、メタデータが見事にその役割を果たしてくれた。
+
+**魔法**のようなものは存在しない。\
+**質量・エネルギー保存則**は我々のコードにも同様に適用されると考える。（真剣に物理的な意味ではない。誤解なきよう）\
+我々が**結合度を下げるために何かを切り離す行為**は、まるで**強い力で結合している陽子・中性子を引き離すこと**に似ている。\
+核分裂の過程でウラン235に**中性子を衝突させて原子核を分裂**させる。その過程で質量欠損により**結合エネルギーが放出**され、エネルギーに変換される。\
+中性子を衝突させる過程は、我々が**時間とコストを投資**し、**様々な手法**（上記のメタデータのような）を用いて結合度を下げることに相当する。
+
+**結合度を下げる**ために一定の**エネルギー（コスト）が必要**であるが、その結果として**放出されて我々に返ってくるエネルギー**はより大きいはずである。
+
+<figure><img src="/post/images/decorator/nuclear_fission.png" /><figcaption>Nuclear Fission Diagram. <br/>出典：https://www.automated-teaching-machines.com/Intermediate-Science/310-Nuclear-Fission-and-Fusion.php</figcaption></figure>
+
+
+
+<br/>
+<br/>
+
+P.S ただし、過ぎたるは猶及ばざるが如し。規模に見合わない過度な結合度の分離や、目的と行為の主客が転倒した結合度の分離は逆効果を生みかねない。\
+制御されない（核）分裂が歴史的にどのような結果をもたらしたか、考えてみよう。
+
+## Reference
+
+https://ko.javascript.info/class#ref-285
+https://www.cs.ubc.ca/~gregor/papers/kiczales-ECOOP1997-AOP.pdf
+https://en.wikipedia.org/wiki/Aspect-oriented_programming
+
+https://peps.python.org/pep-0318/
+https://github.com/tc39/proposal-decorators?tab=readme-ov-file
+
+https://docs.google.com/document/d/1GMp938qlmJlGkBZp6AerL-ewL1MWUDU8QzHBiNvs3MM/edit
+https://springframework.guru/gang-of-four-design-patterns/
+
+https://groups.google.com/g/v8-reviews/c/inK1X-XQQPg
+https://chromium-review.googlesource.com/q/hashtag:%22decorators%22+(status:open%20OR%20status:merged)
+https://chromium-review.googlesource.com/c/v8/v8/+/5837979
+https://chromium-review.googlesource.com/c/v8/v8/+/5837979/4/src/interpreter/bytecode-generator.cc#3154
+
+https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#decorator-metadata
+https://www.typescriptlang.org/docs/handbook/decorators.html
+https://www.typescriptlang.org/tsconfig/#experimentalDecorators
+https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#decorators
+https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#differences-with-experimental-legacy-decorators
+
+https://2ality.com/2022/10/javascript-decorators.html
+https://medium.com/javascript-scene/javascript-factory-functions-vs-constructor-functions-vs-classes-2f22ceddf33e
