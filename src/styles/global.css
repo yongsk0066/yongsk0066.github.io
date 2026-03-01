@@ -1,6 +1,24 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@theme {
+  --font-sans: "Oswald", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Pretendard", ui-serif, Georgia, serif;
+  --shadow-3xl: 0 35px 60px -15px rgba(0, 0, 0, 0.3);
+  --animate-expand: expand 1s ease-in-out;
+
+  @keyframes expand {
+    0% {
+      max-width: 28rem;
+      transform: scale(0.7);
+    }
+    100% {
+      max-width: 100%;
+      transform: scale(1);
+    }
+  }
+}
+
 @utility prose-black {
   --tw-prose-body: #000000;
 }
@@ -180,8 +198,10 @@
 }
 
 html {
+  --header-height: 4rem;
   overflow-y: scroll;
   color-scheme: light;
+  scroll-padding-top: var(--header-height);
 }
 
 
