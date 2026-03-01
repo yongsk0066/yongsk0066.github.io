@@ -10,6 +10,7 @@ import {
 
 export interface OverlayRenderer {
   start(): void;
+  ready(): Promise<void>;
   toggleAutoMode(): void;
   getModeName(): string;
 }
@@ -27,6 +28,21 @@ export function createOverlayRenderer(
   let currentMode = 0;
   let lastMode = -1;
   let autoMode = true;
+
+  // ---- Ready signal ----
+
+  let resolveReady: () => void;
+  const readyPromise = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
+  let assetsReady = false;
+
+  function checkReady() {
+    if (asciiData && asciiImg.complete && !assetsReady) {
+      assetsReady = true;
+      resolveReady();
+    }
+  }
 
   // ---- Shader compilation ----
 
@@ -88,6 +104,7 @@ export function createOverlayRenderer(
       gl.UNSIGNED_BYTE,
       asciiImg,
     );
+    checkReady();
   };
   asciiImg.src = "/assets/images/ascii.png";
 
@@ -160,6 +177,7 @@ export function createOverlayRenderer(
         null,
       );
       gl.uniform2f(uGrid, asciiData.cols, asciiData.rows);
+      checkReady();
     });
 
   // ---- Render loop ----
@@ -218,6 +236,9 @@ export function createOverlayRenderer(
   return {
     start() {
       requestAnimationFrame(render);
+    },
+    ready() {
+      return readyPromise;
     },
     toggleAutoMode() {
       autoMode = !autoMode;

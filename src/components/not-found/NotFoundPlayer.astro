@@ -8,7 +8,7 @@ const { autoplay = true } = Astro.props;
 const VIDEO_ID = "zhHB4dZTChw";
 const iframeParams = new URLSearchParams({
   start: "32",
-  autoplay: autoplay ? "1" : "0",
+  autoplay: "0",
   mute: "1",
   controls: "0",
   enablejsapi: "1",
@@ -23,6 +23,7 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     <canvas class="spectro-border"></canvas>
     <div class="video-crop">
       <h1>404</h1>
+      <div class="loading-cover" aria-hidden="true"></div>
       <iframe
         id="yt-player"
         src={iframeSrc}
@@ -145,7 +146,7 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     btnPlay.setAttribute("aria-label", playing ? "일시정지" : "재생");
   }
 
-  setPlaying(true);
+  setPlaying(false);
 
   btnPlay.addEventListener("click", () => {
     if (!player) return;
@@ -206,23 +207,42 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
 
   // ---- YouTube Player ----
 
-  const ytScript = document.createElement("script");
-  ytScript.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(ytScript);
+  const loadingCover = document.querySelector<HTMLElement>(".loading-cover")!;
+  let revealed = false;
 
-  (window as any).onYouTubeIframeAPIReady = () => {
-    player = new YT.Player("yt-player", {
-      events: {
-        onStateChange(e: YT.OnStateChangeEvent) {
-          if (e.data === YT.PlayerState.ENDED) {
-            player.seekTo(VIDEO_START, true);
-            player.playVideo();
-          }
-          setPlaying(e.data === YT.PlayerState.PLAYING);
+  const ytReady = new Promise<void>((resolve) => {
+    const ytScript = document.createElement("script");
+    ytScript.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(ytScript);
+
+    (window as any).onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("yt-player", {
+        events: {
+          onReady() {
+            resolve();
+          },
+          onStateChange(e: YT.OnStateChangeEvent) {
+            if (e.data === YT.PlayerState.ENDED) {
+              player.seekTo(VIDEO_START, true);
+              player.playVideo();
+            }
+            setPlaying(e.data === YT.PlayerState.PLAYING);
+
+            if (e.data === YT.PlayerState.PLAYING && !revealed) {
+              revealed = true;
+              loadingCover.classList.add("ready");
+            }
+          },
         },
-      },
-    });
-  };
+      });
+    };
+  });
+
+  // ---- Coordinated start ----
+
+  Promise.all([renderer.ready(), ytReady]).then(() => {
+    player.playVideo();
+  });
 
   // ---- Mode Display ----
 
@@ -366,6 +386,45 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     aspect-ratio: 16 / 9;
     border: 0;
     pointer-events: none;
+  }
+
+  .loading-cover {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: #0a0a0a;
+    overflow: hidden;
+    transition: opacity 0.8s ease-out;
+  }
+
+  .loading-cover.ready {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .loading-cover::before {
+    content: "";
+    position: absolute;
+    inset: -50%;
+    background: radial-gradient(
+      ellipse at center,
+      rgba(255, 255, 255, 0.06) 0%,
+      transparent 50%
+    );
+    filter: blur(80px);
+    animation: loading-pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes loading-pulse {
+    0%,
+    100% {
+      transform: scale(0.6);
+      opacity: 0.3;
+    }
+    50% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
   }
 
   .ascii-overlay {
