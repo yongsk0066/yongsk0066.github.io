@@ -16,6 +16,7 @@ export const ui = {
     "word.next_post": "다음 글",
     "word.categories": "카테고리",
     "word.all": "전체",
+    "locale.noTranslation": "번역이 준비되지 않았습니다",
   },
   en: {
     "page.title": "Yongseok's Blog",
@@ -33,6 +34,7 @@ export const ui = {
     "word.next_post": "Next",
     "word.categories": "Categories",
     "word.all": "All",
+    "locale.noTranslation": "Translation not available",
   },
   ja: {
     "page.title": "ヨンソクのブログ",
@@ -50,6 +52,7 @@ export const ui = {
     "word.next_post": "次の記事",
     "word.categories": "カテゴリ",
     "word.all": "すべて",
+    "locale.noTranslation": "翻訳がありません",
   },
 } as const;
 

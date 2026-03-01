@@ -19,7 +19,7 @@ const locales = Object.entries(LOCALE_LABELS);
         <div class="font-semibold">{t("page.title")}</div>
       </Link>
       <nav class="flex items-center gap-1">
-        <div class="flex items-center gap-0.5 mr-1">
+        <div class="flex items-center gap-0.5 mr-1" data-no-translation={t("locale.noTranslation")}>
           {locales.map(([code, label], i) => (
             <>
               {i > 0 && <span class="text-zinc-300 text-xs select-none">|</span>}
@@ -37,9 +37,9 @@ const locales = Object.entries(LOCALE_LABELS);
             </>
           ))}
         </div>
-        <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;">
+        <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;" transition:persist="header-clock">
           <span id="header-clock-placeholder">--:--:--</span>
-          <HeaderClock client:only="react" transition:persist="header-clock" />
+          <HeaderClock client:only="react" />
         </div>
         <span>
           {`/`}
@@ -58,6 +58,26 @@ const locales = Object.entries(LOCALE_LABELS);
   header {
     content-visibility: auto;
   }
+  .locale-btn[data-unavailable] {
+    opacity: 0.3;
+    cursor: default;
+    position: relative;
+  }
+  .locale-btn[data-unavailable]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.65rem;
+    background: #18181b;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    z-index: 50;
+    margin-top: 4px;
+  }
 </style>
 
 <script>
@@ -66,10 +86,28 @@ const locales = Object.entries(LOCALE_LABELS);
       .map((btn) => btn.dataset.locale)
       .filter((l): l is string => !!l && l !== "ko");
 
+    // Mark unavailable locale buttons based on page data
+    const availableRaw = document.documentElement.dataset.availableLocales;
+    const available = availableRaw ? availableRaw.split(",") : null;
+    const container = document.querySelector<HTMLElement>("[data-no-translation]");
+    const tooltipText = container?.dataset.noTranslation || "";
+
     document.querySelectorAll<HTMLButtonElement>(".locale-btn").forEach((btn) => {
+      const locale = btn.dataset.locale;
+
+      // Reset previous state (for View Transitions re-init)
+      delete btn.dataset.unavailable;
+      delete btn.dataset.tooltip;
+
+      if (available && locale && !available.includes(locale)) {
+        btn.dataset.unavailable = "";
+        btn.dataset.tooltip = tooltipText;
+      }
+
       btn.addEventListener("click", () => {
         const target = btn.dataset.locale;
         if (!target) return;
+        if (btn.hasAttribute("data-unavailable")) return;
 
         const path = window.location.pathname;
 

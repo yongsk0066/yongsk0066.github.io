@@ -15,6 +15,7 @@ type Props = {
   webmcpHasTranslation?: boolean;
   webmcpTranslationSlug?: string;
   webmcpCurrentLocale?: string;
+  availableLocales?: string[];
 };
 
 const {
@@ -25,11 +26,12 @@ const {
   webmcpHasTranslation = false,
   webmcpTranslationSlug = "",
   webmcpCurrentLocale = Astro.currentLocale,
+  availableLocales,
 } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" {...(availableLocales ? { "data-available-locales": availableLocales.join(",") } : {})}>
   <head>
     <Head
       title={`${title} | ${SITE_TITLE}`}

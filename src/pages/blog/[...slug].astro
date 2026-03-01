@@ -71,6 +71,20 @@ if (currentLocale === DEFAULT_LOCALE) {
   hasTranslation = allPosts.some((p) => p.id === translationSlug);
 }
 
+// Compute available locales for language switcher UI
+const availableLocales: string[] = [currentLocale];
+const _baseSlug = currentLocale === DEFAULT_LOCALE
+  ? post.id
+  : post.id.replace(new RegExp(`^${currentLocale}/`), "");
+
+if (currentLocale !== DEFAULT_LOCALE) {
+  if (allPosts.some((p) => p.id === _baseSlug)) availableLocales.push(DEFAULT_LOCALE);
+}
+for (const locale of OTHER_LOCALES) {
+  if (locale === currentLocale) continue;
+  if (allPosts.some((p) => p.id === `${locale}/${_baseSlug}`)) availableLocales.push(locale);
+}
+
 const { Content, headings } = await render(post);
 const t = useTranslations(currentLocale as any);
 ---
@@ -88,6 +102,7 @@ const t = useTranslations(currentLocale as any);
   webmcpHasTranslation={hasTranslation}
   webmcpTranslationSlug={translationSlug}
   webmcpCurrentLocale={currentLocale}
+  availableLocales={availableLocales}
 >
   <!--- Starts component --->
   <div id="scroll-progress" class="bg-blue-600 h-1 fixed top-0 left-0 z-50">
