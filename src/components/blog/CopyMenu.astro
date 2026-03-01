@@ -227,11 +227,25 @@ const t = useTranslations(currentLocale as any);
     var copiedText = copyBtn.closest(".copy-menu-wrapper").dataset.copiedText || "Copied!";
 
     copyBtn.addEventListener("click", function () {
+      if (copyBtn.dataset.loading) return; // 중복 클릭 방지
       var mdUrl = new URL("index.md", window.location.href).toString();
       var label = document.getElementById("copy-page-label");
       var icon = copyBtn.querySelector(".copy-icon");
 
+      // 로딩 상태
+      copyBtn.dataset.loading = "1";
+      copyBtn.style.opacity = "0.6";
+      copyBtn.style.pointerEvents = "none";
+      if (label) { label.textContent = "..."; }
+
+      function restore() {
+        delete copyBtn.dataset.loading;
+        copyBtn.style.opacity = "";
+        copyBtn.style.pointerEvents = "";
+      }
+
       function showSuccess() {
+        restore();
         if (label) { label.textContent = "\u2713 " + copiedText; }
         if (icon) { icon.style.display = "none"; }
         setTimeout(function () {
@@ -250,6 +264,7 @@ const t = useTranslations(currentLocale as any);
         })
         .then(showSuccess)
         .catch(function () {
+          restore();
           navigator.clipboard.writeText(window.location.href).then(showSuccess);
         });
     });
