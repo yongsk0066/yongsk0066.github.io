@@ -1,0 +1,52 @@
+---
+/**
+ * ScrollProgressBar — pure CSS scroll progress indicator.
+ * Uses CSS scroll-driven animations (animation-timeline: scroll())
+ * for zero-JS, GPU-accelerated performance.
+ *
+ * Place this component at the bottom of <header> so it renders
+ * as a thin bar right below the header.
+ */
+---
+
+<div class="scroll-progress-track" aria-hidden="true">
+  <div class="scroll-progress-bar"></div>
+</div>
+
+<style>
+  .scroll-progress-track {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  .scroll-progress-bar {
+    height: 100%;
+    width: 100%;
+    background: #000;
+    transform-origin: left;
+    transform: scaleX(0);
+    animation: scroll-progress linear both;
+    animation-timeline: scroll();
+  }
+
+  @keyframes scroll-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Fallback: hide on browsers that don't support scroll-driven animations */
+  @supports not (animation-timeline: scroll()) {
+    .scroll-progress-track {
+      display: none;
+    }
+  }
+</style>
