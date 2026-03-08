@@ -1,8 +1,8 @@
 ---
 import { type CollectionEntry, getCollection } from "astro:content";
 import PageLayout from "@layouts/PageLayout.astro";
-import ArrowCard from "@components/blog/ArrowCard.astro";
 import BlogSidebar from "@components/blog/BlogSidebar.astro";
+import AnimatedPostList from "@components/blog/AnimatedPostList.tsx";
 import { DEFAULT_LOCALE, SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
@@ -58,7 +58,25 @@ const posts = data.reduce((acc: Acc, post) => {
   return acc;
 }, {});
 
-const years = Object.keys(posts).sort((a, b) => parseInt(b) - parseInt(a));
+const sortedYears = Object.keys(posts).sort((a, b) => parseInt(b) - parseInt(a));
+
+// Serialize post data for React component (Date -> ISO string)
+const yearGroups = sortedYears.map((year) => ({
+  year,
+  posts: posts[year].map((post) => ({
+    id: post.id,
+    collection: post.collection,
+    data: {
+      title: post.data.title,
+      description: post.data.description,
+      date: post.data.date.toISOString(),
+      draft: post.data.draft,
+      categories: post.data.categories,
+    },
+  })),
+}));
+
+const isDev = import.meta.env.DEV;
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION}
@@ -67,24 +85,11 @@ const years = Object.keys(posts).sort((a, b) => parseInt(b) - parseInt(a));
     <div class="space-y-10">
       <div class="animate font-semibold text-black">블로그</div>
       <BlogSidebar categories={categories} series={series} locale="ko" />
-      <div class="space-y-4">
-        {
-          years.map((year) => (
-            <section class="animate space-y-4" data-year={year}>
-              <div class="font-semibold text-black">{year}</div>
-              <div>
-                <ul class="flex flex-col gap-4">
-                  {posts[year].map((post) => (
-                    <li data-categories={JSON.stringify(post.data.categories || [])}>
-                      <ArrowCard entry={post} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          ))
-        }
-      </div>
+      <AnimatedPostList
+        client:visible
+        years={yearGroups}
+        isDev={isDev}
+      />
     </div>
   </div>
 </PageLayout>
