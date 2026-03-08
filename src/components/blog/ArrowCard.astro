@@ -1,51 +1,20 @@
 ---
 import type { CollectionEntry } from "astro:content";
+import ArrowCardInteractive from "./ArrowCardInteractive";
 
 type Props = {
   entry: CollectionEntry<"blog">;
 };
 
 const { entry } = Astro.props;
+const isDev = import.meta.env.DEV;
 ---
 
-<a
+<ArrowCardInteractive
+  client:visible
   href={`/${entry.collection}/${entry.id}`}
-  class="relative group flex flex-nowrap py-3 pr-10 rounded-lg hover:text-black transition-colors duration-300 ease-in-out antialiased"
->
-  <div class="flex flex-col flex-1 truncate">
-    <div
-      class="font-bold text-zinc-600 group-hover:text-black transition-colors duration-300 ease-in-out
-        whitespace-normal break-all line-clamp-2"
-    >
-      {entry.data.title}
-      {import.meta.env.DEV && entry.data.draft && (
-        <span class="inline-flex items-center ml-2 px-1.5 py-0.5 text-[10px] font-medium leading-none text-orange-600 bg-orange-100 rounded align-middle">
-          DRAFT
-        </span>
-      )}
-    </div>
-    <div class="text-sm line-clamp-2 whitespace-normal break-all text-semibold">
-      {entry.data.description}
-    </div>
-    <!-- <div class="text-xs text-gray-500 dark:text-gray-400">
-      {entry.data.date}
-    </div> -->
-  </div>
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    class="absolute top-1/2 right-2 -translate-y-1/2 size-5 stroke-2 fill-none stroke-current"
-  >
-    <line
-      x1="5"
-      y1="12"
-      x2="19"
-      y2="12"
-      class="translate-x-3 group-hover:translate-x-0 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-in-out"
-    ></line>
-    <polyline
-      points="12 5 19 12 12 19"
-      class="-translate-x-1 group-hover:translate-x-0 transition-transform duration-300 ease-in-out"
-    ></polyline>
-  </svg>
-</a>
+  title={entry.data.title}
+  description={entry.data.description}
+  draft={entry.data.draft}
+  isDev={isDev}
+/>
