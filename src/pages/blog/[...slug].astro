@@ -105,10 +105,6 @@ const t = useTranslations(currentLocale as any);
   webmcpCurrentLocale={currentLocale}
   availableLocales={availableLocales}
 >
-  <!--- Starts component --->
-  <div id="scroll-progress" class="bg-blue-600 h-1 fixed top-0 left-0 z-50">
-  </div>
-  <!--- Ends component --->
   <Container>
     <div>
       <BackToPrev href={t("path.blog")}>
@@ -188,15 +184,50 @@ const t = useTranslations(currentLocale as any);
     <Comments />
   </Container>
 </PageLayout>
-<!--- Starts script --->
-<script type="module">
-  window.addEventListener("scroll", function () {
-    const scrollableHeight =
-      document.documentElement.scrollHeight - window.innerHeight;
-    const scrolled = window.scrollY;
-    const progressBar = document.getElementById("scroll-progress");
-    const progress = (scrolled / scrollableHeight) * 100;
-    progressBar.style.width = progress + "%";
-  });
+
+<script>
+  /**
+   * Code block blur-fade scroll detection.
+   * Adds at-start / at-end / no-scroll classes to <pre> elements
+   * so mask-image gradients in global.css respond to scroll position.
+   */
+  function initCodeBlockBlurFade() {
+    const THRESHOLD = 2; // px tolerance for scroll boundary
+
+    function updateClasses(el: HTMLElement) {
+      const scrollable = el.scrollWidth > el.clientWidth + THRESHOLD;
+
+      if (!scrollable) {
+        el.classList.add("no-scroll");
+        el.classList.remove("at-start", "at-end");
+        return;
+      }
+
+      el.classList.remove("no-scroll");
+
+      const atStart = el.scrollLeft <= THRESHOLD;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - THRESHOLD;
+
+      el.classList.toggle("at-start", atStart);
+      el.classList.toggle("at-end", atEnd);
+    }
+
+    const article = document.getElementById("post-content");
+    if (!article) return;
+
+    const pres = article.querySelectorAll<HTMLElement>("pre");
+
+    pres.forEach((pre) => {
+      updateClasses(pre);
+      pre.addEventListener("scroll", () => updateClasses(pre), { passive: true });
+    });
+
+    // Recalculate on resize (font size changes, viewport changes)
+    const ro = new ResizeObserver(() => {
+      pres.forEach((pre) => updateClasses(pre));
+    });
+    pres.forEach((pre) => ro.observe(pre));
+  }
+
+  document.addEventListener("DOMContentLoaded", initCodeBlockBlurFade);
 </script>
-<!--- Ends script --->
