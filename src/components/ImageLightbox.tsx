@@ -3,25 +3,28 @@ import {
   motion,
   useMotionValue,
   useTransform,
+  useReducedMotion,
   type PanInfo,
 } from "framer-motion";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 // --- Spring configs (DD: simulating-physics) ---
+// Close is snappier than open (DD: "exit should be faster than entry")
 const OPEN_SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
 const CLOSE_SPRING = { type: "spring" as const, stiffness: 500, damping: 35 };
+const INSTANT = { duration: 0 };
 
 // --- Thresholds ---
 const VELOCITY_DISMISS = 500; // px/s — fast drag dismisses immediately
 const DISTANCE_DISMISS = 150; // px — slow drag past this distance dismisses
+const DRAG_THRESHOLD = 3; // px — movement threshold before drag registers (DD: gesture conflicts)
 
-// --- Rubber banding (DD: rubber-banding dampen function) ---
+// --- Rubber banding (DD: dampen function) ---
 function dampen(val: number, max: number): number {
   const abs = Math.abs(val);
   if (abs > max) {
     const extra = abs - max;
-    const dampenedExtra = Math.sqrt(extra) * 3;
-    return Math.sign(val) * (max + dampenedExtra);
+    return Math.sign(val) * (max + Math.sqrt(extra) * 3);
   }
   return val;
 }
@@ -31,10 +34,10 @@ const gesture = {
   start: () => {
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
-    // Disable pointer events on everything else during drag
     const style = document.createElement("style");
     style.id = "lightbox-gesture";
-    style.textContent = "body > *:not(#lightbox-overlay) { pointer-events: none !important; }";
+    style.textContent =
+      "body > *:not(#lightbox-overlay) { pointer-events: none !important; }";
     document.head.appendChild(style);
   },
   end: () => {
@@ -44,62 +47,71 @@ const gesture = {
   },
 };
 
-interface LightboxImage {
-  src: string;
-  alt: string;
-  rect: DOMRect;
-}
-
 export function ImageLightbox() {
-  const [activeImage, setActiveImage] = useState<LightboxImage | null>(null);
+  const [activeImage, setActiveImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   // Drag motion values
   const dragY = useMotionValue(0);
   const dragX = useMotionValue(0);
-
-  // Opacity linked to drag distance
   const dragDistance = useMotionValue(0);
-  const overlayOpacity = useTransform(dragDistance, [0, DISTANCE_DISMISS * 2], [1, 0.2]);
 
-  // Scale linked to drag distance for tactile feedback
-  const imageScale = useTransform(dragDistance, [0, DISTANCE_DISMISS * 2], [1, 0.85]);
+  // Interpolation: overlay opacity + image scale from drag distance (DD: responsive-interfaces)
+  const overlayOpacity = useTransform(
+    dragDistance,
+    [0, DISTANCE_DISMISS * 2],
+    [1, 0.2]
+  );
+  const imageScale = useTransform(
+    dragDistance,
+    [0, DISTANCE_DISMISS * 2],
+    [1, 0.85]
+  );
 
-  const isDragging = useRef(false);
+  const dragStarted = useRef(false); // Tracks if threshold was exceeded
+
+  // Animation config respecting reduced motion
+  const openTransition = prefersReducedMotion ? INSTANT : OPEN_SPRING;
+  const closeTransition = prefersReducedMotion ? INSTANT : CLOSE_SPRING;
 
   // Open lightbox
-  const openLightbox = useCallback((img: HTMLImageElement) => {
-    const rect = img.getBoundingClientRect();
-    setActiveImage({
-      src: img.src,
-      alt: img.alt || "",
-      rect,
-    });
-    setIsOpen(true);
-    document.body.style.overflow = "hidden";
-  }, []);
+  const openLightbox = useCallback(
+    (img: HTMLImageElement) => {
+      setActiveImage({
+        src: img.src,
+        alt: img.alt || "",
+      });
+      setIsOpen(true);
+      document.documentElement.style.overflow = "hidden";
+    },
+    []
+  );
 
   // Close lightbox
   const closeLightbox = useCallback(() => {
     setIsOpen(false);
-    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
     gesture.end();
-    // Clean up after exit animation
+    // Use onAnimationComplete instead of setTimeout where possible,
+    // but AnimatePresence exit needs time — 300ms is conservative for spring
+    const cleanupDelay = prefersReducedMotion ? 0 : 300;
     setTimeout(() => {
       setActiveImage(null);
       dragY.jump(0);
       dragX.jump(0);
       dragDistance.jump(0);
-    }, 400);
-  }, [dragY, dragX, dragDistance]);
+    }, cleanupDelay);
+  }, [dragY, dragX, dragDistance, prefersReducedMotion]);
 
   // Esc key handler
   useEffect(() => {
+    if (!isOpen) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && isOpen) {
-        closeLightbox();
-      }
+      if (e.key === "Escape") closeLightbox();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -113,19 +125,17 @@ export function ImageLightbox() {
     const imgs = postContent.querySelectorAll("img");
 
     function handleClick(e: Event) {
+      e.preventDefault();
+      e.stopPropagation();
       const img = e.currentTarget as HTMLImageElement;
-      // Don't open for tiny images (icons, etc.)
       if (img.naturalWidth < 100 || img.naturalHeight < 100) return;
       openLightbox(img);
     }
 
     imgs.forEach((img) => {
       img.addEventListener("click", handleClick);
+      // DD: ergonomic-interactions — cursor affordance
       img.style.cursor = "zoom-in";
-      // Fitts' Law: expand hit area with padding (DD: ergonomic-interactions)
-      img.style.padding = "8px";
-      img.style.margin = "-8px";
-      img.style.boxSizing = "content-box";
     });
 
     return () => {
@@ -135,25 +145,26 @@ export function ImageLightbox() {
     };
   }, [openLightbox]);
 
-  // --- Drag handlers ---
+  // --- Drag handlers with threshold (DD: gesture conflicts) ---
   const onPanStart = useCallback(() => {
-    isDragging.current = true;
-    gesture.start();
+    dragStarted.current = false;
   }, []);
 
   const onPan = useCallback(
     (_: PointerEvent, info: PanInfo) => {
       const rawY = info.offset.y;
       const rawX = info.offset.x;
-
-      // Apply rubber banding beyond dismiss distance
-      const dampedY = dampen(rawY, DISTANCE_DISMISS);
-      const dampedX = dampen(rawX, DISTANCE_DISMISS);
-
-      dragY.jump(dampedY);
-      dragX.jump(dampedX);
-
       const dist = Math.sqrt(rawX * rawX + rawY * rawY);
+
+      // DD: gesture conflicts — don't start drag until threshold exceeded
+      if (!dragStarted.current) {
+        if (dist < DRAG_THRESHOLD) return;
+        dragStarted.current = true;
+        gesture.start();
+      }
+
+      dragY.jump(dampen(rawY, DISTANCE_DISMISS));
+      dragX.jump(dampen(rawX, DISTANCE_DISMISS));
       dragDistance.jump(dist);
     },
     [dragY, dragX, dragDistance]
@@ -161,7 +172,12 @@ export function ImageLightbox() {
 
   const onPanEnd = useCallback(
     (_: PointerEvent, info: PanInfo) => {
-      isDragging.current = false;
+      if (!dragStarted.current) {
+        // No significant drag occurred — treat as click to close
+        return;
+      }
+
+      dragStarted.current = false;
       gesture.end();
 
       const speed = Math.sqrt(
@@ -171,8 +187,8 @@ export function ImageLightbox() {
         info.offset.x * info.offset.x + info.offset.y * info.offset.y
       );
 
+      // DD: applying velocity — projected position determines dismiss
       if (speed > VELOCITY_DISMISS || dist > DISTANCE_DISMISS) {
-        // Dismiss
         closeLightbox();
       } else {
         // Snap back with spring
@@ -184,12 +200,14 @@ export function ImageLightbox() {
     [closeLightbox, dragY, dragX, dragDistance]
   );
 
-  // Click on overlay to close (but not during drag)
+  // Click on overlay to close (DD: prefer click over mousedown for interruptibility)
   const onOverlayClick = useCallback(
     (e: React.MouseEvent) => {
-      if (isDragging.current) return;
-      // Only close if clicking the overlay, not the image
-      if (e.target === e.currentTarget || (e.target as HTMLElement).id === "lightbox-overlay-bg") {
+      if (dragStarted.current) return;
+      if (
+        e.target === e.currentTarget ||
+        (e.target as HTMLElement).id === "lightbox-overlay-bg"
+      ) {
         closeLightbox();
       }
     },
@@ -203,27 +221,22 @@ export function ImageLightbox() {
       {isOpen && activeImage && (
         <motion.div
           id="lightbox-overlay"
-          ref={containerRef}
           className="fixed inset-0 z-[9999] flex items-center justify-center"
           style={{ touchAction: "none" }}
           onClick={onOverlayClick}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={CLOSE_SPRING}
+          transition={closeTransition}
         >
-          {/* Background overlay */}
+          {/* Background overlay — opacity driven by drag distance (interpolation) */}
           <motion.div
             id="lightbox-overlay-bg"
             className="absolute inset-0 bg-black/80"
             style={{ opacity: overlayOpacity }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={OPEN_SPRING}
           />
 
-          {/* Image */}
+          {/* Image — no layoutId since source imgs are plain HTML */}
           <motion.img
             src={activeImage.src}
             alt={activeImage.alt}
@@ -232,29 +245,19 @@ export function ImageLightbox() {
               x: dragX,
               y: dragY,
               scale: imageScale,
-              cursor: isOpen ? "grab" : "default",
+              cursor: "grab",
               touchAction: "none",
             }}
-            layoutId={`lightbox-${activeImage.src}`}
-            initial={{
-              opacity: 0,
-              scale: 0.7,
-            }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-            }}
-            exit={{
-              opacity: 0,
-              scale: 0.7,
-            }}
-            transition={isOpen ? OPEN_SPRING : CLOSE_SPRING}
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={isOpen ? openTransition : closeTransition}
             onPanStart={onPanStart}
             onPan={onPan}
             onPanEnd={onPanEnd}
             draggable={false}
             onPointerDown={(e: React.PointerEvent) => {
-              // Pointer capture (DD: contained-gestures)
+              // DD: contained-gestures — pointer capture
               (e.target as HTMLElement).setPointerCapture(e.pointerId);
             }}
           />

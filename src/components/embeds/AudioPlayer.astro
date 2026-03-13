@@ -5,203 +5,353 @@ interface Props {
 }
 
 const { src, title } = Astro.props;
+const playerId = `ap-${Math.random().toString(36).slice(2, 8)}`;
 ---
 
 <div
-  class="audio-player w-full max-w-full bg-white rounded-lg shadow-md p-4 my-4"
+  class="audio-player group relative w-full max-w-full rounded-lg border border-zinc-200 bg-white my-4 select-none"
+  data-player-id={playerId}
+  data-src={src}
 >
-  {title && <div class="text-lg font-medium mb-2">{title}</div>}
-  <div class="player-container">
-    <div class="flex items-center mb-2">
-      <button
-        id="playPauseBtn"
-        class="w-12 h-12 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 rounded-full text-white mr-4"
+  <div class="flex items-center gap-3 px-4 py-3">
+    <!-- Play/Pause button (DD: ergonomic-interactions — generous hit area) -->
+    <button
+      data-role="play-pause"
+      class="ap-play-btn relative flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-zinc-900 text-white transition-transform duration-150 ease-out active:scale-90 hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+      aria-label="Play"
+    >
+      <!-- Play icon -->
+      <svg data-role="play-icon" class="w-4 h-4 ml-0.5" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M4.5 2.5v11l9-5.5z" />
+      </svg>
+      <!-- Pause icon -->
+      <svg data-role="pause-icon" class="w-4 h-4 hidden" viewBox="0 0 16 16" fill="currentColor">
+        <rect x="3.5" y="2" width="3.5" height="12" rx="0.75" />
+        <rect x="9" y="2" width="3.5" height="12" rx="0.75" />
+      </svg>
+    </button>
+
+    <!-- Track info + progress -->
+    <div class="flex-1 min-w-0">
+      {title && <div class="text-sm font-medium text-zinc-800 truncate mb-1.5">{title}</div>}
+
+      <!-- Progress bar (DD: ergonomic-interactions — expanded hit area with padding) -->
+      <div
+        data-role="seek-area"
+        class="ap-seek-area relative py-2 -my-2 cursor-pointer"
+        style="touch-action: none;"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="play-icon h-6 w-6"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-            clip-rule="evenodd"></path>
-        </svg>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="pause-icon h-6 w-6 hidden"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-            clip-rule="evenodd"></path>
-        </svg>
-      </button>
-      <div class="flex-grow">
-        <div class="relative">
+        <!-- Track background -->
+        <div class="relative h-1 bg-zinc-200 rounded-full overflow-hidden transition-[height] duration-150">
+          <!-- Filled progress -->
           <div
-            class="progress-container w-full h-2 bg-gray-200 rounded-full overflow-hidden"
-          >
-            <div id="progressBar" class="progress-bar h-full bg-indigo-500 w-0">
-            </div>
-          </div>
-          <input
-            type="range"
-            id="seekBar"
-            class="absolute top-0 w-full h-2 opacity-0 cursor-pointer"
-            min="0"
-            max="100"
-            value="0"
-          />
+            data-role="progress-fill"
+            class="absolute inset-y-0 left-0 bg-zinc-700 rounded-full"
+            style="width: 0%; will-change: width;"
+          ></div>
         </div>
+
+        <!-- Hover time preview (DD: responsive-interfaces — proportional feedback) -->
         <div
-          class="flex justify-between text-xs text-gray-500 mt-1"
+          data-role="time-preview"
+          class="absolute -top-7 px-1.5 py-0.5 text-[10px] font-mono text-zinc-500 bg-white border border-zinc-200 rounded opacity-0 pointer-events-none transition-opacity duration-100 shadow-sm"
+          style="transform: translateX(-50%);"
         >
-          <span id="currentTime">0:00</span>
-          <span id="totalTime">0:00</span>
+          0:00
         </div>
+
+        <!-- Seek thumb (DD: responsive-interfaces — real-time gesture feedback) -->
+        <div
+          data-role="seek-thumb"
+          class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-zinc-900 rounded-full opacity-0 transition-opacity duration-100 pointer-events-none shadow-sm"
+          style="transform: translate(-50%, -50%); will-change: left;"
+        ></div>
+      </div>
+
+      <!-- Time display -->
+      <div class="flex justify-between mt-1">
+        <span data-role="current-time" class="text-[11px] font-mono text-zinc-400 tabular-nums">0:00</span>
+        <span data-role="total-time" class="text-[11px] font-mono text-zinc-400 tabular-nums">0:00</span>
       </div>
     </div>
-    <div class="flex items-center">
-      <button id="muteBtn" class="text-gray-600 mr-2">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="volume-icon h-5 w-5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
-            clip-rule="evenodd"></path>
+
+    <!-- Volume control -->
+    <div class="ap-volume-group relative flex items-center gap-1.5 flex-shrink-0">
+      <button
+        data-role="mute"
+        class="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-zinc-700 rounded transition-colors duration-100 active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
+        aria-label="Mute"
+      >
+        <!-- Volume icon -->
+        <svg data-role="volume-icon" class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M7.563 2.069A.75.75 0 0 1 8 2.75v10.5a.75.75 0 0 1-1.238.57L3.472 11H1.75A.75.75 0 0 1 1 10.25v-4.5A.75.75 0 0 1 1.75 5h1.722l3.29-2.82a.75.75 0 0 1 .801-.111ZM10.5 4.5a.5.5 0 0 1 .707 0 5.5 5.5 0 0 1 0 7.778.5.5 0 1 1-.707-.707 4.5 4.5 0 0 0 0-6.364.5.5 0 0 1 0-.707Z" />
+          <path d="M12.268 3.232a.5.5 0 0 1 .707 0 7.5 7.5 0 0 1 0 10.607.5.5 0 1 1-.707-.707 6.5 6.5 0 0 0 0-9.193.5.5 0 0 1 0-.707Z" />
         </svg>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="mute-icon h-5 w-5 hidden"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z"
-            clip-rule="evenodd"></path>
+        <!-- Mute icon -->
+        <svg data-role="mute-icon" class="w-4 h-4 hidden" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M7.563 2.069A.75.75 0 0 1 8 2.75v10.5a.75.75 0 0 1-1.238.57L3.472 11H1.75A.75.75 0 0 1 1 10.25v-4.5A.75.75 0 0 1 1.75 5h1.722l3.29-2.82a.75.75 0 0 1 .801-.111Z" />
+          <path d="M11.354 5.354a.5.5 0 0 0-.708-.708L9 6.293 7.354 4.646a.5.5 0 1 0-.708.708L8.293 7 6.646 8.646a.5.5 0 1 0 .708.708L9 7.707l1.646 1.647a.5.5 0 0 0 .708-.708L9.707 7l1.647-1.646Z" />
         </svg>
       </button>
-      <div class="relative flex-grow max-w-[120px]">
-        <div
-          class="volume-container w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"
-        >
-          <div id="volumeBar" class="volume-bar h-full bg-indigo-500 w-full">
-          </div>
+
+      <!-- Volume slider (hidden on small screens) -->
+      <div
+        data-role="volume-area"
+        class="hidden sm:block relative w-16 py-2 -my-2 cursor-pointer"
+        style="touch-action: none;"
+      >
+        <div class="h-1 bg-zinc-200 rounded-full overflow-hidden">
+          <div
+            data-role="volume-fill"
+            class="h-full bg-zinc-400 rounded-full transition-[width] duration-75"
+            style="width: 100%;"
+          ></div>
         </div>
-        <input
-          type="range"
-          id="volumeControl"
-          class="absolute top-0 w-full h-1.5 opacity-0 cursor-pointer"
-          min="0"
-          max="100"
-          value="100"
-        />
       </div>
     </div>
   </div>
-  <audio id="audioElement" src={src} preload="metadata" class="hidden"></audio>
+
+  <audio data-role="audio" src={src} preload="metadata" class="hidden"></audio>
 </div>
 
-<script define:vars={{ src }}>
-  function initAllAudioPlayers() {
-    const initAudioPlayer = (audioPlayerId) => {
-      // Find the closest parent component
-      const playerContainer = document
-        .querySelector(`[src="${src}"]`)
-        .closest(".audio-player");
-      if (!playerContainer) return;
+<script>
+  /**
+   * AudioPlayer — DD-principled audio player
+   *
+   * Applied DD principles:
+   * - Ergonomic interactions: generous hit areas, cursor affordance, focus rings
+   * - Responsive interfaces: real-time seek feedback, interpolated preview
+   * - Contained gestures: pointer capture for seek bar, cursor lock during drag
+   * - Simulating physics: press scale-down via CSS active:scale-90
+   * - Reduced responsiveness: no animation on time display updates (high-frequency)
+   */
+  function initAudioPlayers() {
+    document.querySelectorAll<HTMLElement>(".audio-player").forEach((root) => {
+      // Prevent double-init
+      if (root.dataset.init) return;
+      root.dataset.init = "1";
 
-      // Select elements
-      const audio = playerContainer.querySelector("#audioElement");
-      const playPauseBtn = playerContainer.querySelector("#playPauseBtn");
-      const progressBar = playerContainer.querySelector("#progressBar");
-      const seekBar = playerContainer.querySelector("#seekBar");
-      const currentTimeEl = playerContainer.querySelector("#currentTime");
-      const totalTimeEl = playerContainer.querySelector("#totalTime");
-      const muteBtn = playerContainer.querySelector("#muteBtn");
-      const volumeBar = playerContainer.querySelector("#volumeBar");
-      const volumeControl = playerContainer.querySelector("#volumeControl");
-      const playIcon = playerContainer.querySelector(".play-icon");
-      const pauseIcon = playerContainer.querySelector(".pause-icon");
-      const volumeIcon = playerContainer.querySelector(".volume-icon");
-      const muteIcon = playerContainer.querySelector(".mute-icon");
+      const $ = <T extends HTMLElement>(role: string) =>
+        root.querySelector<T>(`[data-role="${role}"]`)!;
 
-      // Format time in MM:SS
-      const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+      const audio = $<HTMLAudioElement>("audio");
+      const playPauseBtn = $("play-pause");
+      const playIcon = $("play-icon");
+      const pauseIcon = $("pause-icon");
+      const seekArea = $("seek-area");
+      const progressFill = $("progress-fill");
+      const seekThumb = $("seek-thumb");
+      const timePreview = $("time-preview");
+      const currentTimeEl = $("current-time");
+      const totalTimeEl = $("total-time");
+      const muteBtn = $("mute");
+      const volumeIcon = $("volume-icon");
+      const muteIcon = $("mute-icon");
+      const volumeArea = root.querySelector<HTMLElement>('[data-role="volume-area"]');
+      const volumeFill = root.querySelector<HTMLElement>('[data-role="volume-fill"]');
+
+      // --- Helpers ---
+      const fmt = (s: number) => {
+        if (!isFinite(s)) return "0:00";
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? "0" : ""}${sec}`;
       };
 
-      // Update progress bar and current time display
-      const updateProgress = () => {
-        const { currentTime, duration } = audio;
-        const progressPercent = (currentTime / duration) * 100;
-        progressBar.style.width = `${progressPercent}%`;
-        seekBar.value = progressPercent;
-        currentTimeEl.textContent = formatTime(currentTime);
+      const getProgress = () =>
+        audio.duration ? audio.currentTime / audio.duration : 0;
+
+      const setProgress = (pct: number) => {
+        progressFill.style.width = `${pct * 100}%`;
+        seekThumb.style.left = `${pct * 100}%`;
       };
 
-      // Set event listeners
-      audio.addEventListener("loadedmetadata", () => {
-        totalTimeEl.textContent = formatTime(audio.duration);
-        seekBar.max = 100;
-      });
+      // --- Shared icon sync ---
+      const syncMuteIcon = (muted: boolean) => {
+        volumeIcon.classList.toggle("hidden", muted);
+        muteIcon.classList.toggle("hidden", !muted);
+      };
 
-      audio.addEventListener("timeupdate", updateProgress);
-
-      audio.addEventListener("ended", () => {
-        playIcon.classList.remove("hidden");
-        pauseIcon.classList.add("hidden");
-      });
+      // --- Play / Pause ---
+      const updatePlayState = () => {
+        const playing = !audio.paused;
+        playIcon.classList.toggle("hidden", playing);
+        pauseIcon.classList.toggle("hidden", !playing);
+        playPauseBtn.setAttribute("aria-label", playing ? "Pause" : "Play");
+      };
 
       playPauseBtn.addEventListener("click", () => {
-        if (audio.paused) {
-          audio.play();
-          playIcon.classList.add("hidden");
-          pauseIcon.classList.remove("hidden");
-        } else {
-          audio.pause();
-          playIcon.classList.remove("hidden");
-          pauseIcon.classList.add("hidden");
+        if (audio.paused) audio.play();
+        else audio.pause();
+      });
+
+      audio.addEventListener("play", updatePlayState);
+      audio.addEventListener("pause", updatePlayState);
+      audio.addEventListener("ended", updatePlayState);
+
+      // --- Progress update (DD: reduced responsiveness — no animation on time) ---
+      audio.addEventListener("loadedmetadata", () => {
+        totalTimeEl.textContent = fmt(audio.duration);
+      });
+
+      audio.addEventListener("timeupdate", () => {
+        if (isSeeking) return; // Don't fight with seek gesture
+        const p = getProgress();
+        setProgress(p);
+        currentTimeEl.textContent = fmt(audio.currentTime);
+      });
+
+      // --- Seek gesture (DD: responsive gestures + contained gestures) ---
+      let isSeeking = false;
+
+      const seekFromEvent = (e: PointerEvent) => {
+        const rect = seekArea.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = pct * (audio.duration || 0);
+        setProgress(pct);
+        currentTimeEl.textContent = fmt(audio.currentTime);
+      };
+
+      const showPreviewAt = (e: PointerEvent) => {
+        const rect = seekArea.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const time = pct * (audio.duration || 0);
+        timePreview.textContent = fmt(time);
+        timePreview.style.left = `${pct * 100}%`;
+        timePreview.style.opacity = "1";
+      };
+
+      // Hover preview (DD: responsive-interfaces — proportional feedback)
+      seekArea.addEventListener("pointerenter", () => {
+        seekThumb.style.opacity = "1";
+      });
+      seekArea.addEventListener("pointermove", (e: PointerEvent) => {
+        if (!isSeeking) showPreviewAt(e);
+      });
+      seekArea.addEventListener("pointerleave", () => {
+        if (!isSeeking) {
+          seekThumb.style.opacity = "0";
+          timePreview.style.opacity = "0";
         }
       });
 
-      seekBar.addEventListener("input", () => {
-        const seekTime = (seekBar.value / 100) * audio.duration;
-        audio.currentTime = seekTime;
+      // Seek start (DD: gesture lifecycle — start/move/end)
+      seekArea.addEventListener("pointerdown", (e: PointerEvent) => {
+        e.preventDefault();
+        isSeeking = true;
+        // DD: contained gestures — pointer capture
+        seekArea.setPointerCapture(e.pointerId);
+        seekThumb.style.opacity = "1";
+        // DD: contained gestures — cursor lock
+        document.body.style.cursor = "grabbing";
+        document.body.style.userSelect = "none";
+        seekFromEvent(e);
       });
 
-      muteBtn.addEventListener("click", () => {
-        audio.muted = !audio.muted;
-        volumeIcon.classList.toggle("hidden", audio.muted);
-        muteIcon.classList.toggle("hidden", !audio.muted);
-        volumeBar.style.width = audio.muted ? "0%" : `${volumeControl.value}%`;
+      seekArea.addEventListener("pointermove", (e: PointerEvent) => {
+        if (!isSeeking) return;
+        // DD: responsive gestures — real-time feedback on move
+        seekFromEvent(e);
+        showPreviewAt(e);
       });
 
-      volumeControl.addEventListener("input", () => {
-        const volume = volumeControl.value / 100;
-        audio.volume = volume;
-        volumeBar.style.width = `${volumeControl.value}%`;
-        audio.muted = volume === 0;
-        volumeIcon.classList.toggle("hidden", volume === 0);
-        muteIcon.classList.toggle("hidden", volume !== 0);
-      });
-    };
+      const endSeek = () => {
+        if (!isSeeking) return;
+        isSeeking = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        timePreview.style.opacity = "0";
+        if (!seekArea.matches(":hover")) {
+          seekThumb.style.opacity = "0";
+        }
+      };
 
-    // Initialize all audio players on the page
-    document.querySelectorAll(".audio-player").forEach((player, index) => {
-      initAudioPlayer(`audio-player-${index}`);
+      seekArea.addEventListener("pointerup", endSeek);
+      seekArea.addEventListener("pointercancel", endSeek);
+      // DD: pointer capture ensures lostpointercapture fires if pointer leaves
+      seekArea.addEventListener("lostpointercapture", endSeek);
+
+      // --- Volume ---
+      if (volumeArea && volumeFill) {
+        const setVolume = (pct: number) => {
+          audio.volume = pct;
+          volumeFill.style.width = `${pct * 100}%`;
+          audio.muted = pct === 0;
+          syncMuteIcon(pct === 0);
+        };
+
+        let isVolumeSeek = false;
+
+        const volumeFromEvent = (e: PointerEvent) => {
+          const rect = volumeArea.getBoundingClientRect();
+          const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          setVolume(pct);
+        };
+
+        volumeArea.addEventListener("pointerdown", (e: PointerEvent) => {
+          e.preventDefault();
+          isVolumeSeek = true;
+          volumeArea.setPointerCapture(e.pointerId);
+          document.body.style.cursor = "grabbing";
+          volumeFromEvent(e);
+        });
+
+        volumeArea.addEventListener("pointermove", (e: PointerEvent) => {
+          if (isVolumeSeek) volumeFromEvent(e);
+        });
+
+        const endVolumeSeek = () => {
+          if (!isVolumeSeek) return;
+          isVolumeSeek = false;
+          document.body.style.cursor = "";
+        };
+
+        volumeArea.addEventListener("pointerup", endVolumeSeek);
+        volumeArea.addEventListener("pointercancel", endVolumeSeek);
+        volumeArea.addEventListener("lostpointercapture", endVolumeSeek);
+
+        muteBtn.addEventListener("click", () => {
+          audio.muted = !audio.muted;
+          syncMuteIcon(audio.muted);
+          volumeFill.style.width = audio.muted ? "0%" : `${audio.volume * 100}%`;
+        });
+      } else {
+        // Mobile: only mute toggle
+        muteBtn.addEventListener("click", () => {
+          audio.muted = !audio.muted;
+          syncMuteIcon(audio.muted);
+        });
+      }
+
+      // --- Keyboard (DD: responsive-interfaces — keyboard interactions) ---
+      // Arrow keys for seek when focused on player
+      root.addEventListener("keydown", (e: KeyboardEvent) => {
+        if (e.key === " " || e.key === "k") {
+          e.preventDefault();
+          if (audio.paused) audio.play();
+          else audio.pause();
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          audio.currentTime = Math.max(0, audio.currentTime - 5);
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          audio.currentTime = Math.min(audio.duration, audio.currentTime + 5);
+        } else if (e.key === "m") {
+          e.preventDefault();
+          audio.muted = !audio.muted;
+          syncMuteIcon(audio.muted);
+          if (volumeFill) {
+            volumeFill.style.width = audio.muted ? "0%" : `${audio.volume * 100}%`;
+          }
+        }
+      });
+
+      // Make player focusable
+      root.setAttribute("tabindex", "0");
     });
   }
-  document.addEventListener("DOMContentLoaded", initAllAudioPlayers);
+
+  // Init on load and on Astro page transitions
+  document.addEventListener("DOMContentLoaded", initAudioPlayers);
+  document.addEventListener("astro:page-load", initAudioPlayers);
 </script>
