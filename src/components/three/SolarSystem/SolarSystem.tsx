@@ -8,7 +8,7 @@ import {
   useSyncExternalStore,
   type LegacyRef,
 } from "react";
-import type { Line, Mesh } from "three";
+import type { Mesh } from "three";
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
@@ -35,6 +35,43 @@ const EARTH_ORBIT_RADIUS = 10;
 const MOON_ORBIT_RADIUS = 3;
 const EARTH_ROTATION_SPEED = 0.08;
 const MOON_ROTATION_SPEED = 0.8;
+
+function useTrail(maxLength: number) {
+  const lineRef = useRef<THREE.Line>(null!);
+  const countRef = useRef(0);
+  const maxRef = useRef(maxLength);
+  maxRef.current = maxLength;
+
+  useEffect(() => {
+    const geom = lineRef.current?.geometry;
+    if (!geom) return;
+    geom.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(maxLength * 3), 3)
+    );
+    geom.setDrawRange(0, 0);
+    countRef.current = 0;
+  }, [maxLength]);
+
+  const push = (x: number, y: number, z: number) => {
+    const geom = lineRef.current?.geometry;
+    const attr = geom?.attributes.position as THREE.BufferAttribute | undefined;
+    if (!geom || !attr) return;
+    const max = maxRef.current;
+
+    if (countRef.current >= max) {
+      (attr.array as Float32Array).copyWithin(0, 3);
+      countRef.current = max - 1;
+    }
+
+    attr.setXYZ(countRef.current, x, y, z);
+    countRef.current++;
+    attr.needsUpdate = true;
+    geom.setDrawRange(0, countRef.current);
+  };
+
+  return { lineRef, push };
+}
 
 const Sun = () => {
   const ratio = useRatio();
@@ -78,8 +115,7 @@ const Sun = () => {
 const Earth = () => {
   const ratio = useRatio();
   const ref = useRef<Mesh>(null);
-  const trailRef = useRef<Line | null>(null);
-  const trailPositions = useRef<THREE.Vector3[]>([]);
+  const trail = useTrail(Math.ceil(4000 * ratio) || 1);
   const [shaderMaterial, setShaderMaterial] =
     useState<THREE.ShaderMaterial | null>(null);
 
@@ -118,16 +154,7 @@ const Earth = () => {
       const z = Math.sin(t * EARTH_ROTATION_SPEED) * EARTH_ORBIT_RADIUS * ratio;
       ref.current.position.set(x, 0, z);
       ref.current.rotation.y += 0.01;
-
-      // Update trail
-      trailPositions.current.push(new THREE.Vector3(x, 0, z));
-      if (trailPositions.current.length > 4000 * ratio) {
-        trailPositions.current.shift();
-      }
-
-      if (trailRef.current) {
-        trailRef.current.geometry.setFromPoints(trailPositions.current);
-      }
+      trail.push(x, 0, z);
     }
   });
 
@@ -139,7 +166,7 @@ const Earth = () => {
           <primitive object={shaderMaterial} attach="material" />
         )}
       </mesh>
-      <line ref={trailRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="black" opacity={0.6} transparent={true} />
       </line>
@@ -150,8 +177,7 @@ const Earth = () => {
 const Moon = () => {
   const ratio = useRatio();
   const ref = useRef<Mesh>(null);
-  const trailRef = useRef<Line>(null);
-  const trailPositions = useRef<THREE.Vector3[]>([]);
+  const trail = useTrail(Math.ceil(500 * ratio) || 1);
 
   useFrame(({ clock }) => {
     if (ref.current) {
@@ -166,15 +192,7 @@ const Moon = () => {
         earthZ + Math.sin(t * MOON_ROTATION_SPEED) * MOON_ORBIT_RADIUS * ratio;
 
       ref.current.position.set(x, 0, z);
-
-      trailPositions.current.push(new THREE.Vector3(x, 0, z));
-      if (trailPositions.current.length > 500 * ratio) {
-        trailPositions.current.shift();
-      }
-
-      if (trailRef.current) {
-        trailRef.current.geometry.setFromPoints(trailPositions.current);
-      }
+      trail.push(x, 0, z);
     }
   });
 
@@ -188,7 +206,7 @@ const Moon = () => {
           specular="#ffffff"
         />
       </mesh>
-      <line ref={trailRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="black" opacity={0.8} transparent={true} />
       </line>
@@ -224,8 +242,7 @@ const Star = ({ p }: { p: number }) => {
 const Spaceship = () => {
   const ratio = useRatio();
   const meshRef = useRef<Mesh>(null);
-  const trailRef = useRef<Line>(null);
-  const trailPositions = useRef<THREE.Vector3[]>([]);
+  const trail = useTrail(Math.ceil(3000 * ratio) || 1);
   const [state, setState] = useState("toMoon"); // "toMoon", "onMoon", "toEarth"
   const stateStartTime = useRef(0);
 
@@ -302,17 +319,7 @@ const Spaceship = () => {
     const up = new THREE.Vector3(0, 1, 0);
     meshRef.current.quaternion.setFromUnitVectors(up, direction);
 
-    // Update trail
-    trailPositions.current.push(position.clone());
-    if (trailPositions.current.length > 3000 * ratio) {
-      trailPositions.current.shift();
-    }
-
-    if (trailRef.current) {
-      (trailRef.current?.geometry as THREE.BufferGeometry).setFromPoints(
-        trailPositions.current
-      );
-    }
+    trail.push(position.x, position.y, position.z);
   });
 
   return (
@@ -321,7 +328,7 @@ const Spaceship = () => {
         <coneGeometry args={[0.3 * ratio, 1 * ratio, 5]} />
         <meshPhongMaterial color="silver" />
       </mesh>
-      <line ref={trailRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="red" opacity={0.5} transparent={true} />
       </line>
@@ -362,6 +369,7 @@ function Scene({ numStars = 300 }) {
 
   useLayoutEffect(() => {
     gl.shadowMap.enabled = true;
+    gl.shadowMap.type = THREE.PCFShadowMap;
     gl.setPixelRatio(1);
   }, [gl]);
 
