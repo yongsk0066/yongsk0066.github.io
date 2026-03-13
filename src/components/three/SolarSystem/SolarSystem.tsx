@@ -332,7 +332,7 @@ const Spaceship = () => {
 function Scene({ numStars = 300 }) {
   const ratio = useRatio();
   const { gl, scene, camera } = useThree();
-  const composer = useRef<EffectComposer>();
+  const composer = useRef<EffectComposer>(null!);
   const time = useRef(0);
 
   useEffect(() => {

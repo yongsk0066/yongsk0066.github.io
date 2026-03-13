@@ -12,10 +12,18 @@ import {
   CuboidCollider,
   Physics,
   RigidBody,
+  type RapierRigidBody,
   useRopeJoint,
   useSphericalJoint,
 } from "@react-three/rapier";
 import { MeshLineGeometry, MeshLineMaterial } from "meshline";
+
+declare module "@react-three/fiber" {
+  interface ThreeElements {
+    meshLineGeometry: Record<string, unknown>;
+    meshLineMaterial: Record<string, unknown>;
+  }
+}
 
 extend({ MeshLineGeometry, MeshLineMaterial });
 useGLTF.preload(
@@ -85,12 +93,12 @@ export default function Card() {
 
 function Band({ maxSpeed = 50, minSpeed = 10 }) {
   // 요소들 참조 생성
-  const band = useRef();
-  const fixed = useRef();
-  const j1 = useRef();
-  const j2 = useRef();
-  const j3 = useRef();
-  const card = useRef();
+  const band = useRef<THREE.Mesh>(null!);
+  const fixed = useRef<RapierRigidBody>(null!);
+  const j1 = useRef<RapierRigidBody>(null!);
+  const j2 = useRef<RapierRigidBody>(null!);
+  const j3 = useRef<RapierRigidBody>(null!);
+  const card = useRef<RapierRigidBody>(null!);
 
   // 백터 및 각도 생성
   const vec = new THREE.Vector3();
@@ -105,7 +113,7 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
     colliders: false,
     angularDamping: 2,
     linearDamping: 2,
-  };
+  } as const;
 
   // GLTF 파일 로드
   const { nodes, materials } = useGLTF(
@@ -130,7 +138,7 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
   );
 
   // 드래그 및 호버 상태 생성
-  const [dragged, drag] = useState(false);
+  const [dragged, drag] = useState<false | THREE.Vector3>(false);
   const [hovered, hover] = useState(false);
 
   // 로프 조인트 및 구형 조인트 생성
@@ -166,31 +174,31 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
       // Fix most of the jitter when over pulling the card
       // 지터링을 줄이기 위해 카드를 너무 많이 당길 때 대부분의 것을 수정
       [j1, j2].forEach((ref) => {
-        if (!ref.current.lerped)
-          ref.current.lerped = new THREE.Vector3().copy(
-            ref.current.translation()
-          );
+        const body = ref.current as RapierRigidBody & { lerped?: THREE.Vector3 };
+        if (!body.lerped)
+          body.lerped = new THREE.Vector3().copy(body.translation());
         const clampedDistance = Math.max(
           0.1,
-          Math.min(1, ref.current.lerped.distanceTo(ref.current.translation()))
+          Math.min(1, body.lerped.distanceTo(body.translation()))
         );
-        ref.current.lerped.lerp(
-          ref.current.translation(),
+        body.lerped.lerp(
+          body.translation(),
           delta * (minSpeed + clampedDistance * (maxSpeed - minSpeed))
         );
       });
       // Calculate catmul curve
       // 카트물 곡선 계산
+      type WithLerped = RapierRigidBody & { lerped: THREE.Vector3 };
       curve.points[0].copy(j3.current.translation());
-      curve.points[1].copy(j2.current.lerped);
-      curve.points[2].copy(j1.current.lerped);
+      curve.points[1].copy((j2.current as WithLerped).lerped);
+      curve.points[2].copy((j1.current as WithLerped).lerped);
       curve.points[3].copy(fixed.current.translation());
-      band.current.geometry.setPoints(curve.getPoints(32));
+      (band.current.geometry as MeshLineGeometry).setPoints(curve.getPoints(32));
       // Tilt it back towards the screen
       // 화면으로 다시 기울이기
       ang.copy(card.current.angvel());
       rot.copy(card.current.rotation());
-      card.current.setAngvel({ x: ang.x, y: ang.y - rot.y * 0.25, z: ang.z });
+      card.current.setAngvel({ x: ang.x, y: ang.y - rot.y * 0.25, z: ang.z }, true);
     }
   });
 
@@ -223,10 +231,10 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
             onPointerOver={() => hover(true)}
             onPointerOut={() => hover(false)}
             onPointerUp={(e) => (
-              e.target.releasePointerCapture(e.pointerId), drag(false)
+              (e.target as Element)?.releasePointerCapture(e.pointerId), drag(false)
             )}
             onPointerDown={(e) => (
-              e.target.setPointerCapture(e.pointerId),
+              (e.target as Element)?.setPointerCapture(e.pointerId),
               drag(
                 new THREE.Vector3()
                   .copy(e.point)
@@ -234,9 +242,9 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
               )
             )}
           >
-            <mesh geometry={nodes.card.geometry}>
+            <mesh geometry={(nodes.card as THREE.Mesh).geometry}>
               <meshPhysicalMaterial
-                map={materials.base.map}
+                map={(materials.base as THREE.MeshStandardMaterial).map}
                 map-anisotropy={16}
                 clearcoat={1}
                 clearcoatRoughness={0.15}
@@ -245,11 +253,11 @@ function Band({ maxSpeed = 50, minSpeed = 10 }) {
               />
             </mesh>
             <mesh
-              geometry={nodes.clip.geometry}
+              geometry={(nodes.clip as THREE.Mesh).geometry}
               material={materials.metal}
               material-roughness={0.3}
             />
-            <mesh geometry={nodes.clamp.geometry} material={materials.metal} />
+            <mesh geometry={(nodes.clamp as THREE.Mesh).geometry} material={materials.metal} />
           </group>
         </RigidBody>
       </group>

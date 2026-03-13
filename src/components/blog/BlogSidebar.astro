@@ -7,7 +7,7 @@ interface SeriesPost {
 interface Props {
   categories: { name: string; count: number }[];
   series: { name: string; posts: SeriesPost[] }[];
-  locale: "ko" | "en";
+  locale: "ko" | "en" | "ja";
 }
 
 const { categories, series, locale } = Astro.props;
