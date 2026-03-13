@@ -1,9 +1,9 @@
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "motion/react";
 import { useEffect, useState } from "react";
 
 interface PostData {
   title: string;
-  description: string;
+  description?: string;
   date: string;
   draft?: boolean;
   categories?: string[];
@@ -25,7 +25,7 @@ interface Props {
   isDev: boolean;
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: {
     opacity: 0,
     y: 12,

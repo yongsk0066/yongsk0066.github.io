@@ -4,7 +4,7 @@ import {
   useMotionValue,
   useMotionValueEvent,
   type MotionValue,
-} from "framer-motion";
+} from "motion/react";
 import { useEffect, useRef, useState, useCallback } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────

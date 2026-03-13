@@ -46,8 +46,10 @@ export default function Sandpack({
   }, [files]);
 
   const isLongContent = useMemo(() => {
-    const mainFile = Object.values(normalizedFiles).find((f) => !f.hidden);
-    if (!mainFile) return false;
+    const mainFile = Object.values(normalizedFiles).find(
+      (f) => typeof f !== "string" && !f.hidden
+    );
+    if (!mainFile || typeof mainFile === "string") return false;
     const lineCount = mainFile.code.split("\n").length;
     return lineCount > 16;
   }, [normalizedFiles]);

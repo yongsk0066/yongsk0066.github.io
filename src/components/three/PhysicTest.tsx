@@ -46,7 +46,7 @@ const Spheres = ({ colors, number, size }: InstancedGeometryProps) => {
     for (let i = 0; i < number; i++) {
       instances.push({
         key: "instance_" + Math.random(),
-        position: [Math.random() - 0.5, Math.random() * 2, Math.random() - 0.5],
+        position: [Math.random() - 0.5, Math.random() * 2, Math.random() - 0.5] as [number, number, number],
       });
     }
     return instances;
@@ -93,7 +93,7 @@ const Boxes = ({ colors, number, size }: InstancedGeometryProps) => {
     for (let i = 0; i < number; i++) {
       instances.push({
         key: "instance_" + Math.random(),
-        position: [Math.random() - 0.5, Math.random() * 2, Math.random() - 0.5],
+        position: [Math.random() - 0.5, Math.random() * 2, Math.random() - 0.5] as [number, number, number],
       });
     }
     return instances;

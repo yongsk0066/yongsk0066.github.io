@@ -716,14 +716,11 @@ const UnfoldableCylinderScene = ({
         <bufferGeometry>
           <bufferAttribute
             attach="attributes-position"
-            array={new Float32Array(positions)}
-            count={positions.length / 3}
-            itemSize={3}
+            args={[new Float32Array(positions), 3]}
           />
           <bufferAttribute
             attach="index"
-            array={new Uint16Array(indices)}
-            count={indices.length}
+            args={[new Uint16Array(indices), 1]}
           />
         </bufferGeometry>
         <meshBasicMaterial
