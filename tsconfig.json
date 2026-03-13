@@ -3,31 +3,30 @@
   "compilerOptions": {
     "useDefineForClassFields": false,
     "experimentalDecorators": true,
-    "baseUrl": ".",
     "paths": {
       "@styles/*": [
-        "src/styles/*"
+        "./src/styles/*"
       ],
       "@layouts/*": [
-        "src/layouts/*"
+        "./src/layouts/*"
       ],
       "@components/*": [
-        "src/components/*"
+        "./src/components/*"
       ],
       "@pages/*": [
-        "src/pages/*"
+        "./src/pages/*"
       ],
       "@lib/*": [
-        "src/lib/*"
+        "./src/lib/*"
       ],
       "@consts": [
-        "src/consts"
+        "./src/consts"
       ],
       "@types": [
-        "src/types"
+        "./src/types"
       ],
       "@i18n/*": [
-        "src/i18n/*"
+        "./src/i18n/*"
       ]
     },
     "jsx": "react-jsx",

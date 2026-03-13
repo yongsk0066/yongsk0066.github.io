@@ -2025,29 +2025,40 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lit-labs/ssr-dom-shim@npm:^1.3.0, @lit-labs/ssr-dom-shim@npm:^1.4.0":
+"@lit-labs/ssr-dom-shim@npm:^1.4.0":
   version: 1.4.0
   resolution: "@lit-labs/ssr-dom-shim@npm:1.4.0"
   checksum: 10c0/eb8b4c6ed83db48e2f2c8c038f88e0ac302214918e5c1209458cb82a35ce27ce586100c5692885b2c5520f6941b2c3512f26c4d7b7dd48f13f17f1668553395a
   languageName: node
   linkType: hard
 
-"@lit-labs/ssr@npm:^3.2.2":
-  version: 3.3.1
-  resolution: "@lit-labs/ssr@npm:3.3.1"
+"@lit-labs/ssr-dom-shim@npm:^1.5.0":
+  version: 1.5.1
+  resolution: "@lit-labs/ssr-dom-shim@npm:1.5.1"
+  checksum: 10c0/2b10a42db0af33a4db32b3aa34db0f546aaa6794acdfc173499e999b4423102a1c9d15687679c674f07fa799cf740b5f5641c2ca6eee5d4af30c762a1e3b8c4f
+  languageName: node
+  linkType: hard
+
+"@lit-labs/ssr@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "@lit-labs/ssr@npm:4.0.0"
   dependencies:
     "@lit-labs/ssr-client": "npm:^1.1.7"
-    "@lit-labs/ssr-dom-shim": "npm:^1.3.0"
+    "@lit-labs/ssr-dom-shim": "npm:^1.5.0"
     "@lit/reactive-element": "npm:^2.0.4"
     "@parse5/tools": "npm:^0.3.0"
-    "@types/node": "npm:^16.0.0"
     enhanced-resolve: "npm:^5.10.0"
     lit: "npm:^3.1.2"
     lit-element: "npm:^4.0.4"
     lit-html: "npm:^3.1.2"
     node-fetch: "npm:^3.2.8"
     parse5: "npm:^7.1.1"
-  checksum: 10c0/2e7bd9c1840816b98bd56dbc2f2ffc840b32aa1466ac2a380775d7cb399ca5e8e94b134a98e2edfe210f0c4d5743718aa980231d7b546db8cab5e2d6c4630461
+  peerDependencies:
+    "@types/node": ">=20.0.0 <25.0.0"
+  peerDependenciesMeta:
+    "@types/node":
+      optional: true
+  checksum: 10c0/a0a8368d12f5633d675e8109ab9046c47c00f3844e5eb92b7e75568c0fee6cf307fa90cc7f2cfb6af4e2a8af055a9bb816d315e0f5c25a095af68650f960c03e
   languageName: node
   linkType: hard
 
@@ -3497,13 +3508,6 @@ __metadata:
   dependencies:
     undici-types: "npm:~7.10.0"
   checksum: 10c0/96bdeca01f690338957c2dcc92cb9f76c262c10398f8d91860865464412b0f9d309c24d9b03d0bdd26dd47fa7ee3f8227893d5c89bc2009d919a525a22512030
-  languageName: node
-  linkType: hard
-
-"@types/node@npm:^16.0.0":
-  version: 16.18.126
-  resolution: "@types/node@npm:16.18.126"
-  checksum: 10c0/5c137eb141d33de32b16ff26047ff6d449432b58d0d25f7cced2040c97727d81fe1099a7581eb336d14a6840f5b09e363bdd43d7a6995e8e81eb47aa51e413fc
   languageName: node
   linkType: hard
 
@@ -10277,23 +10281,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.9.3":
-  version: 5.9.3
-  resolution: "typescript@npm:5.9.3"
+"typescript@npm:6.0.1-rc":
+  version: 6.0.1-rc
+  resolution: "typescript@npm:6.0.1-rc"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/6bd7552ce39f97e711db5aa048f6f9995b53f1c52f7d8667c1abdc1700c68a76a308f579cd309ce6b53646deb4e9a1be7c813a93baaf0a28ccd536a30270e1c5
+  checksum: 10c0/8f042a30f2111700e2172c49d025f90c825fb5a44c17f4ef5092d3025f314ad7f503218c410720f491f209861c9083490741599da8c2395eef0e3d9d3808657e
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
-  version: 5.9.3
-  resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
+"typescript@patch:typescript@npm%3A6.0.1-rc#optional!builtin<compat/typescript>":
+  version: 6.0.1-rc
+  resolution: "typescript@patch:typescript@npm%3A6.0.1-rc#optional!builtin<compat/typescript>::version=6.0.1-rc&hash=5786d5"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/ad09fdf7a756814dce65bc60c1657b40d44451346858eea230e10f2e95a289d9183b6e32e5c11e95acc0ccc214b4f36289dcad4bf1886b0adb84d711d336a430
+  checksum: 10c0/891d5e284e6c1a1215cc938a93926244de207c64ef78c349f09473e9040b4ef9f039b04b4445148133c63cb679d13c15230e73491ce7984f4e04ab09ea35c46d
   languageName: node
   linkType: hard
 
@@ -11256,7 +11260,7 @@ __metadata:
     "@astrojs/rss": "npm:4.0.17"
     "@astrojs/sitemap": "npm:3.7.1"
     "@codesandbox/sandpack-react": "npm:^2.20.0"
-    "@lit-labs/ssr": "npm:^3.2.2"
+    "@lit-labs/ssr": "npm:^4.0.0"
     "@lit/task": "npm:^1.0.0"
     "@mermaid-js/mermaid-cli": "npm:^11.12.0"
     "@react-spring/three": "npm:^10.0.3"
@@ -11287,7 +11291,7 @@ __metadata:
     tailwind-merge: "npm:^3.5.0"
     tailwindcss: "npm:^4.2.0"
     three: "npm:^0.183.1"
-    typescript: "npm:^5.9.3"
+    typescript: "npm:6.0.1-rc"
     unist-util-visit: "npm:^5.1.0"
     vfile: "npm:^6.0.3"
     which: "npm:^6.0.1"
