@@ -5,7 +5,7 @@ import {
   useTransform,
   useReducedMotion,
   type PanInfo,
-} from "framer-motion";
+} from "motion/react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 // --- Spring configs (DD: simulating-physics) ---

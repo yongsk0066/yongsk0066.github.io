@@ -1,4 +1,4 @@
-import { motion, useSpring, useTransform, useMotionValue } from "framer-motion";
+import { motion, useSpring, useTransform, useMotionValue } from "motion/react";
 
 type Props = {
   href: string;
