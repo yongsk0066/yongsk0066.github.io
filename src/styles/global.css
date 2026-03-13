@@ -258,8 +258,9 @@ footer {
   }
 
   img {
-    @apply rounded-lg shadow-xl hover:shadow-2xl hover:-translate-y-2 hover:scale-105 transition-all duration-300 ease-in-out !my-4;
+    @apply rounded-lg shadow-xl hover:shadow-2xl hover:scale-[1.01] transition-all duration-300 ease-in-out !my-4;
     color-scheme: only light;
+    cursor: zoom-in;
   }
 
   code {
@@ -279,6 +280,117 @@ footer {
 
 *::selection {
   @apply bg-orange-500;
+}
+
+/* ==============================
+   Blur Fade Utilities
+   Inspired by Devouring Details' blur-fade component.
+   Uses mask-image gradients to softly fade edges of scrollable containers.
+   ============================== */
+
+/* Horizontal (left/right) blur fade — ideal for code blocks */
+.blur-fade-x {
+  --blur-fade-size: 24px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--blur-fade-size),
+    black calc(100% - var(--blur-fade-size)),
+    transparent
+  );
+}
+
+/* Vertical (top/bottom) blur fade */
+.blur-fade-y {
+  --blur-fade-size: 24px;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black var(--blur-fade-size),
+    black calc(100% - var(--blur-fade-size)),
+    transparent
+  );
+}
+
+/* All four sides blur fade */
+.blur-fade-all {
+  --blur-fade-size: 24px;
+  mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--blur-fade-size),
+      black calc(100% - var(--blur-fade-size)),
+      transparent
+    ),
+    linear-gradient(
+      to bottom,
+      transparent,
+      black var(--blur-fade-size),
+      black calc(100% - var(--blur-fade-size)),
+      transparent
+    );
+  mask-composite: intersect;
+}
+
+/* Scroll-position-aware fade states:
+   When scrolled to the start, remove the left/top fade.
+   When scrolled to the end, remove the right/bottom fade. */
+.blur-fade-x.at-start {
+  mask-image: linear-gradient(
+    to right,
+    black,
+    black calc(100% - var(--blur-fade-size)),
+    transparent
+  );
+}
+
+.blur-fade-x.at-end {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--blur-fade-size),
+    black
+  );
+}
+
+.blur-fade-x.at-start.at-end,
+.blur-fade-x.no-scroll {
+  mask-image: none;
+}
+
+/* Code block blur fade: auto-applied to pre elements within articles */
+article pre {
+  --blur-fade-size: 24px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--blur-fade-size),
+    black calc(100% - var(--blur-fade-size)),
+    transparent
+  );
+}
+
+article pre.at-start {
+  mask-image: linear-gradient(
+    to right,
+    black,
+    black calc(100% - var(--blur-fade-size)),
+    transparent
+  );
+}
+
+article pre.at-end {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--blur-fade-size),
+    black
+  );
+}
+
+article pre.at-start.at-end,
+article pre.no-scroll {
+  mask-image: none;
 }
 
 /* Content Progressive Animation */

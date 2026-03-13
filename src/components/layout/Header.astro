@@ -2,6 +2,7 @@
 import Container from "./Container.astro";
 import Link from "./Link.astro";
 import HeaderClock from "../widget/HeaderClock";
+import ScrollProgressBar from "./ScrollProgressBar.astro";
 
 import { DEFAULT_LOCALE, LOCALE_LABELS } from "@consts";
 import { useTranslations } from "@i18n/utils";
@@ -52,6 +53,7 @@ const locales = Object.entries(LOCALE_LABELS);
       </nav>
     </div>
   </Container>
+  <ScrollProgressBar />
 </header>
 
 <style>

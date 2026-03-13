@@ -38,7 +38,8 @@ try {
     description ||
     extractMeta(html, "og:description") || extractMeta(html, "description") ||
     "No description available";
-  image = extractMeta(html, "og:image");
+  const rawImage = extractMeta(html, "og:image");
+  image = rawImage ? new URL(rawImage, src).href : null;
 } catch (error) {
   console.error(`Failed to fetch or parse ${src}:`, error);
   title = title || src;

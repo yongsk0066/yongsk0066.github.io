@@ -1,5 +1,6 @@
 ---
 import type { MarkdownHeading } from 'astro'
+import TOCEnhanced from './TOCEnhanced.tsx'
 
 interface Props {
   headings: MarkdownHeading[]
@@ -15,8 +16,8 @@ const filteredHeadings = headings.filter(heading =>
   <!-- TOC Container -->
   <div
     id="toc-container"
-    class="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/50 p-1 
-           lg:fixed lg:left-[calc(50%+28rem)] lg:top-44 lg:w-68 
+    class="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/50 p-1
+           lg:fixed lg:left-[calc(50%+28rem)] lg:top-44 lg:w-68
            lg:border-none lg:bg-transparent lg:p-0"
   >
     <!-- Hidden Checkbox for mobile toggle -->
@@ -25,7 +26,7 @@ const filteredHeadings = headings.filter(heading =>
       id="toc-toggle"
       class="hidden"
     />
-    
+
     <!-- TOC Header - Mobile Only -->
     <div class="relative h-12 w-full lg:hidden">
       <label
@@ -37,34 +38,25 @@ const filteredHeadings = headings.filter(heading =>
         </span>
       </label>
     </div>
-    
-    <!-- Expandable Content Wrapper -->
-    <div id="toc-accordion-wrapper" class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out lg:grid-rows-[1fr]">
+
+    <!-- Expandable Content Wrapper (Mobile accordion) -->
+    <div id="toc-accordion-wrapper" class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-300 ease-in-out lg:hidden">
       <nav
         id="toc-accordion-content"
-        class="overflow-hidden px-4 lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto lg:px-0 relative"
+        class="overflow-hidden px-4"
         aria-label="Table of Contents"
       >
-        <!-- Progress Line (Desktop Only) -->
-        <div class="hidden lg:block absolute left-0 top-0 bottom-0 w-8">
-          <svg
-            id="toc-lines-svg"
-            class="absolute inset-0 w-full h-full"
-            aria-hidden="true"
-          ></svg>
-        </div>
-
-        <!-- TOC List -->
-        <ul id="toc-links-list" class="mb-2.5 mt-1 list-none space-y-1 pl-0 lg:pl-8 lg:mb-1 lg:space-y-1.5 relative">
+        <!-- TOC List (Mobile only) -->
+        <ul id="toc-links-list" class="mb-2.5 mt-1 list-none space-y-1 pl-0">
           {filteredHeadings.map((heading, index) => (
             <li
               data-depth={heading.depth}
               data-index={index}
               class:list={{
                 'toc-item relative': true,
-                'ml-0 lg:ml-0': heading.depth === 2,
-                'ml-4 lg:ml-4': heading.depth === 3,
-                'ml-8 lg:ml-8': heading.depth === 4,
+                'ml-0': heading.depth === 2,
+                'ml-4': heading.depth === 3,
+                'ml-8': heading.depth === 4,
               }}
             >
               <a
@@ -74,7 +66,6 @@ const filteredHeadings = headings.filter(heading =>
                   { 'toc-links-h2': heading.depth === 2 },
                   { 'toc-links-h3': heading.depth === 3 },
                   { 'toc-links-h4': heading.depth === 4 },
-                  'lg:text-xs lg:text-zinc-400',
                 ]}
                 title={heading.text}
               >
@@ -84,6 +75,11 @@ const filteredHeadings = headings.filter(heading =>
           ))}
         </ul>
       </nav>
+    </div>
+
+    <!-- Desktop Enhanced TOC (React island with proximity effects) -->
+    <div class="hidden lg:block lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto" id="toc-enhanced-wrapper">
+      <TOCEnhanced headings={headings} client:visible />
     </div>
   </div>
 )}
@@ -99,177 +95,24 @@ const filteredHeadings = headings.filter(heading =>
     grid-template-rows: 1fr;
   }
 
-  /* Desktop: always open, hide checkbox behavior */
-  @media (min-width: 1024px) {
-    #toc-toggle:checked ~ #toc-accordion-wrapper {
-      grid-template-rows: 1fr;
-    }
-  }
-
-  /* Scrollbar styling */
-  #toc-accordion-content {
+  /* Scrollbar styling for enhanced wrapper */
+  #toc-enhanced-wrapper {
     scrollbar-width: thin;
     scrollbar-color: rgb(161 161 170 / 0.3) transparent;
   }
 
-  #toc-accordion-content::-webkit-scrollbar {
+  #toc-enhanced-wrapper::-webkit-scrollbar {
     width: 4px;
   }
 
-  #toc-accordion-content::-webkit-scrollbar-track {
+  #toc-enhanced-wrapper::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  #toc-accordion-content::-webkit-scrollbar-thumb {
+  #toc-enhanced-wrapper::-webkit-scrollbar-thumb {
     background-color: rgb(161 161 170 / 0.3);
     border-radius: 2px;
   }
 
-  /* Animation for TOC items */
-  @media (min-width: 1024px) {
-    #toc-links-list > * {
-      opacity: 0;
-      animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
-    }
-
-    #toc-links-list > *:nth-child(1) { animation-delay: 0.175s; }
-    #toc-links-list > *:nth-child(2) { animation-delay: 0.2s; }
-    #toc-links-list > *:nth-child(3) { animation-delay: 0.225s; }
-    #toc-links-list > *:nth-child(4) { animation-delay: 0.25s; }
-    #toc-links-list > *:nth-child(5) { animation-delay: 0.275s; }
-    #toc-links-list > *:nth-child(6) { animation-delay: 0.3s; }
-    #toc-links-list > *:nth-child(7) { animation-delay: 0.325s; }
-    #toc-links-list > *:nth-child(8) { animation-delay: 0.35s; }
-    #toc-links-list > *:nth-child(9) { animation-delay: 0.375s; }
-    #toc-links-list > *:nth-child(10) { animation-delay: 0.4s; }
-    #toc-links-list > *:nth-child(n+11) { animation-delay: 0.425s; }
-
-    /* CSS Scroll-driven TOC highlight using modern CSS */
-    #toc-links-list {
-      scroll-target-group: auto;
-    }
-
-    /* Active link styles via :target-current */
-    .toc-link:target-current {
-      color: rgb(39 39 42);
-      font-weight: 500;
-      anchor-name: --active-toc;
-    }
-
-    /* CSS Anchor-positioned indicator (the moving dot) */
-    #toc-accordion-content::after {
-      content: '';
-      position: absolute;
-      position-anchor: --active-toc;
-      width: 8px;
-      height: 8px;
-      background: rgb(39 39 42);
-      border-radius: 50%;
-      top: anchor(center);
-      left: anchor(left);
-      transform: translate3d(-28px, -50%, 0);
-      transition: top 0.3s ease-out, left 0.3s ease-out, transform 0.3s ease-out;
-      z-index: 1;
-      will-change: transform, top, left;
-    }
-
-    /* Adjust indicator position per depth */
-    #toc-accordion-content:has(.toc-item[data-depth="3"] .toc-link:target-current)::after {
-      transform: translate3d(-36px, -50%, 0);
-    }
-
-    #toc-accordion-content:has(.toc-item[data-depth="4"] .toc-link:target-current)::after {
-      transform: translate3d(-44px, -50%, 0);
-    }
-
-    /* SVG line animation on load */
-    .toc-line-path {
-      animation: drawPath 0.8s ease-out forwards;
-    }
-
-    @keyframes drawPath {
-      from {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 200;
-      }
-      to {
-        stroke-dasharray: 200;
-        stroke-dashoffset: 0;
-      }
-    }
-
-    /* Hover effect on container */
-    #toc-container:hover .toc-link {
-      color: rgb(113 113 122);
-    }
-
-    #toc-container:hover .toc-link:hover {
-      color: rgb(0 0 0);
-    }
-
-    #toc-container:hover .toc-link:target-current {
-      color: rgb(0 0 0);
-    }
-  }
+  /* Desktop entry animation is handled in global.css */
 </style>
-
-<!-- TOC Script -->
-<script>
-function drawTOCLines() {
-  const svg = document.getElementById('toc-lines-svg') as SVGElement
-  if (!svg) return
-
-  const tocItems = document.querySelectorAll('.toc-item')
-  if (tocItems.length === 0) return
-
-  svg.innerHTML = ''
-
-  const xPositions = { 2: 8, 3: 16, 4: 24 }
-
-  let prevDepth = 2
-  let prevY = 0
-
-  tocItems.forEach((item, index) => {
-    const depth = parseInt((item as HTMLElement).dataset.depth || '2')
-    const rect = item.getBoundingClientRect()
-    const containerRect = svg.getBoundingClientRect()
-    const y = rect.top - containerRect.top + rect.height / 2
-
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    const currentX = xPositions[depth as keyof typeof xPositions] || 8
-    const prevX = xPositions[prevDepth as keyof typeof xPositions] || 8
-
-    if (index === 0) {
-      path.setAttribute('d', `M ${currentX} 0 L ${currentX} ${y}`)
-    } else {
-      if (depth !== prevDepth) {
-        const midY = prevY + 8
-        path.setAttribute('d', `M ${prevX} ${prevY} L ${prevX} ${midY} L ${currentX} ${y}`)
-      } else {
-        path.setAttribute('d', `M ${currentX} ${prevY} L ${currentX} ${y}`)
-      }
-    }
-
-    path.setAttribute('stroke', 'rgb(228 228 231)')
-    path.setAttribute('stroke-width', '1')
-    path.setAttribute('fill', 'none')
-    path.setAttribute('class', 'toc-line-path')
-
-    svg.appendChild(path)
-
-    prevDepth = depth
-    prevY = y
-  })
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.innerWidth >= 1024) {
-    drawTOCLines()
-  }
-})
-window.addEventListener('resize', () => {
-  if (window.innerWidth >= 1024) {
-    drawTOCLines()
-  }
-})
-</script>
