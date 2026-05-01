@@ -74,11 +74,13 @@ async function createPost() {
         name: 'components',
         message: '추가로 import할 컴포넌트를 선택하세요 (스페이스바로 선택):',
         choices: [
+          { name: 'LinkPreview - 링크 미리보기', value: 'LinkPreview' },
           { name: 'AudioPlayer - 오디오 플레이어', value: 'AudioPlayer' },
           { name: 'YouTube - 유튜브 임베드', value: 'YouTube' },
           { name: 'GoogleMap - 구글 맵', value: 'GoogleMap' },
           { name: 'Video - 비디오 플레이어', value: 'Video' },
           { name: 'InstagramEmbed - 인스타그램 임베드', value: 'InstagramEmbed' },
+          { name: 'TwitterVideo - 트위터 비디오', value: 'TwitterVideo' },
         ],
         default: [],
       },
@@ -87,18 +89,16 @@ async function createPost() {
     // 날짜 정보 - ISO 8601 형식
     const date = new Date().toISOString();
 
-    // import 문 생성
-    const baseImports = ['LinkPreview'];
-    const allImports = [...baseImports, ...answers.components];
+    // import 문 생성 (en 블로그는 한 단계 더 깊어 ../ 추가)
+    const componentPathPrefix = answers.language === 'en'
+      ? '../../../components/embeds'
+      : '../../components/embeds';
 
-    const importStatements = allImports
-      .map(component => {
-        if (component === 'LinkPreview' || component === 'AudioPlayer') {
-          return `import ${component} from "../../components/${component}.astro";`;
-        }
-        return `import ${component} from "@components/${component}.astro";`;
-      })
+    const importStatements = answers.components
+      .map(component => `import ${component} from "${componentPathPrefix}/${component}.astro";`)
       .join('\n');
+
+    const importBlock = importStatements ? `\n${importStatements}\n` : '';
 
     // MDX 템플릿 생성
     const mdxContent = `---
@@ -109,9 +109,7 @@ categories: ${JSON.stringify(answers.categories)}
 date: "${date}"${answers.series ? `\nseries: "${answers.series}"` : ''}
 heroImage: "/post/images/${answers.filename}/thumb.png"
 ---
-
-${importStatements}
-
+${importBlock}
 여기에 내용을 작성하세요.
 `;
 
