@@ -108,6 +108,7 @@ author: "Yongseok"
 categories: ${JSON.stringify(answers.categories)}
 date: "${date}"${answers.series ? `\nseries: "${answers.series}"` : ''}
 heroImage: "/post/images/${answers.filename}/thumb.png"
+draft: true
 ---
 ${importBlock}
 여기에 내용을 작성하세요.
