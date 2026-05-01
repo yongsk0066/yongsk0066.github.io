@@ -50,5 +50,8 @@ export default defineConfig({
     optimizeDeps: {
       exclude: ['toastify-js'],
     },
+    resolve: {
+      dedupe: ['react', 'react-dom'],
+    },
   },
 });
