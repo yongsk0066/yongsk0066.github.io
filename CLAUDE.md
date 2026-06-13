@@ -25,9 +25,10 @@
 - 정적 파일 확장자/경로 바이패스
 
 ### i18n
-- 기본 `ko` (prefix 없음), `en` (`/en/`, `/blog/en/`)
+- 기본 `ko` (prefix 없음), `en` (`/en/`, `/blog/en/`), `ja` (`/ja/`, `/blog/ja/`)
+- fallback: `en`→`ko`, `ja`→`ko`
 - 번역 데이터 + `useTranslations()` → `src/i18n/utils.ts`
-- 블로그 영문 번역: `src/content/blog/en/` 하위에 동일 slug
+- 블로그 번역: `src/content/blog/{en,ja}/` 하위에 동일 slug
 
 ### Content Collections
 - **blog**: `src/content/blog/` (MDX), frontmatter: title, date, categories, heroImage, series, draft
@@ -71,7 +72,7 @@
 - **페이지/컴포넌트** (.astro, .ts, .tsx): `@components/`, `@lib/` 등 alias 사용
 - **MDX 블로그 글**: 상대 경로 사용 (`../../components/embeds/YouTube.astro`)
   - `src/content/blog/` → `../../components/`
-  - `src/content/blog/en/` → `../../../components/`
+  - `src/content/blog/en/`, `src/content/blog/ja/` → `../../../components/`
 
 ## Naming Conventions
 - Astro 컴포넌트: **PascalCase** `.astro` (Container.astro)

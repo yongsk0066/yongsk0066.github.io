@@ -7,8 +7,15 @@
 # Switch to `isolated` later if you want pnpm's strict phantom-dependency guard.
 nodeLinker: hoisted
 
-# This repo intentionally tracks Astro pre-releases (alpha/beta). pnpm 11's default
-# 24h resolve-block (minimumReleaseAge: 1440) would refuse freshly published betas.
+# pnpm 11 delays installing versions published <24h ago (supply-chain defense).
+# Disabled for now because this repo (a) tracks Astro alpha/beta and (b) just did
+# a full dependency refresh that pulled several fresh (<24h) transitive packages
+# (@types/inquirer, bare-stream, baseline-browser-mapping, ...) — a non-zero window
+# rejects the current lockfile until those age out, breaking `pnpm install`/CI.
+# REVISIT: once the tree settles and astro@7 ships stable, restore protection with
+#   minimumReleaseAge: 1440
+#   minimumReleaseAgeExclude: [astro, "@astrojs/*"]
+# then rebuild the lockfile (`pnpm install`).
 minimumReleaseAge: 0
 
 # Replaces Yarn's `resolutions`: pin transitive React to the installed version.
