@@ -1,5 +1,4 @@
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
-import { degreesToRadians, mix, progress } from "popmotion";
 import {
   useEffect,
   useLayoutEffect,
@@ -15,6 +14,15 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPixelatedPass } from "three/addons/postprocessing/RenderPixelatedPass.js";
 import "./styles.css";
 import { Text } from "@react-three/drei";
+
+// Internalized from popmotion (legacy, superseded by `motion`): three tiny pure
+// math helpers, identical formulas to popmotion's — behaviour unchanged.
+const degreesToRadians = (deg: number) => (deg * Math.PI) / 180;
+const mix = (from: number, to: number, p: number) => -p * from + p * to + from;
+const progress = (from: number, to: number, value: number) => {
+  const d = to - from;
+  return d === 0 ? 1 : (value - from) / d;
+};
 
 extend({ EffectComposer, RenderPixelatedPass, OutputPass });
 
