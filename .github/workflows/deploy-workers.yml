@@ -18,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set commit message
-        run: echo "COMMIT_MSG=$(echo '${{ github.event.head_commit.message }}' | head -1 | sed 's/[\"\\]//g')" >> $GITHUB_ENV
+        env:
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: echo "COMMIT_MSG=$(printf '%s' "$HEAD_COMMIT_MSG" | head -1 | sed 's/[\"\\]//g')" >> "$GITHUB_ENV"
 
       - name: Notify Slack (start)
         uses: slackapi/slack-github-action@v3
