@@ -12,8 +12,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "new:post": "node scripts/create-post.js",
-    "cf:dev": "yarn build && wrangler dev",
-    "cf:deploy": "yarn build && wrangler deploy",
+    "cf:dev": "pnpm build && wrangler dev",
+    "cf:deploy": "pnpm build && wrangler deploy",
     "cf:preview": "wrangler dev"
   },
   "dependencies": {
@@ -62,9 +62,5 @@
     "typescript": "6.0.3",
     "wrangler": "^4.100.0"
   },
-  "packageManager": "yarn@4.13.0",
-  "resolutions": {
-    "react": "19.2.7",
-    "react-dom": "19.2.7"
-  }
+  "packageManager": "pnpm@11.6.0"
 }

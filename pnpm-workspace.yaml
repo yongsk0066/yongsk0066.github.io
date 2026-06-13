@@ -1,0 +1,28 @@
+# pnpm 11 project config (migrated from Yarn 4).
+# In pnpm 11 all non-auth settings live here instead of .npmrc.
+
+# Flat node_modules like Yarn's node-linker. Keeps the heavy client-side
+# React-Three-Fiber/Three.js runtime behaviour identical to the previous Yarn
+# setup, while pnpm still uses its global content-addressable store + hard links.
+# Switch to `isolated` later if you want pnpm's strict phantom-dependency guard.
+nodeLinker: hoisted
+
+# This repo intentionally tracks Astro pre-releases (alpha/beta). pnpm 11's default
+# 24h resolve-block (minimumReleaseAge: 1440) would refuse freshly published betas.
+minimumReleaseAge: 0
+
+# Replaces Yarn's `resolutions`: pin transitive React to the installed version.
+overrides:
+  react: "19.2.7"
+  react-dom: "19.2.7"
+
+# pnpm 11 blocks dependency build scripts by default (strictDepBuilds). Allow the
+# native deps that legitimately need to build / run postinstall.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+  es5-ext: true
+  # @mermaid-js/mermaid-cli -> puppeteer postinstall downloads Chromium, which the
+  # remark-mermaid plugin needs at build time to render diagrams to SVG.
+  puppeteer: true

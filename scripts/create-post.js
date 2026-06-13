@@ -160,7 +160,7 @@ ${importBlock}
 📁 이미지 폴더: ${path.relative(rootDir, imageDir)}
 
 다음 명령어로 개발 서버를 실행하세요:
-  yarn dev
+  pnpm dev
 
 포스트 URL: http://localhost:4321/blog/${answers.filename}
 `);

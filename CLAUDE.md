@@ -1,20 +1,20 @@
 # Project: yongseok.me (Astro SSG Blog)
 
 ## Tech Stack
-- Astro 6 (beta), React 19, TypeScript 5.9, Tailwind CSS v4
+- Astro 7 (beta), React 19, TypeScript 6, Tailwind CSS v4
 - Lit 3 (web components), Three.js (3D 시각화)
-- Cloudflare Workers (wrangler), Yarn 4.10.3, Node 22
+- Cloudflare Workers (wrangler), pnpm 11, Node 26
 
 ## Commands
-- `yarn dev` — 개발 서버
-- `yarn build` — 프로덕션 빌드
-- `yarn new:post` — 새 글 생성 (scripts/create-post.js)
-- `yarn cf:deploy` — 빌드 + Cloudflare 배포
-- `yarn cf:dev` — 빌드 + 로컬 wrangler dev
+- `pnpm dev` — 개발 서버
+- `pnpm build` — 프로덕션 빌드
+- `pnpm new:post` — 새 글 생성 (scripts/create-post.js)
+- `pnpm cf:deploy` — 빌드 + Cloudflare 배포
+- `pnpm cf:dev` — 빌드 + 로컬 wrangler dev
 
 ## Branch & Deploy
 - `cloudflare/main` = 프로덕션 안정 브랜치
-- Push → GitHub Actions → `yarn build` → wrangler deploy
+- Push → GitHub Actions → `pnpm build` → wrangler deploy
 - Slack 알림: 배포 시작/성공/실패
 
 ## Architecture
@@ -51,7 +51,7 @@
 - 모두 **소문자 영문** 통일 (한글, 대문자 사용 금지)
 - 배열 형식: `["react"]`, 복수 태그: `["react", "dev"]`
 - 시리즈명을 카테고리로 쓰지 않음 (예: React Compiler 시리즈 → `categories: ["react"]`, `series: "React Compiler"`)
-- `yarn new:post` 기본값: `dev`
+- `pnpm new:post` 기본값: `dev`
 - RSS(`rss.xml`)에 `<category>` 태그로 자동 포함, 검색 인덱스에도 반영
 
 ### Custom Plugins
