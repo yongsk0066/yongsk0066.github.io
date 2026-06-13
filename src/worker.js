@@ -66,6 +66,26 @@ export default {
       });
     }
 
+    // Long-lived (but revalidating) cache for content-stable media.
+    // Not `immutable`: these paths are human-named, not content-hashed, so an
+    // edited asset must eventually revalidate (stale-while-revalidate window).
+    if (
+      response.ok &&
+      (path.startsWith("/post/") ||
+        path.startsWith("/assets/") ||
+        path.startsWith("/fonts/"))
+    ) {
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set(
+        "cache-control",
+        "public, max-age=2592000, stale-while-revalidate=86400",
+      );
+      return new Response(response.body, {
+        status: response.status,
+        headers: newHeaders,
+      });
+    }
+
     return response;
   },
 };
