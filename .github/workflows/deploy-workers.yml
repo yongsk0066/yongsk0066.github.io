@@ -49,13 +49,10 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
 
-      - name: Cache Puppeteer Chromium
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/puppeteer
-          key: ${{ runner.os }}-puppeteer-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-puppeteer-
-
+      # NOTE: do NOT cache ~/.cache/puppeteer. A restored partial / cross-lockfile
+      # cache leaves the browser folder present but the chrome-headless-shell binary
+      # missing, and puppeteer's postinstall then ERRORS instead of re-downloading
+      # (this broke a deploy). Let puppeteer fetch Chromium fresh each run.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
