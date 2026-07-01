@@ -27,15 +27,13 @@ export default defineConfig({
       prefixDefaultLocale: false
     }
   },
-  integrations: [mdx({
-    optimize: true,
+  integrations: [mdx({ optimize: true }), sitemap(), react(), markdownExport()],
+  markdown:{
     remarkPlugins: [remarkMath],
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false
-    })]
-  }), sitemap(), react(), markdownExport()],
-  markdown:{
+    })],
     shikiConfig: {
       theme: customTheme,
     },
