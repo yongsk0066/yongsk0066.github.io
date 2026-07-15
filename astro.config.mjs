@@ -30,7 +30,8 @@ export default defineConfig({
   integrations: [
     mdx({ optimize: true }),
     // /design 은 내부용 디자인 레퍼런스 — 사이트맵에서 제외 (페이지 자체는 noindex)
-    sitemap({ filter: (page) => new URL(page).pathname.replace(/\/$/, "") !== "/design" }),
+    // i18n fallback이 만드는 /en/design, /ja/design 변형까지 함께 제외
+    sitemap({ filter: (page) => !/\/design\/?$/.test(new URL(page).pathname) }),
     react(),
     markdownExport(),
   ],
