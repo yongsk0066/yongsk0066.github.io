@@ -56,7 +56,7 @@
 - RSS(`rss.xml`)에 `<category>` 태그로 자동 포함, 검색 인덱스에도 반영
 
 ### Custom Plugins
-- `plugin/remark-mermaid/` — Mermaid 다이어그램 → SVG 변환 (Lit SSR + mmdc CLI)
+- `plugin/remark-mermaid/` — ```mermaid 코드펜스 → `<mermaid-diagram>` 엘리먼트 치환. 실제 SVG 렌더링은 브라우저에서 lazy-load (`src/components/mermaid/mermaid-element.ts`, mermaid npm 패키지 번들). 빌드 타임 브라우저 의존(mmdc/puppeteer) 없음
 - Shiki 커스텀 테마: `shiki/github-dark-default.json`
 
 ## Path Aliases (tsconfig.json)

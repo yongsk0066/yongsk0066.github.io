@@ -35,7 +35,7 @@ export default defineConfig({
     markdownExport(),
   ],
   markdown:{
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkMath, mermaid],
     rehypePlugins: [() => rehypeKatex({
       output: "mathml",
       strict: false

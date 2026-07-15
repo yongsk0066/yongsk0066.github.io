@@ -1,241 +1,31 @@
-import { render as litRender } from '@lit-labs/ssr';
-import { collectResult } from '@lit-labs/ssr/lib/render-result.js';
-import fs from 'fs/promises';
-import { visit } from 'unist-util-visit';
-import { createMermaidDiv, getDestinationDir, render, renderFromFile } from './utils';
-const PLUGIN_NAME = 'remark-mermaid';
-
-
-import { html } from 'lit';
+import { visit } from "unist-util-visit";
 
 /**
- * Is this title `mermaid:`?
+ * ```mermaid 코드펜스를 <mermaid-diagram> 커스텀 엘리먼트로 치환한다.
  *
- * @param  {string} title
- * @return {boolean}
- */
-const isMermaid = (title) => title === 'mermaid:';
-
-/**
- * Given a node which contains a `url` property (eg. Link or Image), follow
- * the link, generate a graph and then replace the link with the link to the
- * generated graph. Checks to ensure node has a title of `mermaid:` before doing.
+ * 렌더링은 빌드 타임이 아니라 독자의 브라우저에서 일어난다
+ * (src/components/mermaid/mermaid-element.ts). mmdc(puppeteer) 같은
+ * 빌드 타임 브라우저 의존이 없으므로 CI/로컬 환경을 타지 않는다.
  *
- * @param   {object}  node
- * @param   {vFile}   vFile
- * @return {object}
+ * 다이어그램 소스는 attribute로 안전하게 넘기기 위해 URI 인코딩한다.
  */
-const replaceUrlWithGraph = async (node, vFile) => {
-  const { title, url, position } = node;
-  const { destinationDir } = vFile.data;
+export default function remarkMermaid() {
+  return (tree) => {
+    visit(tree, "code", (node, index, parent) => {
+      if (node.lang !== "mermaid" || !parent || index === undefined) return;
 
-  // If the node isn't mermaid, ignore it.
-  if (!isMermaid(title)) {
-    return node;
-  }
-
-  try {
-    // eslint-disable-next-line no-param-reassign
-    node.url = await renderFromFile(`${vFile.dirname}/${url}`, destinationDir);
-    vFile.info('mermaid link replaced with link to graph', position, PLUGIN_NAME);
-  } catch (error) {
-    vFile.message(error, position, PLUGIN_NAME);
-  }
-
-  return node;
-};
-
-/**
- * Given a link to a mermaid diagram, grab the contents from the link and put it
- * into a div that Mermaid JS can act upon.
- *
- * @param  {object}   node
- * @param  {integer}  index
- * @param  {object}   parent
- * @param  {vFile}    vFile
- * @return {object}
- */
-const replaceLinkWithEmbedded = async (node, index, parent, vFile) => {
-  const { title, url, position } = node;
-  let newNode;
-
-  // If the node isn't mermaid, ignore it.
-  if (!isMermaid(title)) {
-    return node;
-  }
-
-  try {
-    const value = await fs.promises.readFile(`${vFile.dirname}/${url}`, { encoding: 'utf-8' });
-
-    newNode = createMermaidDiv(value);
-    parent.children.splice(index, 1, newNode);
-    vFile.info('mermaid link replaced with div', position, PLUGIN_NAME);
-  } catch (error) {
-    vFile.message(error, position, PLUGIN_NAME);
-    return node;
-  }
-
-  return node;
-};
-
-/**
- * Given the MDAST ast, look for all fenced codeblocks that have a language of
- * `mermaid` and pass that to mermaid.cli to render the image. Replaces the
- * codeblocks with an image of the rendered graph.
- *
- * @param {object}  ast
- * @param {vFile}   vFile
- * @param {boolean} isSimple
- * @return {function}
- */
-const visitCodeBlock = async (ast, vFile, isSimple) => {
-  return visit(ast, 'code', async (node, index, parent) => {
-    const { lang, value, position } = node;
-    const destinationDir = getDestinationDir(vFile);
-    let newNode;
-
-    // If this codeblock is not mermaid, bail.
-    if (lang !== 'mermaid') {
-      return node;
-    }
-
-    // Are we just transforming to a <div>, or replacing with an image?
-    if (isSimple) {
-      newNode = createMermaidDiv(value);
-
-      vFile.info(`${lang} code block replaced with div`, position, PLUGIN_NAME);
-
-      // Otherwise, let's try and generate a graph!
-    } else {
-      let graphSvgFilename;
-      try {
-        graphSvgFilename = await render(value, destinationDir, vFile);
-        vFile.info(`${lang} code block replaced with graph`, position, PLUGIN_NAME);
-      } catch (error) {
-        vFile.message(error, position, PLUGIN_NAME);
-        return node;
-      }
-
-      newNode = {
-        type: 'image',
-        title: '`mermaid` image',
-        url: graphSvgFilename,
+      parent.children[index] = {
+        type: "mdxJsxFlowElement",
+        name: "mermaid-diagram",
+        attributes: [
+          {
+            type: "mdxJsxAttribute",
+            name: "code",
+            value: encodeURIComponent(node.value),
+          },
+        ],
+        children: [],
       };
-    }
-
-    parent.children.splice(index, 1, newNode);
-
-    return node;
-  });
-}
-
-const visitCodeToggleBlock = async (ast, vFile, isSimple) => {
-  return visit(ast, 'code', async (node, index, parent) => {
-
-    const { lang, value, position } = node;
-    const destinationDir = getDestinationDir(vFile);
-    let newNode;
-
-
-    // If this codeblock is not mermaid, bail.
-    if (lang !== 'mermaid') {
-      return node;
-    }
-
-    // Generate SVG from Mermaid code
-    let svgPath;
-    try {
-      svgPath = await render(value, destinationDir, vFile);
-
-      vFile.info(`${lang} code block replaced with graph`, position, PLUGIN_NAME);
-    } catch (error) {
-      vFile.message(error, position, PLUGIN_NAME);
-      return node;
-    }
-
-    const result =  litRender(html`<mermaid-toggle code="${encodeURIComponent(value)}" svgPath="${encodeURIComponent(svgPath)}"></mermaid-toggle>`, { ssr: true });
-    const renderedString = await collectResult(result);
-    newNode = {
-      type: 'html',
-      value: renderedString,
-    };
-
-    parent.children.splice(index, 1, newNode);
-
-    return node;
-  });
-}
-
-
-/**
- * If links have a title attribute called `mermaid:`, follow the link and
- * depending on `isSimple`, either generate and link to the graph, or simply
- * wrap the graph contents in a div.
- *
- * @param {object}  ast
- * @param {vFile}   vFile
- * @param {boolean} isSimple
- * @return {function}
- */
-const visitLink = (ast, vFile, isSimple) =>{
-  if (isSimple) {
-    return visit(ast, 'link', (node, index, parent) =>
-      replaceLinkWithEmbedded(node, index, parent, vFile)
-    );
-  }
-
-  return visit(ast, 'link', (node) => replaceUrlWithGraph(node, vFile));
-}
-
-/**
- * If images have a title attribute called `mermaid:`, follow the link and
- * depending on `isSimple`, either generate and link to the graph, or simply
- * wrap the graph contents in a div.
- *
- * @param {object}  ast
- * @param {vFile}   vFile
- * @param {boolean} isSimple
- * @return {function}
- */
-const visitImage = (ast, vFile, isSimple) => {
-  if (isSimple) {
-    return visit(ast, 'image', (node, index, parent) =>
-      replaceLinkWithEmbedded(node, index, parent, vFile)
-    );
-  }
-
-  return visit(ast, 'image', (node) => replaceUrlWithGraph(node, vFile));
-}
-
-/**
- * Returns the transformer which acts on the MDAST tree and given VFile.
- *
- * If `options.simple` is passed as a truthy value, the plugin will convert
- * to `<div class="mermaid">` rather than a SVG image.
- *
- * @link https://github.com/unifiedjs/unified#function-transformernode-file-next
- * @link https://github.com/syntax-tree/mdast
- * @link https://github.com/vfile/vfile
- *
- * @param {object} options
- * @return {function}
- */
-const mermaid = (options = {}) => {
-  const simpleMode = options.simple ?? false;
-
-  const transformer =  async (ast, vFile, next) => {
-    visitCodeBlock(ast, vFile, simpleMode);
-    visitCodeToggleBlock(ast, vFile, simpleMode);
-    visitLink(ast, vFile, simpleMode);
-    visitImage(ast, vFile, simpleMode);
-
-    if (typeof next === 'function') {
-      return next(null, ast, vFile);
-    }
-
-    return ast;
+    });
   };
-  return transformer;
 }
-
-export default mermaid;
