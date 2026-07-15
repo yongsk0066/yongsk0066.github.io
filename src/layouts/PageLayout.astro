@@ -10,6 +10,7 @@ type Props = {
   title: string;
   description: string;
   heroImage?: string;
+  noindex?: boolean;
   webmcpPageType?: "blog-post" | "blog-list" | "other";
   webmcpHasTranslation?: boolean;
   webmcpTranslationSlug?: string;
@@ -21,6 +22,7 @@ const {
   title,
   description,
   heroImage,
+  noindex = false,
   webmcpPageType = "other",
   webmcpHasTranslation = false,
   webmcpTranslationSlug = "",
@@ -36,6 +38,7 @@ const {
       title={`${title} | ${SITE_TITLE}`}
       description={description}
       image={heroImage}
+      noindex={noindex}
     />
     <ClarityIdentify pageId={Astro.url.pathname} />
 

@@ -1,4 +1,5 @@
 ---
+import ArticleProse from "@components/blog/ArticleProse.astro";
 import BackToPrev from "@components/blog/BackToPrev.astro";
 import Comments from "@components/blog/Comments.astro";
 import Container from "@components/layout/Container.astro";
@@ -128,7 +129,7 @@ const t = useTranslations(currentLocale as any);
         <CopyMenu />
       </div>
 
-      <div class="text-3xl font-bold text-black">
+      <div class="text-3xl font-bold text-black break-keep">
         {post.data.title}
       </div>
       {
@@ -155,9 +156,9 @@ const t = useTranslations(currentLocale as any);
     </div>
     <!-- Table of Contents -->
     <TOC headings={headings} />
-    <article id="post-content" class="hyphens-auto break-words prose prose-black max-w-full prose-img:mx-auto prose-img:my-auto prose-headings:font-semibold prose-headings:text-black max-sm:text-sm max-sm:leading-7" style="font-family: 'Pretendard', 'Noto Sans JP', 'Oswald', 'Atkinson', sans-serif;">
+    <ArticleProse>
       <Content />
-    </article>
+    </ArticleProse>
     <ImageLightbox client:load />
     {
       seriesPosts.length > 1 && (
@@ -186,50 +187,3 @@ const t = useTranslations(currentLocale as any);
     <Comments />
   </Container>
 </PageLayout>
-
-<script>
-  /**
-   * Code block blur-fade scroll detection.
-   * Adds at-start / at-end / no-scroll classes to <pre> elements
-   * so mask-image gradients in global.css respond to scroll position.
-   */
-  function initCodeBlockBlurFade() {
-    const THRESHOLD = 2; // px tolerance for scroll boundary
-
-    function updateClasses(el: HTMLElement) {
-      const scrollable = el.scrollWidth > el.clientWidth + THRESHOLD;
-
-      if (!scrollable) {
-        el.classList.add("no-scroll");
-        el.classList.remove("at-start", "at-end");
-        return;
-      }
-
-      el.classList.remove("no-scroll");
-
-      const atStart = el.scrollLeft <= THRESHOLD;
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - THRESHOLD;
-
-      el.classList.toggle("at-start", atStart);
-      el.classList.toggle("at-end", atEnd);
-    }
-
-    const article = document.getElementById("post-content");
-    if (!article) return;
-
-    const pres = article.querySelectorAll<HTMLElement>("pre");
-
-    pres.forEach((pre) => {
-      updateClasses(pre);
-      pre.addEventListener("scroll", () => updateClasses(pre), { passive: true });
-    });
-
-    // Recalculate on resize (font size changes, viewport changes)
-    const ro = new ResizeObserver(() => {
-      pres.forEach((pre) => updateClasses(pre));
-    });
-    pres.forEach((pre) => ro.observe(pre));
-  }
-
-  document.addEventListener("DOMContentLoaded", initCodeBlockBlurFade);
-</script>

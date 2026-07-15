@@ -10,11 +10,9 @@ import { dateRange } from "@lib/date";
   video {
     aspect-ratio: 4 / 3;
     width: fit-content;
-    border-radius: 0.5rem;
     overflow: hidden;
     object-fit: cover;
     box-sizing: border-box;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
     outline: 0.5rem solid black;
     width: calc(100% - 1rem);
     height: calc(100% - 1rem);
@@ -286,7 +284,7 @@ import { dateRange } from "@lib/date";
         <div class="space-y-4">
           <figure class="w-full flex flex-col my-4">
             <div
-              class="w-full block aspect-video border-0 bg-black rounded-lg shadow-[0px_0px_12px_6px_rgba(0,0,0,0.36)] overflow-hidden m-0"
+              class="w-full block aspect-video bg-black border border-zinc-300 overflow-hidden m-0"
             >
               <iframe
                 class="w-full aspect-video border-0"
@@ -310,7 +308,7 @@ import { dateRange } from "@lib/date";
           </div>
           <figure class="w-full flex flex-col my-4">
             <div
-              class="w-full block aspect-video border-0 bg-black rounded-lg shadow-[0px_0px_12px_6px_rgba(0,0,0,0.36)] overflow-hidden m-0"
+              class="w-full block aspect-video bg-black border border-zinc-300 overflow-hidden m-0"
             >
               <iframe
                 class="w-full aspect-video border-0"

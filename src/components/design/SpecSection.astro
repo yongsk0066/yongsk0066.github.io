@@ -1,0 +1,33 @@
+---
+/**
+ * /design 레퍼런스 페이지의 섹션 래퍼.
+ * source에 해당 요소의 스타일이 정의된 파일 경로를 넘기면
+ * 제목 옆에 라벨로 노출된다 — 스타일 변경 시 만질 파일을 바로 알 수 있게.
+ */
+type Props = {
+  id: string;
+  title: string;
+  source?: string | string[];
+  note?: string;
+};
+
+const { id, title, source, note } = Astro.props;
+const sources = source ? (Array.isArray(source) ? source : [source]) : [];
+---
+
+<section {id} class="scroll-mt-20 space-y-5">
+  <div class="border-b border-black/10 pb-2">
+    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <h2 class="font-semibold text-black">{title}</h2>
+      {
+        sources.map((s) => (
+          <code class="text-[11px] font-mono text-zinc-500 bg-zinc-200/60 px-1.5 py-0.5 rounded">
+            {s}
+          </code>
+        ))
+      }
+    </div>
+    {note && <p class="mt-1.5 text-xs text-zinc-500">{note}</p>}
+  </div>
+  <slot />
+</section>

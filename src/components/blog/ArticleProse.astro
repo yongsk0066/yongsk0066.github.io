@@ -1,0 +1,63 @@
+---
+/**
+ * 블로그 본문 prose 스타일의 단일 소스.
+ * blog/[...slug].astro와 /design 레퍼런스 페이지가 공유한다 —
+ * 여기를 수정하면 실제 글과 디자인 레퍼런스가 함께 바뀐다.
+ * #post-content id에 global.css의 등장 애니메이션과 pre blur-fade가 걸려 있다.
+ */
+---
+
+<article
+  id="post-content"
+  class="break-keep break-words prose prose-black max-w-full prose-img:mx-auto prose-img:my-auto prose-headings:font-semibold prose-headings:text-black max-sm:text-sm max-sm:leading-7"
+  style="font-family: 'Pretendard', 'Noto Sans JP', 'Oswald', 'Atkinson', sans-serif;"
+>
+  <slot />
+</article>
+
+<script>
+  /**
+   * Code block blur-fade scroll detection.
+   * Adds at-start / at-end / no-scroll classes to <pre> elements
+   * so mask-image gradients in global.css respond to scroll position.
+   */
+  function initCodeBlockBlurFade() {
+    const THRESHOLD = 2; // px tolerance for scroll boundary
+
+    function updateClasses(el: HTMLElement) {
+      const scrollable = el.scrollWidth > el.clientWidth + THRESHOLD;
+
+      if (!scrollable) {
+        el.classList.add("no-scroll");
+        el.classList.remove("at-start", "at-end");
+        return;
+      }
+
+      el.classList.remove("no-scroll");
+
+      const atStart = el.scrollLeft <= THRESHOLD;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - THRESHOLD;
+
+      el.classList.toggle("at-start", atStart);
+      el.classList.toggle("at-end", atEnd);
+    }
+
+    const article = document.getElementById("post-content");
+    if (!article) return;
+
+    const pres = article.querySelectorAll<HTMLElement>("pre");
+
+    pres.forEach((pre) => {
+      updateClasses(pre);
+      pre.addEventListener("scroll", () => updateClasses(pre), { passive: true });
+    });
+
+    // Recalculate on resize (font size changes, viewport changes)
+    const ro = new ResizeObserver(() => {
+      pres.forEach((pre) => updateClasses(pre));
+    });
+    pres.forEach((pre) => ro.observe(pre));
+  }
+
+  document.addEventListener("DOMContentLoaded", initCodeBlockBlurFade);
+</script>

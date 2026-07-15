@@ -27,7 +27,13 @@ export default defineConfig({
       prefixDefaultLocale: false
     }
   },
-  integrations: [mdx({ optimize: true }), sitemap(), react(), markdownExport()],
+  integrations: [
+    mdx({ optimize: true }),
+    // /design 은 내부용 디자인 레퍼런스 — 사이트맵에서 제외 (페이지 자체는 noindex)
+    sitemap({ filter: (page) => new URL(page).pathname.replace(/\/$/, "") !== "/design" }),
+    react(),
+    markdownExport(),
+  ],
   markdown:{
     remarkPlugins: [remarkMath],
     rehypePlugins: [() => rehypeKatex({

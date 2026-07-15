@@ -5,11 +5,12 @@ interface Props {
   title: string;
   description: string;
   image?: string;
+  noindex?: boolean;
 }
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 
-const { title, description, image = "/nano.png" } = Astro.props;
+const { title, description, image = "/nano.png", noindex = false } = Astro.props;
 ---
 
 <meta
@@ -215,6 +216,8 @@ const { title, description, image = "/nano.png" } = Astro.props;
     );
   })()
 }
+
+{noindex && <meta name="robots" content="noindex" />}
 
 <!-- Primary Meta Tags -->
 <title>{title}</title>

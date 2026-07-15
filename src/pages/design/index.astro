@@ -1,0 +1,364 @@
+---
+/**
+ * /design — 디자인 레퍼런스 페이지.
+ * 블로그를 구성하는 모든 시각 요소를 실물 컴포넌트로 한 페이지에 나열한다.
+ * 스타일 변경 시 이 페이지를 기준으로 확인한다. (noindex + sitemap 제외)
+ *
+ * 원칙: 마크업 복사 금지, 실제 컴포넌트를 임포트한다.
+ * 유일한 예외는 About 아이템 패턴(about.astro 인라인 마크업)으로, 해당 섹션에 원본 경로를 명시했다.
+ */
+import PageLayout from "@layouts/PageLayout.astro";
+import Container from "@components/layout/Container.astro";
+import Link from "@components/layout/Link.astro";
+import SpecSection from "@components/design/SpecSection.astro";
+import ArticleProse from "@components/blog/ArticleProse.astro";
+import TOC from "@components/blog/TOC.astro";
+import BackToPrev from "@components/blog/BackToPrev.astro";
+import PostNavigation from "@components/blog/PostNavigation.astro";
+import AnimatedPostList from "@components/blog/AnimatedPostList.tsx";
+import BlogSidebar from "@components/blog/BlogSidebar.astro";
+import CopyMenu from "@components/blog/CopyMenu.astro";
+import Share from "@components/blog/Share.astro";
+import FormattedDate from "@components/blog/FormattedDate.astro";
+import LinkPreview from "@components/embeds/LinkPreview.astro";
+import YouTube from "@components/embeds/YouTube.astro";
+import Video from "@components/embeds/Video.astro";
+import AudioPlayer from "@components/embeds/AudioPlayer.astro";
+import { ImageLightbox } from "@components/ImageLightbox";
+import { dateRange } from "@lib/date";
+import Sample, { getHeadings } from "./_sample.mdx";
+
+const sections = [
+  { id: "colors", label: "색" },
+  { id: "typography", label: "폰트" },
+  { id: "effects", label: "그림자·트랜지션" },
+  { id: "prose", label: "본문 (마크다운)" },
+  { id: "navigation", label: "내비게이션" },
+  { id: "actions", label: "버튼·유틸" },
+  { id: "list", label: "리스트 페이지" },
+  { id: "about", label: "About 패턴" },
+  { id: "embeds", label: "임베드" },
+];
+
+const colors = [
+  { class: "bg-white", name: "white", usage: "페이지 배경 (지면)" },
+  { class: "bg-zinc-800", name: "zinc-800", usage: "본문 잉크 (body)" },
+  { class: "bg-black", name: "black", usage: "강조·헤딩·아티클 본문" },
+  { class: "bg-zinc-500", name: "zinc-500", usage: "보조 (리스트 설명)" },
+  { class: "bg-zinc-400", name: "zinc-400", usage: "비활성 (사이드바)" },
+  { class: "bg-black/55", name: "black/55", usage: "헤어라인 (h2 룰·표 격자)" },
+  { class: "bg-zinc-300", name: "zinc-300", usage: "::selection·연한 보더" },
+  { class: "bg-zinc-100", name: "zinc-100", usage: "인라인 코드 배경" },
+  { class: "bg-black/15", name: "black/15", usage: "버튼 보더" },
+  { class: "bg-zinc-800", name: "zinc-800 (border)", usage: "aside 콜아웃 헤어라인" },
+];
+
+const fonts = [
+  { family: "Pretendard", label: "Pretendard — 본문 (--font-serif)" },
+  { family: "Oswald", label: "Oswald — --font-sans" },
+  { family: "JetBrains Mono", label: "JetBrains Mono — 코드·헤더 시계" },
+  { family: "Atkinson", label: "Atkinson — fallback" },
+];
+
+// 리스트 페이지 요소 데모용 더미 데이터 (카드 링크는 실제 글이 아니므로 404)
+const yearGroups = [
+  {
+    year: "2026",
+    posts: [
+      {
+        id: "design-sample-1",
+        collection: "blog",
+        data: {
+          title: "샘플 글 제목 — 카드에 hover 하면 화살표 모티프가 나타난다",
+          description: "리스트 페이지 PostCard의 설명 영역. 길어지면 두 줄까지 line-clamp 처리된다. 왼쪽 카테고리 태그를 누르면 이 목록이 실제로 필터링된다.",
+          date: "2026-07-01T00:00:00.000Z",
+          categories: ["react"],
+        },
+      },
+      {
+        id: "design-sample-2",
+        collection: "blog",
+        data: {
+          title: "DRAFT 뱃지가 붙는 초안 글",
+          description: "dev 환경에서 draft: true 글에만 보이는 오렌지 뱃지.",
+          date: "2026-06-15T00:00:00.000Z",
+          draft: true,
+          categories: ["dev"],
+        },
+      },
+      {
+        id: "design-sample-3",
+        collection: "blog",
+        data: {
+          title: "세 번째 샘플 글",
+          description: "연도 그룹 아래 gap-4 간격으로 쌓인다.",
+          date: "2026-05-20T00:00:00.000Z",
+          categories: ["essay"],
+        },
+      },
+    ],
+  },
+];
+
+const dummyCategories = [
+  { name: "react", count: 1 },
+  { name: "dev", count: 1 },
+  { name: "essay", count: 1 },
+];
+
+const dummySeries = [
+  {
+    name: "샘플 시리즈",
+    posts: [
+      { title: "시리즈 1편 — 아코디언 안의 글 목록", href: "#list" },
+      { title: "시리즈 2편", href: "#list" },
+    ],
+  },
+];
+---
+
+<script>
+  import "../../components/mermaid/mermaid-element";
+</script>
+
+<PageLayout
+  title="Design Reference"
+  description="블로그를 구성하는 시각 요소 레퍼런스"
+  noindex
+>
+  <Container>
+    <div class="space-y-16">
+      <!-- 인트로 + 섹션 앵커 내비 -->
+      <div class="space-y-4">
+        <h1 class="font-semibold text-black">Design Reference</h1>
+        <p class="text-sm">
+          블로그를 구성하는 모든 시각 요소의 스냅샷. 각 섹션 제목 옆 라벨은 해당
+          스타일이 정의된 파일이다. 스타일을 바꿀 때 이 페이지에서 전체 요소가
+          깨지지 않는지 확인한다.
+        </p>
+        <nav class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+          {
+            sections.map((s) => (
+              <a href={`#${s.id}`} class="underline underline-offset-2 decoration-black/15 hover:text-black hover:decoration-black/25 transition-colors duration-300">
+                {s.label}
+              </a>
+            ))
+          }
+        </nav>
+      </div>
+
+      <!-- ① 색 -->
+      <SpecSection
+        id="colors"
+        title="색"
+        source="src/styles/global.css"
+        note="Editorial 테마: 흰 지면 + 무채색 잉크 단일 계열. 액센트 컬러 없음."
+      >
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {
+            colors.map((c) => (
+              <div class="flex items-center gap-3">
+                <div class:list={["size-10 rounded-md border border-black/10 shrink-0", c.class]} />
+                <div class="min-w-0">
+                  <div class="text-sm font-medium text-black">{c.name}</div>
+                  <div class="text-xs text-zinc-500">{c.usage}</div>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </SpecSection>
+
+      <!-- ② 폰트 -->
+      <SpecSection
+        id="typography"
+        title="폰트"
+        source={["src/styles/global.css", "src/components/head/Head.astro (preload)"]}
+      >
+        <div class="space-y-5">
+          {
+            fonts.map((f) => (
+              <div>
+                <div class="text-xs text-zinc-500 mb-1">{f.label}</div>
+                <p class="text-xl text-black" style={`font-family: '${f.family}'`}>
+                  다람쥐 헌 쳇바퀴에 타고파 · The quick brown fox 0123
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </SpecSection>
+
+      <!-- ③ 헤어라인 · 트랜지션 · 셀렉션 -->
+      <SpecSection
+        id="effects"
+        title="헤어라인 · 트랜지션 · 셀렉션"
+        source="src/styles/global.css"
+        note="곡률 전역 0 (border-radius: 0 !important). 장식 그림자는 콘텐츠 표면에서 제거 — 팝오버 등 일시적 UI에만 허용. 트랜지션 관습: transition-colors duration-300 ease-in-out"
+      >
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div class="bg-white border border-zinc-300 p-2 text-sm">
+            <div class="border border-zinc-100 p-3">매트지 액자</div>
+            <div class="text-xs text-zinc-500 mt-1">본문 이미지 (border + p-2)</div>
+          </div>
+          <div class="border border-zinc-800 p-4 text-sm">
+            헤어라인 박스
+            <div class="text-xs text-zinc-500 mt-1">aside 콜아웃</div>
+          </div>
+          <div class="bg-white border border-black/15 p-4 text-sm hover:border-black/50 transition-colors duration-200 ease-in-out">
+            hover: border 진해짐
+            <div class="text-xs text-zinc-500 mt-1">LinkPreview hover</div>
+          </div>
+        </div>
+        <p class="text-sm">
+          이 문장을 드래그하면 <span class="font-medium text-black">zinc-300 셀렉션</span>을 확인할 수 있다.
+        </p>
+      </SpecSection>
+
+      <!-- ④ 본문 (마크다운) -->
+      <SpecSection
+        id="prose"
+        title="본문 (마크다운)"
+        source={["src/components/blog/ArticleProse.astro", "src/styles/global.css"]}
+        note="_sample.mdx가 실제 글과 동일한 파이프라인(remark-math·mermaid·Shiki·prose)을 통과해 렌더된다. TOC는 실제 글처럼 데스크톱(lg+)에서 우측에 고정된다."
+      >
+        <TOC headings={getHeadings()} />
+        <ArticleProse>
+          <Sample />
+        </ArticleProse>
+        <ImageLightbox client:load />
+      </SpecSection>
+
+      <!-- ⑤ 내비게이션 (화살표 모티프) -->
+      <SpecSection
+        id="navigation"
+        title="내비게이션 — 화살표 hover 모티프"
+        source={[
+          "src/components/blog/BackToPrev.astro",
+          "src/components/blog/PostNavigation.astro",
+        ]}
+        note="BackToPrev · PostNavigation · 리스트 PostCard(아래 섹션)가 같은 SVG 화살표 슬라이드 모티프를 공유한다."
+      >
+        <BackToPrev href="/blog">뒤로 가기</BackToPrev>
+        <PostNavigation
+          prevPost={{ slug: "", title: "이전 글 제목이 여기에 표시된다 — 길면 두 줄까지 line-clamp" }}
+          nextPost={{ slug: "", title: "다음 글 제목" }}
+        />
+      </SpecSection>
+
+      <!-- ⑥ 버튼 · 유틸 -->
+      <SpecSection
+        id="actions"
+        title="버튼 · 유틸"
+        source={[
+          "src/components/blog/CopyMenu.astro",
+          "src/components/blog/Share.astro",
+          "src/components/layout/Link.astro",
+        ]}
+        note="CopyMenu의 'Copy page'는 글 페이지의 index.md를 fetch하므로 여기서는 동작하지 않는다 (표시용)."
+      >
+        <div class="flex flex-wrap items-center gap-3">
+          <CopyMenu />
+          <Share />
+        </div>
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <Link href="#actions">Link (underline)</Link>
+          <Link href="#actions" underline={false}>Link (no underline)</Link>
+          <Link href="https://yongseok.me" external>Link (external)</Link>
+          <span class="text-zinc-500">
+            FormattedDate: <FormattedDate date={new Date("2026-07-11")} />
+          </span>
+        </div>
+      </SpecSection>
+
+      <!-- ⑦ 리스트 페이지 요소 -->
+      <SpecSection
+        id="list"
+        title="리스트 페이지 요소"
+        source={[
+          "src/components/blog/BlogSidebar.astro",
+          "src/components/blog/AnimatedPostList.tsx",
+        ]}
+        note="카테고리 태그를 누르면 아래 목록이 실제로 필터링된다. 카드 링크는 더미(404). 사이드바는 원래 xl+에서 본문 우측에 fixed — 여기서는 겹침 방지를 위해 static으로 눌러 놓았다."
+      >
+        <div class="sidebar-demo">
+          <BlogSidebar categories={dummyCategories} series={dummySeries} locale="ko" />
+        </div>
+        <AnimatedPostList client:visible years={yearGroups} isDev={true} />
+      </SpecSection>
+
+      <!-- ⑧ About 아이템 패턴 -->
+      <SpecSection
+        id="about"
+        title="About 아이템 패턴"
+        source="src/pages/about.astro"
+        note="유일하게 컴포넌트가 아닌 인라인 마크업 복제. 원본 변경 시 이 섹션도 함께 갱신할 것."
+      >
+        <section class="animate space-y-6">
+          <div class="flex flex-wrap gap-y-2 items-center justify-between">
+            <h5 class="font-semibold text-black">Section Header (h5)</h5>
+          </div>
+          <ul class="flex flex-col space-y-4">
+            <li class="animate">
+              <div class="text-sm opacity-75">
+                {dateRange(new Date("2021-06"), new Date("2025-08"))}
+              </div>
+              <div class="font-semibold text-black">
+                <a href="#about">기관/회사 이름 — 날짜·기관·역할 3줄 패턴</a>
+              </div>
+              <div class="text-sm opacity-75">Frontend Engineer</div>
+            </li>
+            <li class="animate">
+              <div class="text-sm opacity-75">April 2025</div>
+              <div class="font-semibold text-black">
+                <a href="#about">
+                  OSS 기여 아이템 <span class="text-gray-400">[link]</span>
+                </a>
+              </div>
+              <div class="text-sm opacity-75">
+                • PR #00000 (<span class="addition">+124</span>/<span class="deletion">−3</span> LOC, merged)
+                <br />
+                • diff 색상(addition/deletion)을 쓰는 불릿 설명 패턴.
+              </div>
+            </li>
+          </ul>
+        </section>
+      </SpecSection>
+
+      <!-- ⑨ 임베드 -->
+      <SpecSection
+        id="embeds"
+        title="임베드"
+        source={[
+          "src/components/embeds/LinkPreview.astro",
+          "src/components/embeds/YouTube.astro",
+          "src/components/embeds/Video.astro",
+          "src/components/embeds/AudioPlayer.astro",
+        ]}
+        note="LinkPreview는 빌드 타임에 대상 URL의 OG 메타를 fetch한다."
+      >
+        <LinkPreview src="https://yongseok.me" imagePosition="center" />
+        <YouTube src="https://youtu.be/zrAGRppDkSw" caption="YouTube 임베드 — 16:9, 검정 그림자 박스" />
+        <Video src="https://static.yongseok.me/about.mp4" caption="Video 임베드 — autoplay/loop/muted" ratio="4 / 3" />
+        <AudioPlayer src="/post/audio/promise_try_torque/promise_try_torque.wav" title="AudioPlayer 샘플" />
+      </SpecSection>
+    </div>
+  </Container>
+</PageLayout>
+
+<style>
+  /* BlogSidebar는 xl+에서 viewport 기준 fixed(본문 우측 플로팅)라
+     이 페이지에서는 TOC와 겹친다 — 데모에서는 문서 흐름 안으로 눌러 놓는다. */
+  .sidebar-demo :global(#blog-sidebar) {
+    position: static !important;
+    width: auto !important;
+  }
+
+  /* 원본: src/pages/about.astro의 스코프 스타일 */
+  .addition {
+    color: #3fb950;
+  }
+  .deletion {
+    color: #f85149;
+  }
+</style>

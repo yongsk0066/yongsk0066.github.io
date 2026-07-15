@@ -48,7 +48,7 @@ function PostCard({ post, isDev }: { post: PostEntry; isDev: boolean }) {
       className="relative group flex flex-nowrap py-3 pr-10 rounded-lg hover:text-black transition-colors duration-300 ease-in-out antialiased"
     >
       <div className="flex flex-col flex-1 truncate">
-        <div className="font-bold text-zinc-600 group-hover:text-black transition-colors duration-300 ease-in-out whitespace-normal break-all line-clamp-2">
+        <div className="font-bold text-black whitespace-normal break-keep break-words line-clamp-2">
           {post.data.title}
           {isDev && post.data.draft && (
             <span className="inline-flex items-center ml-2 px-1.5 py-0.5 text-[10px] font-medium leading-none text-orange-600 bg-orange-100 rounded align-middle">
@@ -56,7 +56,7 @@ function PostCard({ post, isDev }: { post: PostEntry; isDev: boolean }) {
             </span>
           )}
         </div>
-        <div className="text-sm line-clamp-2 whitespace-normal break-all text-semibold">
+        <div className="text-sm text-zinc-500 line-clamp-2 whitespace-normal break-keep break-words">
           {post.data.description}
         </div>
       </div>
