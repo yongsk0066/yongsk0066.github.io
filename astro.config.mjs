@@ -37,7 +37,6 @@ export default defineConfig({
   markdown:{
     remarkPlugins: [remarkMath, mermaid],
     rehypePlugins: [() => rehypeKatex({
-      output: "mathml",
       strict: false
     })],
     shikiConfig: {
