@@ -77,7 +77,7 @@ export class ThumbnailElement extends BaseAnimateElement {
   }
 
   addObject() {
-    if (!this.scene || !this.clock || !this.camera || !this.renderer) return;
+    if (!this.scene || !this.camera || !this.renderer) return;
     this.parentObject = new THREE.Object3D();
     this.scene.add(this.parentObject);
     this.parentObject.rotateOnAxis(
@@ -113,8 +113,7 @@ export class ThumbnailElement extends BaseAnimateElement {
       !this.parentObject ||
       !this.scene ||
       !this.camera ||
-      !this.renderer ||
-      !this.clock
+      !this.renderer
     )
       return;
     requestAnimationFrame(this.animateScene);

@@ -1,5 +1,5 @@
 import { LitElement, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement } from "lit/decorators.js";
 
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -37,7 +37,6 @@ export class BaseAnimateElement extends LitElement {
 
   protected scene?: THREE.Scene;
   protected camera?: THREE.PerspectiveCamera;
-  protected clock: THREE.Clock = new THREE.Clock();
   protected renderer?: THREE.WebGLRenderer;
   protected composer?: EffectComposer;
   protected options: BaseAnimateOptions;
@@ -117,8 +116,7 @@ export class BaseAnimateElement extends LitElement {
   }
 
   protected initComposer() {
-    if (!this.scene || !this.clock || !this.camera || !this.renderer)
-      return this;
+    if (!this.scene || !this.camera || !this.renderer) return this;
     this.composer = new EffectComposer(this.renderer);
     if (this.options.renderPlugin) {
       this.options.renderPlugin.apply(this.composer, this.scene, this.camera);

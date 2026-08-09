@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type LegacyRef,
+  type Ref,
 } from "react";
 import type { Mesh } from "three";
 import * as THREE from "three";
@@ -174,7 +174,7 @@ const Earth = () => {
           <primitive object={shaderMaterial} attach="material" />
         )}
       </mesh>
-      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as Ref<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="black" opacity={0.6} transparent={true} />
       </line>
@@ -214,7 +214,7 @@ const Moon = () => {
           specular="#ffffff"
         />
       </mesh>
-      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as Ref<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="black" opacity={0.8} transparent={true} />
       </line>
@@ -336,7 +336,7 @@ const Spaceship = () => {
         <coneGeometry args={[0.3 * ratio, 1 * ratio, 5]} />
         <meshPhongMaterial color="silver" />
       </mesh>
-      <line ref={trail.lineRef as unknown as LegacyRef<SVGLineElement>}>
+      <line ref={trail.lineRef as unknown as Ref<SVGLineElement>}>
         <bufferGeometry />
         <lineBasicMaterial color="red" opacity={0.5} transparent={true} />
       </line>

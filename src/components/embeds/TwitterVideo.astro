@@ -5,26 +5,25 @@ interface Props {
 
 const { src } = Astro.props;
 
-const validateSrc = (src: string) => {
-  const regex = /https:\/\/twitter.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/;
-  return regex.test(src);
-};
+const statusId = src.match(
+  /^https:\/\/twitter\.com\/[a-zA-Z0-9_]+\/status\/([0-9]+)/
+)?.[1];
 
-if (!validateSrc(src)) {
+if (!statusId) {
   throw new Error("Invalid src");
 }
-const key = Math.random().toString(36).substring(7);
+const key = `twitter-${statusId}`;
 ---
 
 <div class="twitter-container" id={key}>
   <blockquote class="twitter-tweet" data-media-max-width="1080">
     <a href={src}></a>
   </blockquote>
-  <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"
+  <script is:inline async src="https://platform.twitter.com/widgets.js" charset="utf-8"
   ></script>
 </div>
 
-<script define:vars={{ key }}>
+<script is:inline define:vars={{ key }}>
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.type === "childList") {

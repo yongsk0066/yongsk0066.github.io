@@ -2,12 +2,16 @@
 import { DEFAULT_LOCALE } from "@consts";
 import { useTranslations } from "@i18n/utils";
 
+interface Props {
+  id: string;
+}
+
+const { id } = Astro.props;
 const currentLocale = Astro.currentLocale || DEFAULT_LOCALE;
 const t = useTranslations(currentLocale as any);
 
-const uid = Math.random().toString(36).slice(2, 8);
-const popoverId = `copy-menu-${uid}`;
-const anchorName = `--copy-trigger-${uid}`;
+const popoverId = `copy-menu-${id}`;
+const anchorName = `--copy-trigger-${id}`;
 ---
 
 <!-- Split button: [Copy page | ▾] -->
@@ -202,7 +206,6 @@ const anchorName = `--copy-trigger-${uid}`;
       wrapper.dataset.init = "1";
 
       var copyBtn = wrapper.querySelector(".copy-page-btn");
-      var toggle = wrapper.querySelector(".copy-menu-toggle");
       var menu = wrapper.querySelector("[popover]");
       var label = wrapper.querySelector(".copy-page-label");
       var icon = wrapper.querySelector(".copy-icon");

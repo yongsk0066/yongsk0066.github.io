@@ -51,12 +51,16 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-store-
 
-      # NOTE: do NOT cache ~/.cache/puppeteer. A restored partial / cross-lockfile
-      # cache leaves the browser folder present but the chrome-headless-shell binary
-      # missing, and puppeteer's postinstall then ERRORS instead of re-downloading
-      # (this broke a deploy). Let puppeteer fetch Chromium fresh each run.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore Astro incremental build cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules/.astro
+          key: ${{ runner.os }}-astro-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-astro-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Build site
         run: pnpm build

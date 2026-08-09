@@ -11,18 +11,22 @@ interface Props {
 }
 
 const { userId, pageId = Astro.url.pathname, friendlyName } = Astro.props;
-
-const generatedUserId =
-  userId || `anonymous-${Math.random().toString(36).substring(2, 15)}`;
+const isProduction = import.meta.env.PROD;
 ---
 
-<script define:vars={{ generatedUserId, pageId, friendlyName }}>
-  // 브라우저에서만 실행 및 프로덕션 환경에서만 실행
-  if (typeof window !== "undefined" && window.clarity && import.meta.env.PROD) {
+<script is:inline define:vars={{ userId, pageId, friendlyName, isProduction }}>
+  // 명시적인 사용자 ID가 있을 때만 프로덕션에서 식별한다.
+  // 익명 방문자는 Clarity의 기본 익명 세션 추적을 사용한다.
+  if (
+    typeof window !== "undefined" &&
+    window.clarity &&
+    isProduction &&
+    userId
+  ) {
     // 페이지 로드 시 사용자 식별
     window.clarity(
       "identify",
-      generatedUserId,
+      userId,
       undefined,
       pageId,
       friendlyName
@@ -33,7 +37,7 @@ const generatedUserId =
       if (window.clarity) {
         window.clarity(
           "identify",
-          generatedUserId,
+          userId,
           undefined,
           location.pathname,
           friendlyName

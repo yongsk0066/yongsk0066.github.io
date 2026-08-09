@@ -5,12 +5,10 @@ interface Props {
 }
 
 const { src, title } = Astro.props;
-const playerId = `ap-${Math.random().toString(36).slice(2, 8)}`;
 ---
 
 <div
   class="audio-player group relative w-full max-w-full rounded-lg border border-zinc-200 bg-white my-4 select-none"
-  data-player-id={playerId}
   data-src={src}
 >
   <div class="flex items-center gap-3 px-4 py-3">

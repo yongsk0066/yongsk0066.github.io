@@ -451,6 +451,13 @@ article pre.no-scroll {
   mask-image: none;
 }
 
+/* Keep paragraph spacing tied to the text's actual line box. The first value
+ * preserves the previous Tailwind Typography rhythm in older browsers. */
+#post-content > p {
+  margin-block: 1.25em;
+  margin-block: 1lh;
+}
+
 /* Content Progressive Animation */
 @keyframes fadeInUp {
   from {

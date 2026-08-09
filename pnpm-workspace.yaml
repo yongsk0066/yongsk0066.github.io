@@ -7,21 +7,14 @@
 # Switch to `isolated` later if you want pnpm's strict phantom-dependency guard.
 nodeLinker: hoisted
 
-# pnpm 11 delays installing versions published <24h ago (supply-chain defense).
-# Disabled for now because this repo (a) tracks Astro alpha/beta and (b) just did
-# a full dependency refresh that pulled several fresh (<24h) transitive packages
-# (@types/inquirer, bare-stream, baseline-browser-mapping, ...) — a non-zero window
-# rejects the current lockfile until those age out, breaking `pnpm install`/CI.
-# REVISIT: once the tree settles and astro@7 ships stable, restore protection with
-#   minimumReleaseAge: 1440
-#   minimumReleaseAgeExclude: [astro, "@astrojs/*"]
-# then rebuild the lockfile (`pnpm install`).
-minimumReleaseAge: 0
+# Delay newly published versions for 24 hours as a supply-chain safety window.
+# The dependency tree now follows stable Astro releases, so no exception is needed.
+minimumReleaseAge: 1440
 
 # Replaces Yarn's `resolutions`: pin transitive React to the installed version.
 overrides:
-  react: "19.2.7"
-  react-dom: "19.2.7"
+  react: "19.2.8"
+  react-dom: "19.2.8"
 
 # pnpm 11 blocks dependency build scripts by default (strictDepBuilds). Allow the
 # native deps that legitimately need to build / run postinstall.
@@ -30,6 +23,3 @@ allowBuilds:
   sharp: true
   workerd: true
   es5-ext: true
-  # @mermaid-js/mermaid-cli -> puppeteer postinstall downloads Chromium, which the
-  # remark-mermaid plugin needs at build time to render diagrams to SVG.
-  puppeteer: true

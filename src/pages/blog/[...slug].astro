@@ -38,6 +38,7 @@ export async function getStaticPaths() {
     return {
       params: { slug: post.id },
       props: { post, prevPost, nextPost },
+      ...(post.digest ? { cacheKey: `${post.id}:${post.digest}` } : {}),
     };
   });
 }
@@ -93,9 +94,15 @@ const t = useTranslations(currentLocale as any);
 ---
 
 <script>
-  import "../../components/thumbnail-element";
-  import "../../components/lit/youtube-element";
-  import "../../components/mermaid/mermaid-element";
+  const elementModules = [
+    ["thumbnail-element", () => import("../../components/thumbnail-element")],
+    ["youtube-element", () => import("../../components/lit/youtube-element")],
+    ["mermaid-diagram", () => import("../../components/mermaid/mermaid-element")],
+  ] as const;
+
+  for (const [selector, load] of elementModules) {
+    if (document.querySelector(selector)) void load();
+  }
 </script>
 
 <PageLayout
@@ -127,7 +134,7 @@ const t = useTranslations(currentLocale as any);
             {readingTime(post.body ?? "")}
           </div>
         </div>
-        <CopyMenu />
+        <CopyMenu id="post-meta" />
       </div>
 
       <div class="text-3xl font-bold text-black break-keep">
@@ -181,7 +188,7 @@ const t = useTranslations(currentLocale as any);
       )
     }
     <div class="mx-auto my-4 flex gap-2 justify-center">
-      <CopyMenu />
+      <CopyMenu id="post-footer" />
       <Share />
     </div>
     <PostNavigation prevPost={prevPost} nextPost={nextPost} />

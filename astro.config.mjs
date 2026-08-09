@@ -1,4 +1,5 @@
 import mdx from "@astrojs/mdx";
+import { unified } from "@astrojs/markdown-remark";
 import { defineConfig } from 'astro/config';
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -12,6 +13,9 @@ import customTheme from './shiki/github-dark-default.json'
 
 // https://astro.build/config
 export default defineConfig({
+  experimental: {
+    incrementalBuild: true,
+  },
   prefetch: {
     prefetchAll: true,
     defaultStrategy: 'viewport'
@@ -35,11 +39,11 @@ export default defineConfig({
     react(),
     markdownExport(),
   ],
-  markdown:{
-    remarkPlugins: [remarkMath, mermaid],
-    rehypePlugins: [() => rehypeKatex({
-      strict: false
-    })],
+  markdown: {
+    processor: unified({
+      remarkPlugins: [remarkMath, mermaid],
+      rehypePlugins: [[rehypeKatex, { strict: false }]],
+    }),
     shikiConfig: {
       theme: customTheme,
     },
