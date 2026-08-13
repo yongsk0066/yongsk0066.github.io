@@ -237,6 +237,27 @@ import { dateRange } from "@lib/date";
               is disabled with onType linting mode.
             </div>
           </li>
+          <li class="animate">
+            <div class="text-sm opacity-75">August 2026</div>
+            <div class="font-semibold text-black">
+              <a
+                href="https://github.com/vercel/swr/pull/4293"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                SWR <span class="text-gray-400">[link]</span>
+              </a>
+            </div>
+            <div class="text-sm opacity-75">
+              • PR #4293 (<span class="addition">+166</span>/<span
+                class="deletion">−21</span
+              > LOC, merged, shipped in v2.5.1)
+              <br />
+              • Hydrated server-provided cacheData for fetcherless hooks (useSWR(key,
+              null)), which previously left their state undefined because cacheData
+              was only consumed inside revalidate.
+            </div>
+          </li>
         </ul>
       </section>
 
