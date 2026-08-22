@@ -23,7 +23,7 @@ jobs:
         run: echo "COMMIT_MSG=$(printf '%s' "$HEAD_COMMIT_MSG" | head -1 | sed 's/[\"\\]//g')" >> "$GITHUB_ENV"
 
       - name: Notify Slack (start)
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
@@ -31,31 +31,20 @@ jobs:
             {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"🚀 *블로그 배포 시작* — yongseok.me"}},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }} · <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|빌드 로그>"}]}]}
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup pnpm and Node.js
+        uses: pnpm/setup@v2
         with:
-          node-version-file: '.nvmrc'
-
-      - name: Enable Corepack (for pnpm)
-        run: corepack enable
-
-      - name: Resolve pnpm store path
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
+          runtime: node@26.7.0
+          cache: true
+          install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Restore Astro incremental build cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: node_modules/.astro
           key: ${{ runner.os }}-astro-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -74,7 +63,7 @@ jobs:
 
       - name: Notify Slack (success)
         if: success()
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
@@ -83,7 +72,7 @@ jobs:
 
       - name: Notify Slack (failure)
         if: failure()
-        uses: slackapi/slack-github-action@v3
+        uses: slackapi/slack-github-action@v4
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook

@@ -11,6 +11,10 @@ nodeLinker: hoisted
 # The dependency tree now follows stable Astro releases, so no exception is needed.
 minimumReleaseAge: 1440
 
+# Include GitHub Actions when checking for updates with `pnpm outdated`.
+update:
+  githubActions: true
+
 # Replaces Yarn's `resolutions`: pin transitive React to the installed version.
 overrides:
   react: "19.2.8"
