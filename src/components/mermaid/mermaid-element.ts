@@ -9,6 +9,11 @@ const loadMermaid = () => {
     mermaid.initialize({
       startOnLoad: false,
       theme: "neutral",
+      // mermaid 12 기본값(neo look + ELK 레이아웃 + 120px 줄바꿈)을 끄고 v11 렌더링을 유지한다
+      look: "classic",
+      layout: "dagre",
+      flowchart: { wrappingWidth: 200, minNodeWidth: 0 },
+      state: { wrappingWidth: 200, minNodeWidth: 0 },
       fontFamily: "Pretendard, sans-serif",
     });
     return mermaid;

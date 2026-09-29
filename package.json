@@ -5,6 +5,13 @@
   "engines": {
     "node": ">=26.0.0"
   },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.10.0",
+      "onFail": "download"
+    }
+  },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
@@ -17,45 +24,45 @@
     "cf:preview": "wrangler dev"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "7.2.4",
-    "@astrojs/mdx": "7.0.7",
-    "@astrojs/react": "6.0.4",
+    "@astrojs/markdown-remark": "7.3.1",
+    "@astrojs/mdx": "8.0.2",
+    "@astrojs/react": "7.0.0",
     "@astrojs/rss": "4.0.19",
-    "@astrojs/sitemap": "3.7.3",
+    "@astrojs/sitemap": "3.7.4",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@lit/task": "^1.0.3",
     "@react-spring/three": "^10.1.2",
-    "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.7.0",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
     "@react-three/rapier": "^2.2.0",
     "@tailwindcss/vite": "^4.3.3",
-    "astro": "7.2.4",
+    "astro": "7.3.5",
     "clsx": "^2.1.1",
     "lit": "^3.3.3",
-    "mermaid": "^11.17.0",
+    "mermaid": "^12.0.0",
     "meshline": "^3.3.1",
-    "motion": "^13.1.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "motion": "^13.4.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
-    "tailwind-merge": "^3.6.0",
+    "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
-    "three": "^0.185.1",
+    "three": "^0.186.1",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
     "@tailwindcss/typography": "^0.5.20",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
-    "@types/three": "^0.185.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "^0.186.0",
     "@types/youtube": "^0.3.0",
-    "inquirer": "^14.1.0",
-    "prettier": "^3.9.6",
-    "prettier-plugin-astro": "^0.14.1",
+    "inquirer": "^14.2.2",
+    "prettier": "^3.9.9",
+    "prettier-plugin-astro": "^1.1.0",
     "typescript": "6.0.3",
-    "wrangler": "^4.125.0"
+    "wrangler": "^4.142.0"
   },
-  "packageManager": "pnpm@11.22.0"
+  "packageManager": "pnpm@12.6.0"
 }
