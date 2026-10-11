@@ -4,6 +4,7 @@ interface Props {
   hasTranslation?: boolean;
   translationSlug?: string;
   currentLocale?: string;
+  availableLocales?: string[];
 }
 
 const {
@@ -64,7 +65,7 @@ const {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Search keyword' },
-          locale: { type: 'string', enum: ['ko', 'en'], description: 'Filter by language (optional)' }
+          locale: { type: 'string', enum: ['ko', 'en', 'ja'], description: 'Filter by language (optional)' }
         },
         required: ['query']
       },
@@ -86,11 +87,11 @@ const {
     // 5. Tool: switch_language (all pages)
     navigator.modelContext.registerTool({
       name: 'switch_language',
-      description: 'Switch between Korean and English. Returns new URL or error if no translation available.',
+      description: 'Switch between available Korean, English, and Japanese versions. Returns new URL or an error if unavailable.',
       inputSchema: {
         type: 'object',
         properties: {
-          targetLocale: { type: 'string', enum: ['ko', 'en'], description: 'Target language' }
+          targetLocale: { type: 'string', enum: ['ko', 'en', 'ja'], description: 'Target language' }
         },
         required: ['targetLocale']
       },
@@ -100,25 +101,12 @@ const {
           return { content: [{ type: 'text', text: JSON.stringify({ url: window.location.href, message: 'Already viewing in this language.' }) }] };
         }
 
-        var newUrl = '';
-
-        if (pageType === 'blog-post') {
-          if (!hasTranslation) {
-            return { content: [{ type: 'text', text: JSON.stringify({ error: 'No translation available for this post.' }) }] };
-          }
-          newUrl = '/blog/' + translationSlug + '/';
-        } else if (pageType === 'blog-list') {
-          newUrl = target === 'en' ? '/blog/en/' : '/blog/';
-        } else {
-          var path = window.location.pathname;
-          if (target === 'en') {
-            newUrl = path.replace(/\/$/, '') + '/en/';
-            if (path === '/') newUrl = '/en/';
-          } else {
-            newUrl = path.replace(/\/en\/?$/, '/');
-            if (newUrl === '') newUrl = '/';
-          }
+        // The rendered hreflang links are the source of truth for available translations.
+        var alternate = document.querySelector('link[rel="alternate"][hreflang="' + target + '"]');
+        if (!alternate) {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: 'No translation available for this page.' }) }] };
         }
+        var newUrl = alternate.href;
 
         window.location.href = newUrl;
         return { content: [{ type: 'text', text: JSON.stringify({ url: newUrl, message: 'Navigating to ' + target + ' version.' }) }] };

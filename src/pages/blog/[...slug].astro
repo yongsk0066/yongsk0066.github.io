@@ -1,4 +1,5 @@
 ---
+import { createHash } from "node:crypto";
 import ArticleProse from "@components/blog/ArticleProse.astro";
 import BackToPrev from "@components/blog/BackToPrev.astro";
 import Comments from "@components/blog/Comments.astro";
@@ -23,7 +24,9 @@ export async function getStaticPaths() {
     .filter((post) => import.meta.env.DEV || !post.data.draft)
     .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
-  return allPosts.map((post, index) => {
+  const collectionCacheKey = createHash("sha256").update(allPosts.map((p) => `${p.id}:${p.digest}`).join("|" )).digest("hex");
+
+  return allPosts.map((post) => {
     const postLocale = _getLocale(post.id);
     const sameLangPosts = allPosts.filter((p) => _getLocale(p.id) === postLocale);
     const langIndex = sameLangPosts.findIndex((p) => p.id === post.id);
@@ -38,7 +41,8 @@ export async function getStaticPaths() {
     return {
       params: { slug: post.id },
       props: { post, prevPost, nextPost },
-      ...(post.digest ? { cacheKey: `${post.id}:${post.digest}` } : {}),
+      // Navigation and translations depend on the entire published collection.
+      cacheKey: `${post.id}:${collectionCacheKey}`,
     };
   });
 }
@@ -49,7 +53,8 @@ const { post, prevPost, nextPost } = Astro.props;
 const currentLocale = OTHER_LOCALES.find((l) => post.id.startsWith(`${l}/`)) || DEFAULT_LOCALE;
 
 const seriesPosts = (
-  await getCollection("blog", ({ id }) => {
+  await getCollection("blog", ({ id, data }) => {
+    if (!import.meta.env.DEV && data.draft) return false;
     if (currentLocale === DEFAULT_LOCALE) {
       return !id.includes("/");
     }
@@ -64,7 +69,7 @@ const seriesPosts = (
 let hasTranslation = false;
 let translationSlug = "";
 
-const allPosts = await getCollection("blog");
+const allPosts = (await getCollection("blog")).filter((p) => import.meta.env.DEV || !p.data.draft);
 
 if (currentLocale === DEFAULT_LOCALE) {
   translationSlug = `en/${post.id}`;
@@ -114,6 +119,8 @@ const t = useTranslations(currentLocale as any);
   webmcpTranslationSlug={translationSlug}
   webmcpCurrentLocale={currentLocale}
   availableLocales={availableLocales}
+  article={{ date: post.data.date, updatedDate: post.data.updatedDate, categories: post.data.categories }}
+  noindex={!!post.data.draft}
 >
   <Container>
     <div>
@@ -127,6 +134,7 @@ const t = useTranslations(currentLocale as any);
       <div class="flex items-center gap-1.5 justify-between">
         <div class="flex items-center gap-1.5">
           <div class="font-base text-sm">
+            <a href="/about/" rel="author">장용석</a> &bull;
             <FormattedDate date={post.data.date} />
           </div>
           &bull;
@@ -137,9 +145,9 @@ const t = useTranslations(currentLocale as any);
         <CopyMenu id="post-meta" />
       </div>
 
-      <div class="text-3xl font-bold text-black break-keep">
+      <h1 class="text-3xl font-bold text-black break-keep">
         {post.data.title}
-      </div>
+      </h1>
       {
         seriesPosts.length > 1 && (
           <div class="text-zinc-500">

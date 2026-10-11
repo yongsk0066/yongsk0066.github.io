@@ -4,7 +4,7 @@ import { defineConfig } from 'astro/config';
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import mermaid from "./plugin/remark-mermaid";
-import markdownExport from "./plugin/markdown-export";
+import articleHeadings from "./plugin/remark-article-headings/index.js";
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -35,13 +35,17 @@ export default defineConfig({
     mdx({ optimize: true }),
     // /design 은 내부용 디자인 레퍼런스 — 사이트맵에서 제외 (페이지 자체는 noindex)
     // i18n fallback이 만드는 /en/design, /ja/design 변형까지 함께 제외
-    sitemap({ filter: (page) => !/\/design\/?$/.test(new URL(page).pathname) }),
+    sitemap({ filter: (page) => {
+      const path = new URL(page).pathname;
+      // Non-blog locale pages currently redirect to Korean fallback pages.
+      return !/\/design\/?$|\/404(?:\/|\.html)?$|\/index\.md$/.test(path)
+        && !/^\/(?:en|ja)(?:\/(?:about|unknown))?\/?$/.test(path);
+    } }),
     react(),
-    markdownExport(),
   ],
   markdown: {
     processor: unified({
-      remarkPlugins: [remarkMath, mermaid],
+      remarkPlugins: [remarkMath, mermaid, articleHeadings],
       rehypePlugins: [[rehypeKatex, { strict: false }]],
     }),
     shikiConfig: {

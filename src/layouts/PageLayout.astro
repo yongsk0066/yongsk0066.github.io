@@ -5,6 +5,7 @@ import Footer from "@components/layout/Footer.astro";
 import WebMCP from "@components/layout/WebMCP.astro";
 import ClarityIdentify from "@components/head/ClarityIdentify.astro";
 import { SITE_TITLE } from "@consts";
+import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@lib/seo";
 
 type Props = {
   title: string;
@@ -16,6 +17,7 @@ type Props = {
   webmcpTranslationSlug?: string;
   webmcpCurrentLocale?: string;
   availableLocales?: string[];
+  article?: { date: Date; updatedDate?: Date; categories?: string[] };
 };
 
 const {
@@ -28,51 +30,52 @@ const {
   webmcpTranslationSlug = "",
   webmcpCurrentLocale = Astro.currentLocale,
   availableLocales,
+  article,
 } = Astro.props;
+const excludeFromSearch = noindex || /^\/404(?:\/|\.html)?$/.test(Astro.url.pathname);
+const canonicalURL = new URL(Astro.url.pathname, Astro.site).href;
+const siteURL = new URL("/", Astro.site).href;
+const authorId = `${siteURL}#author`;
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "WebSite", "@id": `${siteURL}#website`, name: SITE_TITLE,
+      alternateName: "Yongseok's Blog", url: siteURL, publisher: { "@id": authorId } },
+    { "@type": "Person", "@id": authorId, name: "장용석", alternateName: "Yongseok Jang",
+      url: new URL("/about/", Astro.site).href,
+      sameAs: ["https://x.com/yongsk0066", "https://github.com/yongsk0066", "https://www.linkedin.com/in/yongseok-jang-129267181/"] },
+    ...(article ? [{
+      "@type": "BlogPosting", "@id": `${canonicalURL}#article`,
+      headline: title, description, url: canonicalURL,
+      mainEntityOfPage: { "@type": "WebPage", "@id": canonicalURL },
+      author: { "@id": authorId }, publisher: { "@id": authorId },
+      datePublished: article.date.toISOString(),
+      ...(article.updatedDate ? { dateModified: article.updatedDate.toISOString() } : {}),
+      image: [new URL(heroImage || DEFAULT_SOCIAL_IMAGE, Astro.site).href],
+      inLanguage: webmcpCurrentLocale || "ko", keywords: article.categories,
+      isAccessibleForFree: true,
+    }] : []),
+  ],
+};
 ---
 
 <!doctype html>
 <html lang={webmcpCurrentLocale || 'ko'} {...(availableLocales ? { "data-available-locales": availableLocales.join(",") } : {})}>
   <head>
     <Head
-      title={`${title} | ${SITE_TITLE}`}
+      title={title === SITE_TITLE ? title : `${title} | ${SITE_TITLE}`}
       description={description}
       image={heroImage}
-      noindex={noindex}
+      noindex={excludeFromSearch}
+      pageType={webmcpPageType}
+      currentLocale={webmcpCurrentLocale}
+      availableLocales={availableLocales}
+      publishedTime={article?.date.toISOString()}
+      modifiedTime={article?.updatedDate?.toISOString()}
     />
     <ClarityIdentify pageId={Astro.url.pathname} />
 
-    <!-- 웹사이트 구조화된 데이터 -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "장용석 블로그",
-        "alternateName": "Yongseok's Blog",
-        "url": "https://yongseok.me",
-        "potentialAction": {
-          "@type": "SearchAction",
-          "target": "https://yongseok.me/search?q={search_term_string}",
-          "query-input": "required name=search_term_string"
-        }
-      }
-    </script>
-
-    <!-- 조직 구조화된 데이터 -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "Yongseok Jang",
-        "url": "https://yongseok.me",
-        "logo": "https://yongseok.me/favicon-light.svg",
-        "sameAs": [
-          "https://x.com/yongsk0066",
-          "https://github.com/yongsk0066",
-          "https://www.linkedin.com/in/yongseok-jang-129267181/"
-        ]
-      }
-    </script>
+    {!excludeFromSearch && <script type="application/ld+json" set:html={serializeJsonLd(structuredData)} />}
   </head>
   <body>
     <Header />
@@ -85,6 +88,7 @@ const {
       hasTranslation={webmcpHasTranslation}
       translationSlug={webmcpTranslationSlug}
       currentLocale={webmcpCurrentLocale}
+      availableLocales={availableLocales}
     />
   </body>
 </html>

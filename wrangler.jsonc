@@ -3,6 +3,12 @@
   "name": "yongseok-blog",
   "main": "src/worker.js",
   "compatibility_date": "2025-05-21",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": true }
+  },
 
   // Static assets configuration for Astro SSG output
   "assets": {

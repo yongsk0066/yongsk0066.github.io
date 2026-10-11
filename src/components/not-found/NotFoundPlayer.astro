@@ -1,9 +1,11 @@
 ---
 interface Props {
+  embedded?: boolean;
   autoplay?: boolean;
 }
 
-const { autoplay = true } = Astro.props;
+const { autoplay = true, embedded = false } = Astro.props;
+const Heading = embedded ? "h2" : "h1";
 
 const VIDEO_ID = "zhHB4dZTChw";
 const iframeParams = new URLSearchParams({
@@ -22,7 +24,7 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
   <div class="video-border-wrap">
     <canvas class="spectro-border"></canvas>
     <div class="video-crop">
-      <h1>404</h1>
+      <Heading class="not-found-title">404</Heading>
       <div class="loading-cover" aria-hidden="true"></div>
       <iframe
         id="yt-player"
@@ -336,7 +338,7 @@ const iframeSrc = `https://www.youtube.com/embed/${VIDEO_ID}?${iframeParams}`;
     margin: 0 0 2rem;
   }
 
-  h1 {
+  .not-found-title {
     position: absolute;
     top: 50%;
     left: 50%;

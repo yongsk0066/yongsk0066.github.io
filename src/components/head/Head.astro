@@ -1,16 +1,36 @@
 ---
 import "@styles/global.css";
+import { DEFAULT_SOCIAL_IMAGE, localizedPostPath } from "@lib/seo";
 
 interface Props {
   title: string;
   description: string;
   image?: string;
   noindex?: boolean;
+  availableLocales?: string[];
+  pageType?: "blog-post" | "blog-list" | "other";
+  currentLocale?: string;
+  publishedTime?: string;
+  modifiedTime?: string;
 }
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 
-const { title, description, image = "/nano.png", noindex = false } = Astro.props;
+const {
+  title, description, image = DEFAULT_SOCIAL_IMAGE, noindex = false,
+  availableLocales, pageType = "other", currentLocale = Astro.currentLocale || "ko",
+  publishedTime, modifiedTime,
+} = Astro.props;
+const baseId = Astro.url.pathname.replace(/^\/blog\/(?:en\/|ja\/)?/, "").replace(/\/$/, "");
+const locales = availableLocales ?? (pageType === "blog-list" ? ["ko", "en", "ja"] : [currentLocale]);
+const alternates = locales.map((locale) => ({
+  locale,
+  path: pageType === "blog-post" ? localizedPostPath(baseId, locale)
+    : pageType === "blog-list" ? (locale === "ko" ? "/blog/" : `/blog/${locale}/`)
+    : Astro.url.pathname,
+}));
+const defaultAlternate = alternates.find(({ locale }) => locale === "ko") ?? alternates[0];
+const ogLocale = { ko: "ko_KR", en: "en_US", ja: "ja_JP" }[currentLocale];
 ---
 
 <meta
@@ -25,6 +45,7 @@ const { title, description, image = "/nano.png", noindex = false } = Astro.props
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <meta name="generator" content={Astro.generator} />
+<meta name="color-scheme" content="only light" />
 
 <!-- High priority font preloads for LCP -->
 <link
@@ -146,7 +167,7 @@ const { title, description, image = "/nano.png", noindex = false } = Astro.props
   href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap"
   rel="stylesheet"
 />
-{Astro.currentLocale === 'ja' && (
+{currentLocale === 'ja' && (
   <link
     href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
     rel="stylesheet"
@@ -156,55 +177,19 @@ const { title, description, image = "/nano.png", noindex = false } = Astro.props
 <!-- Canonical URL -->
 <link rel="canonical" href={canonicalURL} />
 
-<!-- hreflang tags -->
-{
-  (() => {
-    const p = Astro.url.pathname;
-    const isBlog = p.match(/^\/blog\/.+/);
-    const isEn = p.includes("/blog/en");
-    const isJa = p.includes("/blog/ja");
-
-    if (!isBlog) {
-      // Non-blog pages: ko + x-default only
-      return (
-        <>
-          <link rel="alternate" hreflang="ko" href={new URL(p, Astro.site)} />
-          <link rel="alternate" hreflang="x-default" href={new URL(p, Astro.site)} />
-        </>
-      );
-    }
-
-    // Derive ko/en/ja paths from current pathname
-    const koPath = isEn ? p.replace(/\/blog\/en/, "/blog") : isJa ? p.replace(/\/blog\/ja/, "/blog") : p;
-    const enPath = koPath.replace(/^\/blog/, "/blog/en");
-    const jaPath = koPath.replace(/^\/blog/, "/blog/ja");
-
-    return (
-      <>
-        <link rel="alternate" hreflang="ko" href={new URL(koPath, Astro.site)} />
-        <link rel="alternate" hreflang="en" href={new URL(enPath, Astro.site)} />
-        <link rel="alternate" hreflang="ja" href={new URL(jaPath, Astro.site)} />
-        <link rel="alternate" hreflang="x-default" href={new URL(koPath, Astro.site)} />
-      </>
-    );
-  })()
-}
-
-<!-- Markdown alternate for AI agents (blog posts only, not list pages) -->
-{
-  Astro.url.pathname.match(/^\/blog\/.+/) && (
-    <link
-      rel="alternate"
-      type="text/markdown"
-      href={new URL(Astro.url.pathname.replace(/\/?$/, "/index.md"), Astro.site)}
-    />
-  )
-}
+<!-- Advertise only available translations and real Markdown endpoints. -->
+{!noindex && alternates.map(({ locale, path }) => (
+  <link rel="alternate" hreflang={locale} href={new URL(path, Astro.site)} />
+))}
+{!noindex && defaultAlternate && <link rel="alternate" hreflang="x-default" href={new URL(defaultAlternate.path, Astro.site)} />}
+{pageType === "blog-post" && !noindex && (
+  <link rel="alternate" type="text/markdown" href={new URL(`${Astro.url.pathname.replace(/\/$/, "")}/index.md`, Astro.site)} />
+)}
 
 <!-- RSS -->
 {
   (() => {
-    const locale = Astro.currentLocale || 'ko';
+    const locale = currentLocale;
     const rssPath = locale === 'ko' ? 'rss.xml' : `${locale}/rss.xml`;
     return (
       <link
@@ -225,24 +210,27 @@ const { title, description, image = "/nano.png", noindex = false } = Astro.props
 <meta name="description" content={description} />
 
 <!-- Open Graph / Facebook -->
-<meta property="og:type" content="website" />
-<meta property="og:url" content={Astro.url} />
+<meta property="og:type" content={pageType === "blog-post" ? "article" : "website"} />
+<meta property="og:locale" content={ogLocale} />
+{publishedTime && <meta property="article:published_time" content={publishedTime} />}
+{modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+<meta property="og:url" content={canonicalURL} />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
-<meta property="og:image" content={new URL(image, Astro.url)} />
+<meta property="og:image" content={new URL(image, Astro.site)} />
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:url" content={Astro.url} />
+<meta property="twitter:url" content={canonicalURL} />
 <meta property="twitter:title" content={title} />
 <meta property="twitter:description" content={description} />
-<meta property="twitter:image" content={new URL(image, Astro.url)} />
+<meta property="twitter:image" content={new URL(image, Astro.site)} />
 
 <!-- Google Tag Manager -->
 <script>
   // @ts-nocheck
   // 개발 환경에서는 Google Tag Manager를 로드하지 않음
-  if (import.meta.env.PROD) {
+  if (import.meta.env.PROD && location.hostname === "yongseok.me") {
     (function (w, d, s, l, i) {
       w[l] = w[l] || [];
       w[l].push({ "gtm.start": new Date().getTime(), event: "gtm.js" });

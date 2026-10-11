@@ -23,7 +23,7 @@ jobs:
         run: echo "COMMIT_MSG=$(printf '%s' "$HEAD_COMMIT_MSG" | head -1 | sed 's/[\"\\]//g')" >> "$GITHUB_ENV"
 
       - name: Notify Slack (start)
-        uses: slackapi/slack-github-action@v4
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
@@ -31,10 +31,10 @@ jobs:
             {"blocks":[{"type":"section","text":{"type":"mrkdwn","text":"🚀 *블로그 배포 시작* — yongseok.me"}},{"type":"context","elements":[{"type":"mrkdwn","text":"${{ env.COMMIT_MSG }} · ${{ github.actor }} · <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|빌드 로그>"}]}]}
 
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm and Node.js
-        uses: pnpm/setup@v3
+        uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           runtime: node
           cache: true
@@ -44,7 +44,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Restore Astro incremental build cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/.astro
           key: ${{ runner.os }}-astro-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -55,7 +55,7 @@ jobs:
         run: pnpm build
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -63,7 +63,7 @@ jobs:
 
       - name: Notify Slack (success)
         if: success()
-        uses: slackapi/slack-github-action@v4
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
@@ -72,7 +72,7 @@ jobs:
 
       - name: Notify Slack (failure)
         if: failure()
-        uses: slackapi/slack-github-action@v4
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook

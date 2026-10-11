@@ -1,4 +1,5 @@
 import { getCollection } from "astro:content";
+import { postLocale, postPath } from "@lib/seo";
 
 export async function GET() {
 	const posts = (await getCollection("blog")).filter(
@@ -15,8 +16,8 @@ export async function GET() {
 		description: post.data.description ?? "",
 		date: post.data.date.toISOString(),
 		categories: post.data.categories ?? [],
-		locale: post.id.startsWith("en/") ? "en" : "ko",
-		url: `/blog/${post.id}/`,
+		locale: postLocale(post.id),
+		url: postPath(post.id),
 	}));
 
 	return new Response(JSON.stringify(index), {

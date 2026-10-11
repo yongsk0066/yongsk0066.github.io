@@ -3,8 +3,8 @@ import { SITE_DESCRIPTION, SITE_TITLE_EN } from '@consts';
 import { getCollection } from 'astro:content';
 
 export async function GET(context) {
-	const posts = await getCollection("blog", ({ id }) => {
-    return id.startsWith("en/");
+	const posts = await getCollection("blog", ({ id, data }) => {
+    return id.startsWith("en/") && !data.draft;
   })
 
 	// 날짜 기준 내림차순 정렬 (최신 글이 먼저 표시)
