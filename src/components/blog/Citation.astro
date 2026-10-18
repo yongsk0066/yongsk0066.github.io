@@ -1,0 +1,59 @@
+---
+import type { Reference } from "@components/blog/references";
+import type { HTMLAttributes } from "astro/types";
+
+interface Props {
+  source: Reference;
+  /** Use 2, 3, ... when citing the same source again. The backlink returns to its first use. */
+  occurrence?: number;
+}
+
+const { source, occurrence = 1 } = Astro.props;
+const referenceLabel = Astro.url.pathname.startsWith("/blog/en/")
+  ? "Reference"
+  : Astro.url.pathname.startsWith("/blog/ja/")
+    ? "参考文献"
+    : "참고문헌";
+if (!Number.isInteger(occurrence) || occurrence < 1) {
+  throw new Error("Citation occurrence must be a positive integer.");
+}
+const id =
+  occurrence === 1 ? source.citationId : `${source.citationId}-${occurrence}`;
+// DPUB-ARIA roles are standard, but are missing from Astro's current role union.
+const citationRole = "doc-biblioref" as HTMLAttributes<"a">["role"];
+---
+
+<sup class="citation" {id}>
+  <a
+    role={citationRole}
+    href={`#${source.referenceId}`}
+    aria-label={`${referenceLabel} ${source.number}: ${source.title}`}
+    title={source.title}
+  >
+    [{source.number}]
+  </a>
+</sup>
+
+<style>
+  .citation {
+    font-size: 0.72em;
+    line-height: 0;
+    vertical-align: super;
+    scroll-margin-top: 1.5rem;
+  }
+
+  .citation a {
+    padding-inline: 0.15em;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+  }
+
+  .citation:target a {
+    background: #e4e4e7;
+  }
+
+  .citation a:focus-visible {
+    outline: 1px solid currentColor;
+    outline-offset: 3px;
+  }
+</style>

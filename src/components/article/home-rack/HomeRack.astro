@@ -1,0 +1,43 @@
+---
+import RackStudy from "@components/article/home-rack/RackStudy";
+import { rackLabels, type RackLocale } from "@components/article/home-rack/labels";
+
+interface Props { lang?: RackLocale }
+const { lang = Astro.url.pathname.startsWith("/blog/en/") ? "en"
+  : Astro.url.pathname.startsWith("/blog/ja/") ? "ja" : "ko" } = Astro.props;
+const copy = rackLabels[lang];
+---
+
+<div class="home-rack not-prose">
+  <figure class="home-rack-photo">
+    <img
+      src="/post/images/2026_mid/home-rack.webp"
+      alt={copy.photoAlt}
+      width="1727"
+      height="2400"
+      loading="lazy"
+      decoding="async"
+    />
+    <figcaption>{copy.caption}</figcaption>
+  </figure>
+
+  <figure class="home-rack-model" aria-label={copy.model}>
+    <RackStudy mode={1} lang={lang} client:visible />
+  </figure>
+</div>
+
+<style>
+  .home-rack { margin: 2rem 0 2.5rem; }
+  figure { margin: 0; }
+  figcaption { color: #71717a; font-size: 12px; line-height: 1.6; }
+  .home-rack-photo img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 740px;
+    margin: 0 auto 10px !important;
+  }
+  .home-rack-photo figcaption { text-align: center; }
+  .home-rack-model { margin-top: 2rem; }
+</style>

@@ -1,0 +1,34 @@
+.rack-study{display:grid;grid-template-columns:136px minmax(0,1fr);align-items:center;gap:8px;width:100%;font-family:inherit}
+.rack-stage{min-width:0;background:transparent;border:0;padding:0}
+.rack-stage>.iso-svg{display:block;width:100%;height:auto}
+.rack-sidebar{display:flex;flex-direction:column;align-items:stretch;gap:18px}
+.rack-device-tabs,.rack-controls{display:flex;flex-direction:column;align-items:stretch;gap:3px;border-left:1px solid #e4e4e7;padding-left:10px}
+.rack-study button{position:relative;display:block;width:100%;border:0;background:transparent;padding:5px 0;color:#71717a;font:400 11px/1.5 var(--font-pretendard, "Pretendard"),sans-serif;text-align:left;cursor:pointer;transition:color 160ms ease}
+.rack-study button:hover,.rack-study button[aria-pressed=true]{color:#18181b}
+.rack-study button[aria-pressed=true]::before{content:"";position:absolute;left:-11px;top:5px;bottom:5px;width:1px;background:currentColor}
+.rack-study button:focus-visible{outline:1px solid currentColor;outline-offset:3px}
+.rack-study button:disabled{opacity:.4;cursor:default}
+@media(max-width:480px){.rack-study{grid-template-columns:100px minmax(0,1fr);gap:0}.rack-sidebar{gap:14px}.rack-study button{font-size:10px}.rack-device-tabs,.rack-controls{padding-left:7px}.rack-study button[aria-pressed=true]::before{left:-8px}}
+.rack-face{fill:var(--rack-face,#24282c);stroke:var(--anatomy-mid);stroke-width:.45;stroke-linejoin:round}
+.rack-material-white{--anatomy-paper:#e8e9e8;--anatomy-top:#fafafa;--anatomy-shade-0:#b9bdbc;--anatomy-shade-1:#cbd0ce;--anatomy-shade-2:#dde0df;--anatomy-shade-3:#e7e9e8;--rack-face:#f1f2f1}
+.rack-material-silver{--anatomy-paper:#b9bcbf;--anatomy-top:#dddfe0;--anatomy-shade-0:#858b91;--anatomy-shade-1:#9ca2a7;--anatomy-shade-2:#b5b9bc;--anatomy-shade-3:#c9cdd0;--rack-face:#bec2c5}
+.rack-material-dark{--anatomy-paper:#303438;--anatomy-top:#494e53;--anatomy-shade-0:#202428;--anatomy-shade-1:#272c31;--anatomy-shade-2:#30363c;--anatomy-shade-3:#393f45;--rack-face:#353a3f}
+.rack-material-black,.rack-material-hole{--anatomy-paper:#14191d;--anatomy-top:#252a2f;--anatomy-shade-0:#101418;--anatomy-shade-1:#151a1f;--anatomy-shade-2:#1b2025;--anatomy-shade-3:#20262c;--rack-face:#12171c}
+.rack-material-screen{--rack-face:#101b2d}.rack-material-screenblue{--rack-face:#203d66}.rack-material-blue{--rack-face:#6d9cf1}.rack-material-trim{--rack-face:#b1a393}.rack-material-glass{opacity:.13}
+.rack-material-glass .iso-shade,.rack-material-glass .iso-top{fill:#5b4e48}.rack-cable{stroke:#f4f4ef!important;stroke-width:2.7px!important;filter:drop-shadow(0 1px .5px #333)}
+.rack-picked>g>.iso-solid>.iso-edge{stroke:var(--anatomy-blue);stroke-width:1px}
+.rack-hover{cursor:pointer}.rack-comet-screen path,.rack-comet-screen circle{vector-effect:none}
+/* Keep the same opaque paint units and spring positions in both styles. Only
+   surface treatment changes, so hidden geometry never shows through a device. */
+.rack-hover path,.rack-hover circle{transition:fill 420ms ease,stroke 420ms ease,stroke-width 420ms ease,opacity 420ms ease,filter 420ms ease}
+.rack-hover .rack-comet-screen{transition:filter 420ms ease}
+.rack-study[data-render=line]{--rack-ink:#4b4b53;--rack-crease:#b6b6bd}
+.rack-study[data-render=line][data-theme=dark]{--rack-ink:#c5c9d1;--rack-crease:#52565e}
+.rack-study[data-render=line] :is(.iso-fill,.iso-shade,.iso-top,.iso-bevel,.rack-face){fill:var(--anatomy-card)}
+.rack-study[data-render=line] :is(.iso-edge,.rack-face){stroke:var(--rack-ink);stroke-width:.65px}
+.rack-study[data-render=line] .iso-line{stroke:var(--rack-ink);stroke-width:.65px}
+.rack-study[data-render=line] .iso-crease{stroke:var(--rack-crease);stroke-width:.45px}
+.rack-study[data-render=line] .rack-cable{stroke:var(--rack-ink)!important;stroke-width:1px!important;filter:drop-shadow(0 0 0 transparent)}
+.rack-study[data-render=line] .rack-picked>g>.iso-solid>.iso-edge{stroke:var(--anatomy-hi);stroke-width:1px}
+.rack-study[data-render=line] .rack-comet-screen{filter:grayscale(1)}
+@media(prefers-reduced-motion:reduce){.rack-hover path,.rack-hover circle,.rack-hover .rack-comet-screen{transition:none}}

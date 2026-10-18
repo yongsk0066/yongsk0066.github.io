@@ -1,0 +1,118 @@
+---
+import katex from "katex";
+import ConceptNote, {
+  type Topic,
+} from "@components/article/free-will/ConceptNote";
+import ConceptNoteEn from "@components/article/free-will/ConceptNote.en";
+import ConceptNoteJa from "@components/article/free-will/ConceptNote.ja";
+
+interface Props {
+  topic: Topic;
+  lang?: "ko" | "en" | "ja";
+}
+const {
+  topic,
+  lang = Astro.url.pathname.startsWith("/blog/en/")
+    ? "en"
+    : Astro.url.pathname.startsWith("/blog/ja/")
+      ? "ja"
+      : "ko",
+} = Astro.props;
+// Typeset at build time: the interactive islands receive HTML, not the KaTeX runtime.
+const formulas: Partial<Record<Topic, Record<string, string>>> = {
+  bell: {
+    "bell-singlet": String.raw`|\Psi^-\rangle=\frac{|01\rangle-|10\rangle}{\sqrt2}`,
+    "bell-answers": String.raw`P(A\ne C)\leq P(A\ne B)+P(B\ne C)`,
+    "bell-bound": String.raw`P_{\text{같음}}(A,C)\leq P_{\text{같음}}(A,B)+P_{\text{같음}}(B,C)`,
+    "bell-quantum": String.raw`P_{\text{같음}}(\theta)=\sin^2\!\left(\frac{\theta}{2}\right)`,
+    "bell-substitution": String.raw`0.75\leq 0.25+0.25=0.50`,
+  },
+  chsh: {
+    "chsh-state": String.raw`|\Phi^+\rangle=\frac{|00\rangle+|11\rangle}{\sqrt2}`,
+    "chsh-probabilities": String.raw`\begin{gathered}P_{\text{같음}}(\theta)=\cos^2\!\left(\frac\theta2\right)\\P_{\text{다름}}(\theta)=\sin^2\!\left(\frac\theta2\right)\end{gathered}`,
+    "chsh-same": String.raw`\begin{gathered}\cos^2\!\left(\frac{45^\circ}{2}\right)=\cos^2 22.5^\circ\\=\frac{1+\cos45^\circ}{2}=\frac{2+\sqrt2}{4}\approx0.853553\end{gathered}`,
+    "chsh-different": String.raw`\sin^2\!\left(\frac{135^\circ}{2}\right)=\sin^2 67.5^\circ=\cos^2 22.5^\circ`,
+    chsh: String.raw`\begin{gathered} S=\left|E_{00}+E_{01}+E_{10}-E_{11}\right| \\ S\leq 2 \end{gathered}`,
+    winning: String.raw`P_{\max}(\text{승리})=\frac12+\frac{S_{\max}}8`,
+    quantum: String.raw`S_{\max}=2\sqrt2\approx2.828`,
+  },
+  guiding: {
+    guiding: String.raw`\frac{d\mathbf Q(t)}{dt}=\left.\frac{\hbar}{m}\,\operatorname{Im}\!\left(\frac{\nabla\psi(\mathbf x,t)}{\psi(\mathbf x,t)}\right)\right|_{\mathbf x=\mathbf Q(t)}`,
+    "guiding-newton": String.raw`F=ma`,
+    "guiding-phase": String.raw`\psi(\mathbf x,t)=R(\mathbf x,t)\,e^{iS(\mathbf x,t)/\hbar}`,
+    "guiding-ratio": String.raw`\frac{\nabla\psi}{\psi}=\frac{\nabla R}{R}+\frac{i}{\hbar}\nabla S`,
+    "guiding-gradient": String.raw`\frac{d\mathbf Q}{dt}=\left.\frac{\nabla S}{m}\right|_{\mathbf x=\mathbf Q(t)}`,
+    "guiding-plane": String.raw`\psi(x,t)=A\,e^{i(kx-\omega t)}`,
+    "guiding-plane-speed": String.raw`v=\frac1m\frac{\partial S}{\partial x}=\frac{\hbar k}{m}=\frac pm`,
+    "guiding-equilibrium": String.raw`\rho(\mathbf x,t)=|\psi(\mathbf x,t)|^2`,
+    "guiding-current": String.raw`\begin{gathered}\mathbf j=\frac{\hbar}{m}\operatorname{Im}(\psi^*\nabla\psi)\\\mathbf v=\frac{\mathbf j}{|\psi|^2}\end{gathered}`,
+    "guiding-pair": String.raw`\begin{gathered}\frac{d\mathbf Q_1}{dt}=\frac{\hbar}{m_1}\operatorname{Im}\!\left(\frac{\nabla_1\Psi}{\Psi}\right)(\mathbf Q_1,\mathbf Q_2,t)\\\Psi=\Psi(\mathbf x_1,\mathbf x_2,t)\end{gathered}`,
+    "guiding-potential": String.raw`U_Q=-\frac{\hbar^2}{2m}\frac{\nabla^2R}{R}`,
+  },
+  hilbert: {
+    "hilbert-classical-basis": String.raw`\mathbf e_1=\begin{pmatrix}1\\0\end{pmatrix},\qquad\mathbf e_2=\begin{pmatrix}0\\1\end{pmatrix}`,
+    "hilbert-classical-vector": String.raw`\mathbf v=\begin{pmatrix}5\\4\end{pmatrix}=5\mathbf e_1+4\mathbf e_2`,
+    "hilbert-spin-basis": String.raw`|0\rangle=\begin{pmatrix}1\\0\end{pmatrix},\qquad|1\rangle=\begin{pmatrix}0\\1\end{pmatrix}`,
+    hilbert: String.raw`|\psi\rangle=\alpha|0\rangle+\beta|1\rangle`,
+    "hilbert-normalization": String.raw`|\alpha|^2+|\beta|^2=1`,
+    "hilbert-example": String.raw`|\psi\rangle=\frac{\sqrt3}{2}|0\rangle+\frac12|1\rangle`,
+    "hilbert-born": String.raw`P(0)=\left|\frac{\sqrt3}{2}\right|^2=\frac34,\qquad P(1)=\left|\frac12\right|^2=\frac14`,
+    "hilbert-other-basis": String.raw`|+\rangle=\frac{|0\rangle+|1\rangle}{\sqrt2},\qquad|-\rangle=\frac{|0\rangle-|1\rangle}{\sqrt2}`,
+    "hilbert-rebase": String.raw`|0\rangle=\frac{|+\rangle+|-\rangle}{\sqrt2}`,
+    "hilbert-tensor": String.raw`\begin{gathered}\mathcal H=\mathcal H_A\otimes\mathcal H_B\\|00\rangle,\quad|01\rangle,\quad|10\rangle,\quad|11\rangle\end{gathered}`,
+    "hilbert-bell": String.raw`|\Phi^+\rangle=\frac{|00\rangle+|11\rangle}{\sqrt2}`,
+    "hilbert-dimension": String.raw`\dim\mathcal H=2^n`,
+    "hilbert-position": String.raw`\psi(\mathbf x,t)=\langle\mathbf x|\psi(t)\rangle`,
+    "hilbert-position-norm": String.raw`\int_{\mathbb R^3}|\psi(\mathbf x,t)|^2\,d^3x=1`,
+    "hilbert-automaton": String.raw`U|A\rangle=|B\rangle,\qquad U|B\rangle=|A\rangle`,
+  },
+  attractor: {
+    "attractor-state": String.raw`\mathbf X(t)=\begin{pmatrix}\theta(t)\\\omega(t)\end{pmatrix}`,
+    lorenz: String.raw`\begin{aligned}\frac{dx}{dt}&=\sigma(y-x)\\\frac{dy}{dt}&=x(\rho-z)-y\\\frac{dz}{dt}&=xy-\beta z\end{aligned}`,
+    "lorenz-parameters": String.raw`\sigma=10,\qquad\rho=28,\qquad\beta=\frac83`,
+    "attractor-sensitivity": String.raw`\delta(t)\approx\delta_0e^{\lambda t}`,
+  },
+  cantor: {
+    "cantor-length": String.raw`L_n=2^n\left(\frac13\right)^n=\left(\frac23\right)^n\xrightarrow[n\to\infty]{}0`,
+    "cantor-quarter": String.raw`\frac{2}{9}+\frac{2}{9^2}+\frac{2}{9^3}+\cdots=\frac14`,
+  },
+  bloch: {
+    "bloch-state": String.raw`|\psi\rangle=\alpha|0\rangle+\beta|1\rangle`,
+    "bloch-normalization": String.raw`|\alpha|^2+|\beta|^2=1`,
+    bloch: String.raw`|\psi\rangle=\cos\!\left(\frac\theta2\right)|0\rangle+e^{i\varphi}\sin\!\left(\frac\theta2\right)|1\rangle`,
+    "bloch-probabilities": String.raw`P_Z(0)=\cos^2\!\left(\frac\theta2\right),\qquad P_Z(1)=\sin^2\!\left(\frac\theta2\right)`,
+    "bloch-plus-minus": String.raw`|+\rangle=\frac{|0\rangle+|1\rangle}{\sqrt2},\qquad|-\rangle=\frac{|0\rangle-|1\rangle}{\sqrt2}`,
+    "bloch-column": String.raw`|\psi\rangle=\begin{pmatrix}\alpha\\\beta\end{pmatrix}`,
+  },
+};
+const mathLabels = {
+  ko: ["같음", "다름", "승리"],
+  en: ["same", "different", "win"],
+  ja: ["一致", "不一致", "勝利"],
+}[lang];
+const math = Object.fromEntries(
+  Object.entries(formulas[topic] ?? {}).map(([key, tex]) => [
+    key,
+    katex.renderToString(
+      tex
+        .replaceAll("\\text{같음}", `\\text{${mathLabels[0]}}`)
+        .replaceAll("\\text{다름}", `\\text{${mathLabels[1]}}`)
+        .replaceAll("\\text{승리}", `\\text{${mathLabels[2]}}`),
+      {
+        displayMode: true,
+        throwOnError: true,
+        output: "htmlAndMathml",
+        trust: false,
+      }
+    ),
+  ])
+);
+---
+
+{lang === "en" ? (
+  <ConceptNoteEn topic={topic} math={math} client:visible />
+) : lang === "ja" ? (
+  <ConceptNoteJa topic={topic} math={math} client:visible />
+) : (
+  <ConceptNote topic={topic} math={math} client:visible />
+)}

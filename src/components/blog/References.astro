@@ -1,0 +1,207 @@
+---
+import type { ReferenceCollection } from "@components/blog/references";
+import type { HTMLAttributes } from "astro/types";
+
+interface Props {
+  sources: ReferenceCollection;
+  label?: string;
+  /** Disable for a reading list whose entries have no inline citations. */
+  backlinks?: boolean;
+}
+
+const locale = Astro.url.pathname.startsWith("/blog/en/")
+  ? "en"
+  : Astro.url.pathname.startsWith("/blog/ja/")
+    ? "ja"
+    : "ko";
+const messages = {
+  ko: {
+    label: "참고문헌",
+    backlink: (number: number) => `참고문헌 ${number}의 첫 인용으로 돌아가기`,
+    returnTitle: "본문 인용으로 돌아가기",
+  },
+  en: {
+    label: "References",
+    backlink: (number: number) =>
+      `Return to the first citation of reference ${number}`,
+    returnTitle: "Return to citation",
+  },
+  ja: {
+    label: "参考文献",
+    backlink: (number: number) => `参考文献${number}の最初の引用に戻る`,
+    returnTitle: "本文の引用に戻る",
+  },
+}[locale];
+const { sources, label = messages.label, backlinks = true } = Astro.props;
+const entries = Object.values(sources).sort((a, b) => a.number - b.number);
+// DPUB-ARIA roles are standard, but are missing from Astro's current role union.
+const bibliographyRole =
+  "doc-bibliography" as HTMLAttributes<"section">["role"];
+const backlinkRole = "doc-backlink" as HTMLAttributes<"a">["role"];
+---
+
+<section
+  class="references not-prose"
+  role={bibliographyRole}
+  aria-label={label}
+>
+  <ol class="references__list" role="list">
+    {entries.map((source) => (
+      <li
+        id={source.referenceId}
+        class="references__entry"
+        value={source.number}
+      >
+        <span class="references__number" aria-hidden="true">
+          [{source.number}]
+        </span>
+        <div class="references__body">
+          <cite class="references__title">
+            {source.url ? (
+              <a href={source.url}>{source.title}</a>
+            ) : (
+              source.title
+            )}
+          </cite>
+          {(source.authors || source.year || source.publication) && (
+            <div class="references__meta">
+              {[source.authors, source.year, source.publication]
+                .filter((value) => value !== undefined && value !== "")
+                .map((value) => (
+                  <span>{value}</span>
+                ))}
+            </div>
+          )}
+        </div>
+        {backlinks && (
+          <a
+            class="references__backlink"
+            role={backlinkRole}
+            href={`#${source.citationId}`}
+            aria-label={messages.backlink(source.number)}
+            title={messages.returnTitle}
+          >
+            <span aria-hidden="true">↩</span>
+          </a>
+        )}
+      </li>
+    ))}
+  </ol>
+</section>
+
+<style>
+  .references {
+    margin-block: 1rem 2.5rem;
+    color: #27272a;
+    font-family: var(--font-pretendard, "Pretendard");
+  }
+
+  .references__list {
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid rgb(0 0 0 / 0.4);
+    list-style: none;
+  }
+
+  .references__entry {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 0.75rem;
+    margin: 0;
+    padding-block: 0.625rem;
+    border-bottom: 1px solid rgb(0 0 0 / 0.12);
+    scroll-margin-top: 1.5rem;
+  }
+
+  .references__entry:target {
+    background: #f4f4f5;
+    box-shadow: inset 2px 0 #3f3f46;
+  }
+
+  .references__number {
+    padding-top: 0.15rem;
+    color: #71717a;
+    font-family: var(--font-jetbrains-mono, "JetBrains Mono"), monospace;
+    font-size: 0.6875rem;
+    line-height: 1.6;
+    text-align: center;
+  }
+
+  .references__title {
+    font-size: 0.75rem;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .references__title a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: rgb(0 0 0 / 0.25);
+    text-underline-offset: 0.2em;
+    transition: text-decoration-color 150ms;
+  }
+
+  .references__title a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .references__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin-top: 0.15rem;
+    color: #71717a;
+    font-size: 0.6875rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  .references__meta span + span::before {
+    content: "·";
+    margin-inline: 0.4rem;
+    color: #a1a1aa;
+  }
+
+  .references__backlink {
+    display: grid;
+    width: 1.75rem;
+    min-height: 1.75rem;
+    place-items: center;
+    color: #71717a;
+    font-size: 1rem;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .references__backlink:hover {
+    color: #18181b;
+    background: #e4e4e7;
+  }
+
+  .references a:focus-visible {
+    outline: 1px solid #18181b;
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 480px) {
+    .references__entry {
+      grid-template-columns: 2rem minmax(0, 1fr) auto;
+      column-gap: 0.35rem;
+      padding-block: 0.625rem;
+    }
+  }
+
+  @media print {
+    .references__backlink {
+      display: none;
+    }
+
+    .references__entry {
+      break-inside: avoid;
+    }
+  }
+</style>

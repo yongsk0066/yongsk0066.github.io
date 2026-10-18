@@ -1,0 +1,553 @@
+/* Article marginal notes: the blog's paper, ink, hairlines and existing fonts. */
+.concept-note {
+  --cn-ink: #27272a;
+  --cn-muted: #71717a;
+  --cn-accent: #18181b;
+  margin: 0.5rem 0 1.25rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0;
+  background: #f7f7f8;
+  color: var(--cn-ink);
+  font-family: var(--font-pretendard, "Pretendard"), sans-serif;
+  font-size: 14px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+  transition: none;
+  scroll-margin-top: 90px;
+}
+.concept-note > summary,
+.concept-note[open] > summary {
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 12px;
+  list-style: none;
+  color: var(--cn-ink);
+  cursor: pointer;
+  transition: none;
+}
+.concept-note > summary:hover {
+  color: #000;
+}
+.concept-note > summary::after,
+.concept-note > summary::marker {
+  content: none;
+}
+.concept-note > summary::-webkit-details-marker {
+  display: none;
+}
+.concept-note > summary:focus-visible {
+  outline: 1px solid #27272a;
+  outline-offset: 3px;
+}
+.cn-title {
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.cn-summary-copy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 1px;
+  line-height: 1.6;
+}
+.cn-summary-description {
+  font-size: 12px;
+  color: var(--cn-muted);
+}
+.concept-note[open] > summary {
+  border-bottom: 1px solid #e4e4e7;
+}
+.cn-expand {
+  width: 12px;
+  font:
+    14px var(--font-jetbrains-mono, "JetBrains Mono"),
+    monospace;
+  text-align: center;
+}
+.concept-note[open] .cn-expand {
+  transform: rotate(45deg);
+}
+/* Keep the global details animation/fixed-height fallback from clipping the note. */
+.concept-note::details-content {
+  padding: 0;
+  transition: none;
+}
+.concept-note[open]::details-content {
+  height: auto;
+  overflow: visible;
+}
+.cn-body {
+  margin: 0;
+  padding: 16px;
+  min-width: 0;
+}
+.cn-body p {
+  margin: 15px 0;
+}
+.cn-body .cn-lead {
+  color: #18181b;
+  margin-top: 0;
+}
+.cn-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: #a1a1aa;
+  text-underline-offset: 3px;
+}
+.cn-body a:hover {
+  text-decoration-color: #18181b;
+}
+.cn-chain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0;
+  text-align: center;
+}
+.cn-chain span {
+  flex: 1;
+}
+.cn-chain span:nth-child(even) {
+  flex: 0;
+  color: var(--cn-muted);
+}
+.cn-chain small {
+  color: var(--cn-muted);
+}
+.cn-result {
+  margin: 20px 0;
+  font-size: 12px;
+  color: var(--cn-muted);
+}
+.cn-equation {
+  margin: 18px 0;
+  padding: 2px 0;
+  color: #18181b;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.cn-equation .katex-display {
+  margin: 0.5em 0;
+  text-align: center;
+}
+.cn-equation .katex-display > .katex {
+  text-align: center;
+}
+.cn-equation .katex {
+  font-size: 1.1em;
+}
+.cn-equation .katex * {
+  border-color: currentColor;
+}
+.cn-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.cn-controls button {
+  padding: 5px 10px;
+  min-height: 34px;
+  border: 1px solid #d4d4d8;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cn-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cn-controls button[aria-pressed="true"] {
+  border-color: #27272a;
+  background: #f4f4f5;
+}
+.cn-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cn-controls button:focus-visible,
+.cn-slider input:focus-visible {
+  outline: 1px solid #18181b;
+  outline-offset: 3px;
+}
+.cn-answer-controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.cn-answer-controls button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cn-answer-controls b {
+  font-weight: 500;
+}
+.cn-table-wrap {
+  overflow-x: auto;
+}
+.cn-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cn-body caption {
+  text-align: left;
+  color: var(--cn-muted);
+  font-size: 12px;
+  padding-bottom: 8px;
+}
+.cn-body th,
+.cn-body td {
+  padding: 9px 7px;
+  border: 0;
+  border-bottom: 1px solid #d4d4d8;
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.cn-body thead th {
+  color: var(--cn-muted);
+  font-size: 12px;
+}
+.cn-pass {
+  color: #71717a;
+}
+.cn-fail {
+  color: #18181b;
+  font-weight: 600 !important;
+}
+.cn-readout {
+  margin: 16px 0;
+  font-size: 12px;
+  color: #27272a;
+  font-variant-numeric: tabular-nums;
+}
+.cn-observation {
+  display: block;
+  margin-bottom: 4px;
+}
+.cn-body .cn-task {
+  font-size: 13px;
+  border-left: 2px solid #d4d4d8;
+  padding-left: 12px;
+}
+.cn-probabilities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.cn-probabilities > div {
+  display: grid;
+  gap: 4px;
+}
+.cn-probability-bar {
+  height: 6px;
+  background: #d4d4d8;
+}
+.cn-probability-bar i {
+  display: block;
+  height: 100%;
+  background: #27272a;
+}
+.cn-bars {
+  display: grid;
+  gap: 15px;
+  margin: 20px 0;
+}
+.cn-bars > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  font-size: 12px;
+}
+.cn-bars b {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.cn-bars i {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: #27272a;
+}
+.cn-bars > div:first-child i {
+  background: #a1a1aa;
+}
+.cn-slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin: 18px 0;
+  color: var(--cn-muted);
+  font-size: 12px;
+}
+.cn-slider output {
+  color: var(--cn-ink);
+  font-variant-numeric: tabular-nums;
+}
+.cn-slider input {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 28px;
+  accent-color: #27272a;
+}
+.cn-angle-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.cn-angle-controls .cn-slider {
+  margin: 0;
+}
+.cn-diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 16px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.cn-diagram text {
+  font:
+    12px var(--font-pretendard, "Pretendard"),
+    sans-serif;
+  fill: #52525b;
+}
+.cn-axis {
+  stroke: #a1a1aa;
+  stroke-width: 1;
+}
+.cn-guide {
+  fill: none;
+  stroke: #a1a1aa;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.cn-vector {
+  stroke: #18181b;
+  stroke-width: 2;
+}
+.cn-dot {
+  fill: #18181b;
+}
+.cn-current {
+  fill: #18181b;
+  stroke: #f7f7f8;
+  stroke-width: 1.5;
+}
+.cn-trajectory {
+  fill: none;
+  stroke: #27272a;
+  stroke-width: 0.65;
+  opacity: 0.75;
+}
+.cn-body .cn-caption {
+  font-size: 12px;
+  color: var(--cn-muted);
+}
+.cn-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+  margin-top: 20px;
+  padding: 10px 0 0;
+  border-top: 1px solid #d4d4d8;
+  font-size: 11px;
+}
+.cn-sources > span {
+  color: var(--cn-muted);
+}
+.concept-note sup {
+  position: static;
+  font-size: 0.75em;
+  vertical-align: super;
+}
+/* Longer explanations follow a short, illustrated lesson inside the note. */
+#concept-bell .cn-body,
+#concept-chsh .cn-body,
+#concept-guiding .cn-body,
+#concept-hilbert .cn-body,
+#concept-attractor .cn-body,
+#concept-cantor .cn-body,
+#concept-bloch .cn-body {
+  font-size: 15px;
+  line-height: 1.95;
+}
+.cn-lesson h4 {
+  margin: 30px 0 12px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+.cn-lesson ul,
+.cn-lesson ol {
+  margin: 14px 0;
+  padding-left: 1.5em;
+}
+.cn-lesson ul {
+  list-style-type: disc;
+}
+.cn-lesson ol {
+  list-style-type: decimal;
+}
+.cn-lesson li {
+  margin: 6px 0;
+}
+.cn-lesson strong {
+  font-weight: 600;
+}
+.cn-lesson blockquote {
+  margin: 20px 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid #d4d4d8;
+  color: inherit;
+  font-style: normal;
+}
+.cn-lesson blockquote p {
+  margin: 0;
+}
+.cn-lesson-figure {
+  margin: 20px 0;
+  padding: 12px;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+}
+.cn-lesson-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--cn-ink);
+}
+.cn-lesson-figure svg text {
+  font:
+    14px var(--font-pretendard, "Pretendard"),
+    sans-serif;
+  fill: var(--cn-ink);
+}
+.cn-lesson-figure svg .cn-lesson-angle {
+  font-size: 12px;
+  fill: var(--cn-muted);
+}
+.cn-lesson-rays {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.cn-lesson-arc {
+  fill: none;
+  stroke: #a1a1aa;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 4;
+}
+.cn-lesson-figure figcaption {
+  margin-top: 8px;
+  color: var(--cn-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+.cn-game-diagram {
+  position: relative;
+}
+.cn-game-line {
+  stroke: #a1a1aa;
+  stroke-width: 1.5;
+}
+.cn-game-line-failed {
+  stroke: #18181b;
+  stroke-width: 3;
+}
+.cn-game-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 22%;
+  min-height: 58px;
+  padding: 6px 4px;
+  border: 1px solid #d4d4d8;
+  border-radius: 0;
+  background: #fafafa;
+  color: var(--cn-ink);
+  font: inherit;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.cn-game-node > span {
+  font-size: 22px;
+  font-weight: 500;
+}
+.cn-game-node > small {
+  font-size: 12px;
+}
+.cn-game-node[aria-pressed="true"] {
+  border-color: #52525b;
+  background: #f4f4f5;
+}
+.cn-game-node:focus-visible {
+  outline: 2px solid #18181b;
+  outline-offset: 3px;
+}
+.cn-lesson-result {
+  margin: 20px 0;
+  padding: 6px 0;
+  border-top: 1px solid #d4d4d8;
+  border-bottom: 1px solid #d4d4d8;
+  text-align: center;
+}
+.cn-body .cn-comparison-table th,
+.cn-body .cn-comparison-table td {
+  white-space: normal;
+}
+@media (max-width: 480px) {
+  .concept-note {
+    font-size: 13px;
+  }
+  .cn-body {
+    padding: 12px;
+  }
+  .cn-chain {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cn-probabilities {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .cn-answer-controls button {
+    padding: 6px 9px;
+  }
+  .cn-diagram text {
+    font-size: 13px;
+  }
+  .cn-equation .katex {
+    font-size: 1em;
+  }
+  #concept-bell .cn-body,
+  #concept-chsh .cn-body,
+  #concept-guiding .cn-body,
+  #concept-hilbert .cn-body,
+  #concept-attractor .cn-body,
+  #concept-cantor .cn-body,
+  #concept-bloch .cn-body {
+    font-size: 14px;
+  }
+  .cn-game-node {
+    min-height: 44px;
+  }
+  .cn-game-node > span {
+    font-size: 16px;
+  }
+}
