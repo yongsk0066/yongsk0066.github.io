@@ -38,7 +38,7 @@ const locales = Object.entries(LOCALE_LABELS);
             </>
           ))}
         </div>
-        <div id="header-clock-wrapper" class="text-sm" style="font-family:'JetBrains Mono',monospace;">
+        <div id="header-clock-wrapper" class="text-sm" style="font-family: var(--font-jetbrains-mono, monospace);">
           <span id="header-clock-placeholder">--:--:--</span>
           <HeaderClock client:only="react" />
         </div>

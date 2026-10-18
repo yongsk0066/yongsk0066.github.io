@@ -14,7 +14,7 @@ const loadMermaid = () => {
       layout: "dagre",
       flowchart: { wrappingWidth: 200, minNodeWidth: 0 },
       state: { wrappingWidth: 200, minNodeWidth: 0 },
-      fontFamily: "Pretendard, sans-serif",
+      fontFamily: "var(--font-pretendard, sans-serif)",
     });
     return mermaid;
   });

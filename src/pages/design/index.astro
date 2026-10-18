@@ -12,6 +12,9 @@ import Container from "@components/layout/Container.astro";
 import Link from "@components/layout/Link.astro";
 import SpecSection from "@components/design/SpecSection.astro";
 import ArticleProse from "@components/blog/ArticleProse.astro";
+import Citation from "@components/blog/Citation.astro";
+import References from "@components/blog/References.astro";
+import { defineReferences } from "@components/blog/references";
 import TOC from "@components/blog/TOC.astro";
 import BackToPrev from "@components/blog/BackToPrev.astro";
 import PostNavigation from "@components/blog/PostNavigation.astro";
@@ -33,6 +36,7 @@ const sections = [
   { id: "typography", label: "폰트" },
   { id: "effects", label: "그림자·트랜지션" },
   { id: "prose", label: "본문 (마크다운)" },
+  { id: "references", label: "참고문헌" },
   { id: "navigation", label: "내비게이션" },
   { id: "actions", label: "버튼·유틸" },
   { id: "list", label: "리스트 페이지" },
@@ -53,11 +57,29 @@ const colors = [
   { class: "bg-zinc-800", name: "zinc-800 (border)", usage: "aside 콜아웃 헤어라인" },
 ];
 
+const sampleReferences = defineReferences({
+  epr: {
+    id: "design-epr",
+    title: "Can Quantum-Mechanical Description of Physical Reality Be Considered Complete?",
+    authors: "Einstein, Podolsky & Rosen",
+    year: 1935,
+    url: "https://doi.org/10.1103/PhysRev.47.777",
+  },
+  book: {
+    id: "design-book",
+    title: "The Principles of Quantum Mechanics",
+    authors: "P. A. M. Dirac",
+    year: 1930,
+    publication: "Oxford University Press",
+  },
+});
+
+// Fonts API 는 패밀리명에 해시를 붙이므로 이름이 아니라 변수로 참조한다 (astro.config.mjs → fonts).
 const fonts = [
-  { family: "Pretendard", label: "Pretendard — 본문 (--font-serif)" },
-  { family: "Oswald", label: "Oswald — --font-sans" },
-  { family: "JetBrains Mono", label: "JetBrains Mono — 코드·헤더 시계" },
-  { family: "Atkinson", label: "Atkinson — fallback" },
+  { family: "var(--font-pretendard)", label: "Pretendard — 본문 (--font-serif)" },
+  { family: "var(--font-oswald)", label: "Oswald — --font-sans" },
+  { family: "var(--font-jetbrains-mono)", label: "JetBrains Mono — 헤더 시계·ASCII 화면 (코드 블록은 Tailwind 기본 mono)" },
+  { family: "var(--font-atkinson)", label: "Atkinson — 보조 서체" },
 ];
 
 // 리스트 페이지 요소 데모용 더미 데이터 (카드 링크는 실제 글이 아니므로 404)
@@ -173,14 +195,14 @@ const dummySeries = [
       <SpecSection
         id="typography"
         title="폰트"
-        source={["src/styles/global.css", "src/components/head/Head.astro (preload)"]}
+        source={["src/styles/global.css", "astro.config.mjs (fonts) · src/components/head/Head.astro (<Font preload>)"]}
       >
         <div class="space-y-5">
           {
             fonts.map((f) => (
               <div>
                 <div class="text-xs text-zinc-500 mb-1">{f.label}</div>
-                <p class="text-xl text-black" style={`font-family: '${f.family}'`}>
+                <p class="text-xl text-black" style={`font-family: ${f.family}`}>
                   다람쥐 헌 쳇바퀴에 타고파 · The quick brown fox 0123
                 </p>
               </div>
@@ -227,6 +249,22 @@ const dummySeries = [
           <Sample />
         </ArticleProse>
         <ImageLightbox client:load />
+      </SpecSection>
+
+      <SpecSection
+        id="references"
+        title="참고문헌"
+        source={["src/components/blog/References.astro", "src/components/blog/Citation.astro", "src/components/blog/references.ts"]}
+        note="본문은 윗첨자 번호, 목록은 제목 → 저자·연도 순서. 인용 번호로 출처를 찾고 ↩로 첫 인용에 돌아온다. 작성 예시는 docs/references.md."
+      >
+        <div style="font-family: var(--font-pretendard)">
+          <p class="text-sm leading-7">
+            문장 뒤에 출처를 연결한다.<Citation source={sampleReferences.epr} />
+            같은 출처를 다시 인용해도 번호는 유지된다.<Citation source={sampleReferences.epr} occurrence={2} />
+            링크가 없는 책도 함께 적을 수 있다.<Citation source={sampleReferences.book} />
+          </p>
+          <References sources={sampleReferences} />
+        </div>
       </SpecSection>
 
       <!-- ⑤ 내비게이션 (화살표 모티프) -->

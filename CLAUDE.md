@@ -1,9 +1,10 @@
 # Project: yongseok.me (Astro SSG Blog)
 
 ## Tech Stack
-- Astro 7 (beta), React 19, TypeScript 6, Tailwind CSS v4
+- Astro 7, React 19, TypeScript 6, Tailwind CSS v4
 - Lit 3 (web components), Three.js (3D 시각화)
-- Cloudflare Workers (wrangler), pnpm 11, Node 26
+- Cloudflare Workers (wrangler), pnpm 12, Node 26
+- TypeScript는 `@astrojs/check`의 지원 범위인 6.x 유지. 7.x 전환은 Astro 검사 도구 지원 후 진행한다.
 
 ## Commands
 - `pnpm dev` — 개발 서버
@@ -130,7 +131,7 @@ src/components/
 ## Styling (Tailwind v4)
 - CSS-first 설정: `src/styles/global.css`의 `@theme`, `@plugin` 사용
 - JS config 파일 없음 (삭제됨)
-- 커스텀 폰트: Oswald (sans), Pretendard (serif), JetBrains Mono (code), Atkinson
+- 커스텀 폰트: Astro Fonts API (`astro.config.mjs` → `fonts`, 파일은 `src/assets/fonts/`, 라이선스는 `licenses/`). Oswald (--font-sans), Pretendard (--font-serif·본문), JetBrains Mono (헤더 시계·ASCII·다이어그램 라벨; 코드 블록은 Tailwind 기본 mono), Atkinson (보조 서체). `<Font />` 는 Head.astro/BaseHead.astro 에서 렌더. Noto Sans JP 만 ja 페이지에서 Google Fonts `<link>`
 - 커스텀 값: `--shadow-3xl`, `--animate-expand`
 
 ## 코드 원칙

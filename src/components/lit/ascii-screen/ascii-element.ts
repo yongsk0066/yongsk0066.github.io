@@ -17,7 +17,7 @@ export class AsciiElement extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
-      font-family: "JetBrains Mono", monospace;
+      font-family: var(--font-jetbrains-mono, monospace);
       font-optical-sizing: auto;
       background-color: rgb(9, 3, 44);
       color: rgb(96, 124, 198);

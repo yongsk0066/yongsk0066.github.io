@@ -2,9 +2,13 @@
 @import "katex/dist/katex.min.css";
 @plugin "@tailwindcss/typography";
 
+/* 폰트 패밀리는 astro.config.mjs 의 fonts 설정이 등록한 변수를 참조한다 (@font-face 는 <Font /> 가 생성). */
+@theme inline {
+  --font-sans: var(--font-oswald);
+  --font-serif: var(--font-pretendard);
+}
+
 @theme {
-  --font-sans: "Oswald", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Pretendard", ui-serif, Georgia, serif;
   --shadow-3xl: 0 35px 60px -15px rgba(0, 0, 0, 0.3);
   --animate-expand: expand 1s ease-in-out;
 
@@ -24,180 +28,6 @@
   --tw-prose-body: #000000;
 }
 
-@font-face {
-  font-family: "Atkinson";
-  src: url("/fonts/atkinson-regular.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Atkinson";
-  src: url("/fonts/atkinson-bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff");
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-Regular.ttf") format("ttf");
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-Bold.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-SemiBold.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-Medium.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-Light.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-ExtraLight.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Oswald";
-  src: url("/fonts/Oswald-Medium.ttf") format("ttf");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Thin.woff2") format("woff");
-  font-weight: 100;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-ExtraLight.woff2") format("woff");
-  font-weight: 200;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Light.woff2") format("woff");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Regular.woff2") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Medium.woff2") format("woff");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-SemiBold.woff2") format("woff");
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Bold.woff2") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-ExtraBold.woff2") format("woff");
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/Pretendard-Black.woff2") format("woff");
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 html {
   --header-height: 4rem;
   overflow-y: scroll;
@@ -212,7 +42,7 @@ body {
 }
 
 body {
-  font-family: "Pretendard", "Noto Sans JP", "Oswald", "Atkinson", sans-serif;
+  font-family: var(--font-pretendard);
   @apply flex flex-col;
   @apply bg-white;
   @apply text-zinc-800;
@@ -235,8 +65,8 @@ footer {
 /* Specific styles for article content - only affects actual article tags in blog posts */
 @layer utilities {
   article a {
-    font-family: "Pretendard", "Noto Sans JP", "Oswald", "Atkinson", sans-serif;
-    @apply font-sans text-current underline underline-offset-2;
+    /* 링크도 본문 서체를 상속한다. */
+    @apply text-current underline underline-offset-2;
     @apply decoration-black/25;
     @apply transition-colors duration-300 ease-in-out;
   }

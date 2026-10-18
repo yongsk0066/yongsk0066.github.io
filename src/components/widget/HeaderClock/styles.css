@@ -1,5 +1,5 @@
 .header__clock {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-jetbrains-mono, monospace);
   font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
