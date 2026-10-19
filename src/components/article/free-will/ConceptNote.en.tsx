@@ -31,7 +31,7 @@ const meta: Record<
     title: "Bell's Inequality",
     subtitle:
       "Does the coin-in-a-box explanation still hold when measurement directions change?",
-    lead: "Bell's inequality is a mathematical condition that tests whether nature can be explained solely through classical causality. If two distant particles answer using only information they carried in advance, there is an unbreakable limit to how their outcomes can relate.",
+    lead: "Bell's inequality places a mathematical limit on the correlations that local hidden-variable models can produce. If two distant particles answer using only information they carried in advance, there is an unbreakable limit to how their outcomes can relate.",
     sources: [
       ["Bell, 1964", "https://doi.org/10.1103/PhysicsPhysiqueFizika.1.195"],
       ["CHSH, 1969", "https://doi.org/10.1103/PhysRevLett.23.880"],
