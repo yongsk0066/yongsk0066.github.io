@@ -437,3 +437,10 @@ summary {
     overflow-y: scroll; /* In case the contents should be taller than 150px */
   }
 }
+
+/* Trim only the block edges of prose callouts, with a fallback for older browsers. */
+#post-content :where(aside, blockquote) > :first-child { margin-block-start: 0; }
+#post-content :where(aside, blockquote) > :last-child { margin-block-end: 0; }
+@supports (margin-trim: block) {
+  #post-content :where(aside, blockquote) { margin-trim: block; }
+}

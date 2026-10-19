@@ -1,0 +1,92 @@
+---
+import Container from "@components/layout/Container.astro";
+import PageLayout from "@layouts/PageLayout.astro";
+
+interface Props { locale?: "ko" | "en" | "ja" }
+const { locale = "ko" } = Astro.props;
+const text = {
+  ko: {
+    title: "RSS로 구독하기", description: "새 글을 RSS 리더에서 받아보세요.",
+    intro: "원하는 언어의 피드 주소를 복사해 사용 중인 RSS 리더의 ‘피드 추가’에 붙여 넣으세요. 새 글이 올라오면 리더에서 확인할 수 있습니다.",
+    copy: "주소 복사", copied: "복사했습니다.", failed: "복사하지 못했습니다. 아래 주소를 직접 선택해 복사해 주세요.",
+    open: "원본 RSS 열기", back: "글 목록으로", note: "원본 RSS는 리더용 XML 문서입니다. 구독 안내는 이 페이지에서 확인할 수 있습니다.",
+  },
+  en: {
+    title: "Subscribe via RSS", description: "Read new posts in your RSS reader.",
+    intro: "Copy the feed address for your preferred language and paste it into your RSS reader’s Add feed field. New posts will appear in your reader.",
+    copy: "Copy address", copied: "Address copied.", failed: "Could not copy. Please select and copy the address below.",
+    open: "Open RSS XML", back: "Back to posts", note: "The original RSS feed is an XML document for feed readers. Subscription instructions are available on this page.",
+  },
+  ja: {
+    title: "RSSで購読する", description: "新しい記事をRSSリーダーで読めます。",
+    intro: "読みたい言語のフィードURLをコピーし、RSSリーダーの「フィードを追加」に貼り付けてください。新しい記事がリーダーに届きます。",
+    copy: "URLをコピー", copied: "コピーしました。", failed: "コピーできませんでした。下のURLを選択してコピーしてください。",
+    open: "RSS XMLを開く", back: "記事一覧へ", note: "元のRSSはリーダー用のXML文書です。購読方法はこのページで確認できます。",
+  },
+}[locale];
+const feeds = [
+  { lang: "ko", name: "한국어", path: "/rss.xml" },
+  { lang: "en", name: "English", path: "/en/rss.xml" },
+  { lang: "ja", name: "日本語", path: "/ja/rss.xml" },
+];
+---
+
+<PageLayout title={text.title} description={text.description} webmcpCurrentLocale={locale} availableLocales={["ko", "en", "ja"]}>
+  <Container>
+    <div class="subscription">
+      <a class="back" href={locale === "ko" ? "/blog/" : `/blog/${locale}/`}>{text.back}</a>
+      <h1>{text.title}</h1>
+      <p class="intro">{text.intro}</p>
+      <div class="feeds">
+        {feeds.map((feed) => {
+          const url = new URL(feed.path, Astro.site).href;
+          return (
+            <section aria-labelledby={`feed-${feed.lang}`}>
+              <h2 id={`feed-${feed.lang}`} lang={feed.lang}>{feed.name}</h2>
+              <code class="feed-url">{url}</code>
+              <div class="actions">
+                <button type="button" data-feed-url={url} data-success={text.copied} data-failure={text.failed} aria-label={`${text.copy} — ${feed.name}`}>{text.copy}</button>
+                <a href={feed.path}>{text.open}</a>
+              </div>
+              <p class="status" role="status"></p>
+            </section>
+          );
+        })}
+      </div>
+      <p class="note">{text.note}</p>
+    </div>
+  </Container>
+</PageLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>("button[data-feed-url]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const status = button.closest("section")?.querySelector("[role=status]");
+      try {
+        await navigator.clipboard.writeText(button.dataset.feedUrl!);
+        if (status) status.textContent = button.dataset.success!;
+      } catch {
+        if (status) status.textContent = button.dataset.failure!;
+      }
+    });
+  });
+</script>
+
+<style>
+  .subscription { padding-block: 1rem; }
+  .back, .note { font-size: 0.875rem; color: #71717a; }
+  h1 { margin-block: 2rem 1rem; font-size: 1.875rem; font-weight: 600; color: #18181b; }
+  .intro { line-height: 1.9; text-wrap: pretty; }
+  .feeds { margin-block: 2.5rem; border-top: 1px solid #d4d4d8; }
+  section { padding-block: 1.5rem; border-bottom: 1px solid #d4d4d8; }
+  h2 { font-size: 1rem; font-weight: 600; }
+  .feed-url { display: block; margin-block: 0.75rem 1rem; font-size: 0.875rem; overflow-wrap: anywhere; user-select: all; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.25rem; font-size: 0.875rem; }
+  button { border: 1px solid #d4d4d8; border-radius: 0.25rem; padding: 0.5rem 0.75rem; cursor: pointer; }
+  button:hover { background: #f4f4f5; }
+  a { text-decoration: underline; text-underline-offset: 3px; }
+  :is(a, button):focus-visible { outline: 2px solid #18181b; outline-offset: 4px; }
+  .status { margin-top: 0.5rem; font-size: 0.8125rem; line-height: 1.6; }
+  .status:empty { display: none; }
+  .note { line-height: 1.8; }
+</style>

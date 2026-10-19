@@ -1,25 +1,10 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
+import { createMermaidLoader } from "./mermaid-loader";
 
 /** mermaid는 무거우므로(수백 KB) 다이어그램이 뷰포트에 접근했을 때 한 번만 로드한다 */
-let mermaidReady: Promise<typeof import("mermaid").default> | null = null;
-const loadMermaid = () => {
-  mermaidReady ??= import("mermaid").then(({ default: mermaid }) => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "neutral",
-      // mermaid 12 기본값(neo look + ELK 레이아웃 + 120px 줄바꿈)을 끄고 v11 렌더링을 유지한다
-      look: "classic",
-      layout: "dagre",
-      flowchart: { wrappingWidth: 200, minNodeWidth: 0 },
-      state: { wrappingWidth: 200, minNodeWidth: 0 },
-      fontFamily: "var(--font-pretendard, sans-serif)",
-    });
-    return mermaid;
-  });
-  return mermaidReady;
-};
+const loadMermaid = createMermaidLoader();
 
 let diagramSeq = 0;
 
@@ -54,6 +39,10 @@ export class MermaidDiagram extends LitElement {
       font-size: 0.875rem;
       line-height: 1.6;
     }
+    .error { font: 0.875rem/1.7 var(--font-pretendard, sans-serif); }
+    button { font: inherit; color: inherit; background: transparent; border: 1px solid #a1a1aa; padding: 0.375rem 0.75rem; cursor: pointer; }
+    button + button { margin-inline-start: 0.5rem; }
+    button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
   `;
 
   /** URI 인코딩된 mermaid 소스 */
@@ -65,6 +54,9 @@ export class MermaidDiagram extends LitElement {
 
   @state()
   private failed = false;
+
+  @state()
+  private loading = false;
 
   private observer?: IntersectionObserver;
 
@@ -92,6 +84,9 @@ export class MermaidDiagram extends LitElement {
   }
 
   private async renderDiagram() {
+    if (this.loading) return;
+    this.loading = true;
+    this.failed = false;
     try {
       const mermaid = await loadMermaid();
       const { svg } = await mermaid.render(
@@ -102,6 +97,8 @@ export class MermaidDiagram extends LitElement {
     } catch (error) {
       console.error("[mermaid-diagram] render failed:", error);
       this.failed = true;
+    } finally {
+      this.loading = false;
     }
   }
 
@@ -111,6 +108,15 @@ export class MermaidDiagram extends LitElement {
         ${unsafeHTML(this.svg)}
       </figure>`;
     }
-    return html`<pre aria-busy=${!this.failed}><code>${this.source}</code></pre>`;
+    const locale = this.ownerDocument.documentElement.lang;
+    const text = locale === "ja"
+      ? ["図を表示できませんでした。元のコードを下に表示しています。", "再試行", "ページを再読み込み"]
+      : locale === "en"
+        ? ["Could not display the diagram. The original code is shown below.", "Try again", "Reload page"]
+        : ["도표를 표시하지 못했습니다. 아래에서 원본 코드를 확인할 수 있습니다.", "다시 시도", "페이지 새로고침"];
+    return html`
+      ${this.failed ? html`<div class="error" role="status"><p>${text[0]}</p><button type="button" @click=${this.renderDiagram}>${text[1]}</button><button type="button" @click=${() => this.ownerDocument.defaultView?.location.reload()}>${text[2]}</button></div>` : null}
+      <pre aria-busy=${this.loading}><code>${this.source}</code></pre>
+    `;
   }
 }

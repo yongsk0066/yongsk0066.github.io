@@ -44,7 +44,9 @@ const alternates = locales.map((locale) => ({
         ? locale === "ko"
           ? "/blog/"
           : `/blog/${locale}/`
-        : Astro.url.pathname,
+        : /^\/(?:en\/|ja\/)?subscribe\/?$/.test(Astro.url.pathname)
+          ? locale === "ko" ? "/subscribe/" : `/${locale}/subscribe/`
+          : Astro.url.pathname,
 }));
 const defaultAlternate =
   alternates.find(({ locale }) => locale === "ko") ?? alternates[0];

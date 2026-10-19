@@ -16,7 +16,6 @@ export async function GET(context) {
 			atom: 'http://www.w3.org/2005/Atom',
 			media: 'http://search.yahoo.com/mrss/'
 		},
-		stylesheet: '/pretty-feed-v3.xsl',
 		items: posts.map((post) => {
 			return ({
 			...post.data,

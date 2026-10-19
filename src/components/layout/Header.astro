@@ -109,6 +109,12 @@ const locales = Object.entries(LOCALE_LABELS);
 
         const path = window.location.pathname;
 
+        if (/^\/(?:en\/|ja\/)?subscribe\/?$/.test(path)) {
+          const alternate = document.querySelector<HTMLLinkElement>(`link[rel="alternate"][hreflang="${target}"]`);
+          if (alternate) window.location.pathname = new URL(alternate.href).pathname;
+          return;
+        }
+
         // Detect current locale from path
         const localePattern = new RegExp(`^/blog/(${locales.join("|")})(\/|$)`);
         const match = path.match(localePattern);
