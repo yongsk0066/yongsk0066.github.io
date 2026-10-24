@@ -4,6 +4,7 @@ import Header from "@components/layout/Header.astro";
 import Footer from "@components/layout/Footer.astro";
 import WebMCP from "@components/layout/WebMCP.astro";
 import ClarityIdentify from "@components/head/ClarityIdentify.astro";
+import BlogAnalytics from "@components/head/BlogAnalytics.astro";
 import { SITE_TITLE } from "@consts";
 import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@lib/seo";
 
@@ -83,6 +84,7 @@ const structuredData = {
       <slot />
     </main>
     <Footer />
+    {!excludeFromSearch && (article || /^\/(?:en\/|ja\/)?subscribe\/?$/.test(Astro.url.pathname)) && <BlogAnalytics />}
     <WebMCP
       pageType={webmcpPageType}
       hasTranslation={webmcpHasTranslation}

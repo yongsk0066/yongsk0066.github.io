@@ -1,0 +1,11 @@
+<script>
+  import { installBlogAnalytics } from "@lib/blog-analytics";
+
+  if (
+    import.meta.env.PROD &&
+    location.hostname === "yongseok.me" &&
+    !document.querySelector('meta[name="robots"][content~="noindex"]')
+  ) {
+    installBlogAnalytics(window, document);
+  }
+</script>

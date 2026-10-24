@@ -65,6 +65,9 @@ const feeds = [
       try {
         await navigator.clipboard.writeText(button.dataset.feedUrl!);
         if (status) status.textContent = button.dataset.success!;
+        document.dispatchEvent(new CustomEvent("blog:feed-copy", {
+          detail: new URL(button.dataset.feedUrl!).pathname,
+        }));
       } catch {
         if (status) status.textContent = button.dataset.failure!;
       }
