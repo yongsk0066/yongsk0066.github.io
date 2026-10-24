@@ -80,6 +80,14 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Keep links to the renamed quarterly post working in each language.
+    const legacyQuarter = path.match(/^\/blog\/(?:(en|ja)\/)?2026_mid\/?$/);
+    if (legacyQuarter) {
+      const locale = legacyQuarter[1] ? `${legacyQuarter[1]}/` : "";
+      url.pathname = `/blog/${locale}2026_3rd_quarter_almost_end_of_year/`;
+      return Response.redirect(url.toString(), 301);
+    }
+
     // Serve /blog/*/index.md with correct Content-Type
     if (path.endsWith("/index.md") && path.startsWith("/blog/")) {
       const response = await env.ASSETS.fetch(request);
