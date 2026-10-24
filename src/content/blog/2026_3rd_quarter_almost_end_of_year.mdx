@@ -1,0 +1,351 @@
+---
+title: "2026년 3쿼터 그리고..."
+description: "서울을 떠난 이사와 홈서버·UniFi 네트워크 정비, 핀란드어 공부와 발표, 게임과 선전·제주 여행까지. 2026년 3분기를 지나 연말을 앞두고 돌아보는 일상의 기록."
+author: "Yongseok"
+categories: ["essay"]
+date: "2026-10-24T18:30:00+09:00"
+heroImage: "/post/images/2026_mid/thumb.png"
+draft: false
+---
+
+import HomeRack from "../../components/article/home-rack/HomeRack.astro";
+import MediaGallery from "../../components/embeds/MediaGallery.astro";
+import LinkPreview from "../../components/embeds/LinkPreview.astro";
+
+## 그간
+
+2026이 벌써 3분기가 지났다.
+원래 이 글을 중반에 쓰려고 했지만, 거의 1년이 다 지나가서 이제야 쓰게 되었다.
+사실 조금씩 썼지만 발행이 미뤄져서 사실상 1년짜리 글이 되었다.
+
+그간 쓰고 싶었던 글들이 없었던 건 아니고, 나름 최근 흥미 가지고 탐구했던 것들이 서너 개 있었다.
+다만 글 자체를 LLM 도움 받아 막상 쓰려니 초벌 작성해 준 걸 읽기가 귀찮아져 draft 상태로 레포에 남아 있다.
+
+요즘 Codex에서 28일 챌린지로 자주 리셋해 주다 보니 열심히 사용한 덕에 정작 글을 써야 할 때는 다 써서 덕분에 손으로 쓰게 되었다.
+토큰 맥싱이 어떤 성과의 지표는 아니란 건 알지만 그래도 기왕 주어진 리셋 기회들 알차게 써보고자 열심히 썼다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-24_15-28-18_screenshot.jxl",
+      alt: "Codex 토큰 사용량과 연속 작업 기록",
+    },
+  ]}
+/>
+
+<LinkPreview
+  src="https://chatgpt.com/u/yongseok"
+  title="용석의 Codex 프로필"
+  imagePosition="center"
+/>
+
+이직한 지도 이제 거의 1년이 되었고,\
+핀란드어도 2월부터 배우기 시작했으니 반년 이상 배웠다.\
+그간 5년간 정들었던 대치동도 떠나 이사도 했다.
+
+집이 바로 나가진 않아서 새집과 중첩되는 기간이 좀 있었는데, 그땐 짐도 조금씩 옮길 겸 자주 왔다 갔다 했다.
+그땐 비어가는 집을 보고 있으니 묘하게 떠나는 게 아쉬움이 크긴 했다. 내 집은 아니었으나 동네를 떠나는 게 아쉽달까...
+막상 아예 완전 떠나고 나니 또 금방 무뎌져갔다.
+
+## 홈서버
+
+지금 집에서 쓰는 맥북을 2023년에 샀으니까 3년 정도 쓴 거 같다.
+당시는 영상 작업을 많이 하진 않았어서 1TB 샀었는데, 지금은 영상도 가끔 찍고 이런저런 프로젝트들도 많이 돌려 보다 보니
+용량이 버거워졌다.
+
+다행히 중간에 외장 SSD를 사뒀었는데, 아무래도 거기에만 의존하자니 불안해서 결국 NAS를 사게 되었다.
+옛날부터 하나 장만해두려 했었는데 좋은 핑계가 생겨서 다행이었다.
+
+이사하면서 집에 운용되는 기기들도 많아지고 해서 네트워크도 정비를 한 번 해야겠다 싶었다.
+기존 ASUS 라우터를 계속 쓰고 있었는데, 분명 스펙은 괜찮은데 이상하리만치 커버리지가 좁았다. 포트도 부족하기도 했고.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-06_14-42-14.jxl",
+      alt: "네트워크 정비 사진",
+    },
+  ]}
+/>
+
+그런고로 게이트웨이도 따로 빼고 스위치랑 AP도 일원화할 생각으로 UniFi 제품군으로 새로 맞췄다.
+랙에 넣고 보니 깔끔하고 이뻐서 만족스럽다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/home-rack.jxl",
+      alt: "집에 설치한 홈랙",
+    },
+  ]}
+/>
+
+<HomeRack showPhoto={false} />
+
+올해 아주 초쯤에 샀던 맥미니도 덕분에 자리 잘 잡아서 집안 서버로 톡톡히 역할을 다하고 있다.
+이사하면서 산발되어 있던 IoT 기기들도 다 Home Assistant로 묶어서 띄워뒀다.
+
+HA OS 세팅하고 각 내·외장 하드, 맥북, 데스크톱... 산발되어 있던 자료들 다 정규화해서 NAS로 옮기고 하는 번거로운 작업들 직접 했으면 귀찮아서 수일은 걸렸을 텐데
+요즘은 든든한 LLM 동료들이 있으니 HA는 아무것도 내가 직접 안 하고 띄울 수 있었다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/home-network-topology.jxl",
+      alt: "UniFi 홈 네트워크 구성도",
+    },
+  ]}
+/>
+
+이쁘게 표현되는 토폴로지를 보자
+
+## 이사
+
+대치동에서 정자까지 지하철로 한 번에 가긴 하지만 거의 1시간 가까이 걸렸었다.
+5년간의 짐이 쌓여가는 방도 리셋하고 싶었던 마음도 있었고, 이젠 좀 더 넓은 방에서 용도가 분리된 공간에서 살고 싶었다.
+
+그렇게 30년간 서울 살다가 회사 근처로 이사했다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-17_13-31-21.jxl",
+      alt: "이사 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-08-08_20-27-08.jxl",
+      alt: "이사 사진 2",
+    },
+  ]}
+  columns={2}
+/>
+
+덕분에 굵직한 가구도 들여두고 그간 애매하게 방치되던 것들이 제자리를 잡았다.
+행동 반경이 넓지 않아서 그런지 막상 작업실에서 주로 보내고 안방은 잘 때만 가다 보니 짐 정리의 의무감이 덜 들어서 그런지 4개월이 지난 지금 시점에도 아직 짐 정리가 다 되지 않았다.
+
+## thingies
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-07_15-42-20.jxl",
+      alt: "모네전 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-07_15-43-19.jxl",
+      alt: "모네전 사진 2",
+    },
+  ]}
+  columns={2}
+/>
+
+자주 가진 못하지만 본가 앞 미술관에서 모네전을 다녀왔었다.
+
+### 게임
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-07_11-36-48_game-capture.jxl",
+      alt: "포코피아 게임 화면 1",
+    },
+  ]}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-07_11-36-57_game-capture.jxl",
+      alt: "포코피아 게임 화면 2",
+    },
+  ]}
+/>
+
+올해 초엔 포코피아 열심히 했었는데 나이가 점차 들어서 그런지 꾸미기 최종 콘텐츠인 게임은 쉽게 질려버린다... 동물의 숲이 마지막이었을지도
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-21_20-34-25.jxl",
+      alt: "데스 스트랜딩 2 게임 화면",
+    },
+  ]}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-04-01_22-30-02_screenshot.jxl",
+      alt: "데스 스트랜딩 2 스크린샷",
+    },
+  ]}
+/>
+
+그래도 올해 데스 스트랜딩 2가 PC로 나오면서 올해 재밌게 즐겼던 게임 중 하나였다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/video/2026_3rd_quarter_almost_end_of_year/2026-09-19_10-28-58.av1.mp4",
+      alt: "마에스트로 플레이 영상",
+    },
+  ]}
+/>
+
+마에스트로도 한동안 열심히 즐겨줬다. 뇌가 좌우로 나누어져 있음을 새삼 느낄 수 있는 게임이었다.
+
+### 일상
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-21_19-22-59.jxl",
+      alt: "일상 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-29_09-58-30.jxl",
+      alt: "일상 사진 2",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-06-08_15-43-07.jxl",
+      alt: "일상 사진 3",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-06-08_15-51-15.jxl",
+      alt: "일상 사진 4",
+    },
+  ]}
+  columns={2}
+/>
+
+여름에는 회사에서 젠슨 황도 자만추했다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-23_18-12-14.jxl",
+    },
+  ]}
+/>
+
+워크샵때마다 들린 구봉농원
+
+### 이것저것
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-08-25_00-09-58.jxl",
+      alt: "블루투스로 연결한 자개 전화기",
+    },
+  ]}
+/>
+
+우연히 골동품 자개 전화기를 발견해서 외장 전화기로 쓰고자 연결해서 블루투스 전화기로 만들었다.
+서버에도 연결해두고 홈서버 Codex랑 통화하는 용도로도 쓰고, 휴대폰 통화도 대신 집전화처럼 쓰고 있다.
+하우징만 잘 이쁘게 넣어주고 싶은데 그럼 3D 프린터도 사고 싶어질까 봐 참고 있다.
+
+### 발표
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-04_01-28-17.jxl",
+      alt: "워크숍 논문과 온라인 발표 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-04_06-14-18.jxl",
+      alt: "워크숍 논문과 온라인 발표 사진 2",
+    },
+  ]}
+  columns={2}
+/>
+
+올해도 FECONF에서 발표를 해보고 싶었는데 막상 올해 FE 쪽으로 고민을 해봤던 게 적어서 발표 지원은 하지 못했다. (티켓도 예매를 까먹음)
+연초에 핀란드어 공부하는 겸 관련 분석기들 좀 뜯어보고 있었는데, 생각해본 아이디어들이 몇 개 있어 워크숍 논문을 써봤다.
+올해는 ACL과 같이 진행해서 규모가 컸다. 직접 미국에 가서 발표하진 못했지만, 버추얼도 지원해주어서 온라인 부스에서 공유해보는 경험도 해봤다.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-22_14-03-45.jxl",
+      alt: "OpenAI DevDay Exchange 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-22_14-08-08.jxl",
+      alt: "OpenAI DevDay Exchange 사진 2",
+    },
+  ]}
+  columns={2}
+/>
+
+행사?라기엔 뭐한 OpenAI DevDay Exchange에도 다녀왔다.
+사실 발표는 9월 DevDay의 recap일 거라 기대는 크게 안 하고 다녀왔는데 기대와 동일했고, 대신 다과로 피자설기를 무제한 줘서 처음 먹어봤다.
+
+### 여행
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_15-12-05.jxl",
+      alt: "선전 여행 사진 1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_16-13-25.jxl",
+      alt: "선전 여행 사진 2",
+    },
+  ]}
+  columns={2}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_16-55-45.jxl",
+      alt: "선전 여행 사진 3",
+    },
+    {
+      src: "/post/video/2026_3rd_quarter_almost_end_of_year/2026-05-17_14-39-32.gif",
+      alt: "선전에서 타 본 자율주행 택시",
+    },
+  ]}
+  columns={2}
+/>
+
+올해는 선전을 다녀왔다. 여전히 여행 영상들은 정리를 못해서 올리진 못하고 있다.
+유명하다는 자율주행택시랑 (첫 회 공짜였음) 음식 배달하는 드론도 보고 왔다.
+
+요즘 새삼 느끼고 있지만, 우리가 달려가고 있는 AGI를 위한 연구들도 결국 물리 레이어로 내려오기 위한 발판들임을 느끼고 있다.
+개발자들 말고도 여러 사람들이 소프트웨어에서 LLM들을 많이 쓰고 있지만 아직까진 이런 분야에 관심 있는 사람들이 주로 접할 뿐 일상에서 밀접하게 사용하는 사람들은 많지 않다.
+결국엔 물리 레벨로 내려와서 살갗에 닿아야 한다. 선전도 비교적 발전되었다고 느꼈지만 아직도 완전히 일상에 침투한 정도는 아니었었다.
+
+선전에서 다녀온 동네 중에는 华侨城创意文化园(OCT-LOFT)이 제일 흥미로웠다. 나중에 길게 와본다면 이 동네에서 보내보는 것도 좋을지도.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-26_13-44-38.jxl",
+      alt: "제주도 여행 사진 1",
+    },
+  ]}
+/>
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-28_20-36-14.jxl",
+      alt: "제주도 여행 사진 2",
+    },
+  ]}
+/>
+
+가을에는 제주도에 다녀왔다. 쏘카 렌트로 테슬라를 빌려 2박 3일 동안 알차게 몰고 다녔다.
+
+막상 이제와서 적자니 세세하게 적기도 어렵다. 올해가 끝나기전까진 꾸준히 내용을 보충해볼듯.
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/image-e06308e5c050.jxl",
+    },
+  ]}
+/>

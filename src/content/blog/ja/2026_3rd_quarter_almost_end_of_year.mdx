@@ -1,0 +1,351 @@
+---
+title: "2026年第3四半期、そして……"
+description: "ソウルを離れての引っ越し、ホームサーバーとUniFiネットワークの整備、フィンランド語の学習と発表、ゲーム、深圳と済州島への旅。第3四半期を過ぎ、年末を前に2026年の日々を振り返る。"
+author: "Yongseok"
+categories: ["essay"]
+date: "2026-10-24T18:30:00+09:00"
+heroImage: "/post/images/2026_mid/thumb.png"
+draft: false
+---
+
+import HomeRack from "../../../components/article/home-rack/HomeRack.astro";
+import MediaGallery from "../../../components/embeds/MediaGallery.astro";
+import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+
+## 近況
+
+2026年も、もう第3四半期が過ぎた。
+本当は年の半ばに書くつもりだったのに、ほとんど一年が終わりかけた今になってようやく書いている。
+少しずつは書いていたものの、公開が延び延びになり、実質一年分の近況になってしまった。
+
+書きたいことがなかったわけではなく、最近興味を持って掘り下げていたテーマも3、4つあった。
+ただ、いざLLMの力を借りて書こうとすると、出てきた下書きを読むのが面倒になって、ドラフトのままリポジトリに残っている。
+
+最近はCodexの28日チャレンジで利用枠を頻繁にリセットしてくれるので、せっせと使っていたら、肝心のブログを書く頃には使い切ってしまい、おかげで自分の手で書くことになった。
+トークンを大量に使うことが成果の指標ではないのは分かっているけれど、せっかくのリセットの機会なので、できるだけ活用しようと使い込んだ。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-24_15-28-18_screenshot.jxl",
+      alt: "Codexのトークン使用量と連続作業記録",
+    },
+  ]}
+/>
+
+<LinkPreview
+  src="https://chatgpt.com/u/yongseok"
+  title="YongseokのCodexプロフィール"
+  imagePosition="center"
+/>
+
+転職してからも、もうすぐ一年になる。\
+フィンランド語も2月から習い始めたので、半年以上続けたことになる。\
+そして、5年間親しんだ大峙洞（テチドン）を離れて引っ越しもした。
+
+前の家の次の借り手がすぐには決まらず、新居と契約期間が少し重なっていたので、荷物を少しずつ運びながら何度も行き来していた。
+空っぽになっていく部屋を見ていると、妙に名残惜しかった。持ち家ではなかったけれど、住み慣れた街を離れるのが寂しいというか……。
+でも、完全に離れてしまうと、その気持ちもまたすぐに薄れていった。
+
+## ホームサーバー
+
+今自宅で使っているMacBookは2023年に買ったので、3年ほど使っていることになる。
+当時は動画をあまり扱わなかったので1TBにしたけれど、今はたまに動画を撮ったり、いろいろなプロジェクトを動かしたりしているうちに、
+容量が厳しくなってきた。
+
+幸い途中で外付けSSDを買ってはいたものの、それだけに頼るのも不安で、結局NASを買うことにした。
+前から一台欲しいと思っていたので、いい口実ができてよかった。
+
+引っ越しに伴って家で動かす機器も増えたので、ネットワークも一度整備しようと思った。
+それまではASUSのルーターを使っていたのだが、スペックは悪くないはずなのに、不思議なくらい電波の届く範囲が狭かった。ポートも足りなかったし。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-06_14-42-14.jxl",
+      alt: "ネットワーク整備の写真",
+    },
+  ]}
+/>
+
+そんなわけでゲートウェイを分け、スイッチとAPも統一するつもりでUniFi製品で揃え直した。
+ラックに収めるとすっきりして見た目もよく、満足している。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/home-rack.jxl",
+      alt: "自宅に設置したラック",
+    },
+  ]}
+/>
+
+<HomeRack showPhoto={false} />
+
+今年の本当に初めの頃に買ったMac miniも、ようやく落ち着く場所ができて、ホームサーバーとしてしっかり働いている。
+引っ越しを機に、ばらばらだったIoT機器もHome Assistantにまとめて動かしている。
+
+HA OSの設定や、内蔵・外付けドライブ、MacBook、デスクトップなどに散らばっていたデータを整理してNASへ移す作業など、全部自分でやっていたら、面倒で何日もかかっていたと思う。
+今は頼もしいLLMの仲間がいるので、HAは自分で設定作業をすることなく立ち上げられた。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/home-network-topology.jxl",
+      alt: "UniFiのホームネットワーク構成図",
+    },
+  ]}
+/>
+
+きれいに表示されるトポロジーをご覧あれ。
+
+## 引っ越し
+
+大峙洞から亭子（チョンジャ）までは地下鉄で一本だけれど、ほぼ一時間かかっていた。
+5年分の荷物が積み重なった部屋をリセットしたい気持ちもあったし、もう少し広くて、用途ごとに空間を分けられる家に住みたかった。
+
+そうして30年間住んだソウルを離れ、会社の近くへ引っ越した。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-17_13-31-21.jxl",
+      alt: "引っ越しの写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-08-08_20-27-08.jxl",
+      alt: "引っ越しの写真2",
+    },
+  ]}
+  columns={2}
+/>
+
+おかげで大きめの家具も置けるようになり、これまで居場所が曖昧だったものたちも収まるべき場所に収まった。
+行動範囲が狭いせいか、結局ほとんどを書斎で過ごし、寝室へは寝るときしか行かない。そのせいで片付けの切迫感が薄いのか、4か月経った今もまだ荷物を片付けきれていない。
+
+## thingies
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-07_15-42-20.jxl",
+      alt: "モネ展の写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-07_15-43-19.jxl",
+      alt: "モネ展の写真2",
+    },
+  ]}
+  columns={2}
+/>
+
+あまり頻繁には行けないけれど、実家の向かいにある美術館でモネ展を見てきた。
+
+### ゲーム
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-07_11-36-48_game-capture.jxl",
+      alt: "ぽこ あ ポケモンのゲーム画面1",
+    },
+  ]}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-07_11-36-57_game-capture.jxl",
+      alt: "ぽこ あ ポケモンのゲーム画面2",
+    },
+  ]}
+/>
+
+今年の初めは『ぽこ あ ポケモン』をよく遊んでいたけれど、年を取ってきたせいか、飾り付けが最終的な遊びになるゲームにはすぐ飽きてしまう……。どうぶつの森が最後だったのかもしれない。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-03-21_20-34-25.jxl",
+      alt: "DEATH STRANDING 2のゲーム画面",
+    },
+  ]}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-04-01_22-30-02_screenshot.jxl",
+      alt: "DEATH STRANDING 2のスクリーンショット",
+    },
+  ]}
+/>
+
+それでも今年は『DEATH STRANDING 2』がPCに出て、楽しく遊んだゲームの一つになった。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/video/2026_3rd_quarter_almost_end_of_year/2026-09-19_10-28-58.av1.mp4",
+      alt: "Maestroのプレイ動画",
+    },
+  ]}
+/>
+
+『Maestro』もしばらく熱心に遊んだ。脳には右と左があるのだと、あらためて実感できるゲームだった。
+
+### 日常
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-21_19-22-59.jxl",
+      alt: "日常の写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-29_09-58-30.jxl",
+      alt: "日常の写真2",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-06-08_15-43-07.jxl",
+      alt: "日常の写真3",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-06-08_15-51-15.jxl",
+      alt: "日常の写真4",
+    },
+  ]}
+  columns={2}
+/>
+
+夏には会社でジェンスン・フアンにも偶然会った。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-02-23_18-12-14.jxl",
+    },
+  ]}
+/>
+
+会社のワークショップのたびに立ち寄ったクボン農園。
+
+### あれこれ
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-08-25_00-09-58.jxl",
+      alt: "Bluetoothで接続した螺鈿細工の電話機",
+    },
+  ]}
+/>
+
+たまたま螺鈿細工の古い電話機を見つけたので、外付けの受話器として使えるようにつないで、Bluetooth電話にした。
+サーバーにもつないで、ホームサーバーのCodexと通話したり、携帯の通話を家の固定電話のように受けたりしている。
+中の機器をきれいなケースに収めたいけれど、そうすると3Dプリンターまで欲しくなりそうなので我慢している。
+
+### 発表
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-04_01-28-17.jxl",
+      alt: "ワークショップ論文とオンライン発表の写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-07-04_06-14-18.jxl",
+      alt: "ワークショップ論文とオンライン発表の写真2",
+    },
+  ]}
+  columns={2}
+/>
+
+今年もFECONFで発表してみたかったけれど、フロントエンドについて深く考えたことがあまりなく、応募はできなかった。（チケットの予約も忘れた）
+年初にフィンランド語の勉強を兼ねて関連する解析器をいじっていたところ、いくつかアイデアが浮かんだので、ワークショップ論文を書いてみた。
+今年はACLと併催で規模も大きかった。アメリカへ直接行って発表することはできなかったけれど、バーチャル参加にも対応していたので、オンラインブースで共有する経験ができた。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-22_14-03-45.jxl",
+      alt: "OpenAI DevDay Exchangeの写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-10-22_14-08-08.jxl",
+      alt: "OpenAI DevDay Exchangeの写真2",
+    },
+  ]}
+  columns={2}
+/>
+
+イベントと呼ぶのもしっくりこないけれど、OpenAI DevDay Exchangeにも行ってきた。
+発表は9月のDevDayの振り返りだろうと思ってあまり期待せずに行き、内容もその予想どおりだった。代わりに軽食としてピザ味のソルギ（蒸し餅）が食べ放題で出ていて、初めて食べた。
+
+### 旅行
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_15-12-05.jxl",
+      alt: "深圳旅行の写真1",
+    },
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_16-13-25.jxl",
+      alt: "深圳旅行の写真2",
+    },
+  ]}
+  columns={2}
+/>
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-05-17_16-55-45.jxl",
+      alt: "深圳旅行の写真3",
+    },
+    {
+      src: "/post/video/2026_3rd_quarter_almost_end_of_year/2026-05-17_14-39-32.gif",
+      alt: "深圳で乗った自動運転タクシー",
+    },
+  ]}
+  columns={2}
+/>
+
+今年は深圳へ行ってきた。旅行の動画は相変わらず整理できていなくて、まだ投稿できていない。
+有名な自動運転タクシーに乗ったり（初回は無料だった）、食べ物を配達するドローンを見たりした。
+
+最近あらためて感じるけれど、私たちが目指しているAGIの研究も、結局は物理的な世界に降りてくるための足がかりなのだと思う。
+開発者以外にもソフトウェアを通じてLLMを使う人は多いけれど、今のところはこの分野に関心のある人が中心で、日常に密着して使っている人はまだ多くない。
+最終的には物理的なレベルまで降りてきて、肌で感じられるものになる必要がある。深圳は比較的進んでいると感じたけれど、それでも日常に完全に浸透しているほどではなかった。
+
+深圳で訪れた街の中では、华侨城创意文化园（OCT-LOFT）が一番面白かった。いつか長めに滞在するなら、この辺りで過ごしてみるのもよさそう。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-26_13-44-38.jxl",
+      alt: "済州島旅行の写真1",
+    },
+  ]}
+/>
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/2026-09-28_20-36-14.jxl",
+      alt: "済州島旅行の写真2",
+    },
+  ]}
+/>
+
+秋には済州島へ行った。SOCARでテスラを借りて、2泊3日の間たっぷり乗り回した。
+
+今になって書こうとすると、細かいことまで書くのは難しい。年末までは少しずつ内容を足していくことになりそう。
+
+<MediaGallery
+  items={[
+    {
+      src: "/post/images/2026_3rd_quarter_almost_end_of_year/image-e06308e5c050.jxl",
+    },
+  ]}
+/>

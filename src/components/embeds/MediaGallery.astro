@@ -1,0 +1,71 @@
+---
+interface Props {
+  items: { src: string; alt: string }[];
+  columns?: 1 | 2;
+}
+
+const { items, columns = 1 } = Astro.props;
+---
+
+<div
+  class:list={["media-gallery", "not-prose", { "two-columns": columns === 2 }]}
+>
+  {items.map(({ src, alt }) => (
+    <figure>
+      {src.endsWith(".mp4") ? (
+        <video
+          src={src}
+          aria-label={alt}
+          controls
+          playsinline
+          preload="metadata"
+        />
+      ) : (
+        <a href={src} target="_blank" rel="noopener noreferrer">
+          <img src={src} alt={alt} loading="lazy" decoding="async" />
+        </a>
+      )}
+    </figure>
+  ))}
+</div>
+
+<style>
+  .media-gallery {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    margin: 1.5rem 0;
+    align-items: start;
+  }
+  .two-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  figure {
+    min-width: 0;
+    margin: 0;
+  }
+  a {
+    display: block;
+  }
+  img,
+  video {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 600px;
+    margin: 0 auto;
+    object-fit: contain;
+  }
+  .two-columns img,
+  .two-columns video {
+    width: 100%;
+  }
+  /* Match the layer of the legacy global img !my-6 rule, so spacing is
+     applied once to the gallery rather than to every image inside it. */
+  @layer components {
+    img {
+      margin-block: 0 !important;
+    }
+  }
+</style>
