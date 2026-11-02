@@ -1,0 +1,47 @@
+<aside id="calendar-sidebar" aria-label="윤전달력"></aside>
+
+<style>
+  #calendar-sidebar { display: none; }
+  @media (min-width: 1440px) {
+    #calendar-sidebar {
+      display: block;
+      position: fixed;
+      right: calc(50% + 21rem);
+      top: 11rem;
+      width: 22.5rem;
+      min-height: 30.15rem;
+      z-index: 10;
+
+    }
+    #calendar-sidebar[data-expanded="true"] {
+
+      z-index: 40;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) { #calendar-sidebar { transition: none; } }
+  @media print { #calendar-sidebar { display: none; } }
+</style>
+
+<script>
+  const host = document.querySelector<HTMLElement>('#calendar-sidebar');
+  if (host) {
+    const desktop = matchMedia('(min-width: 1440px)');
+    let calendar: Awaited<ReturnType<typeof import('../calendar/mount').mountCalendar>> | undefined;
+    let pending = false;
+    const sync = async () => {
+      if (desktop.matches && !calendar && !pending) {
+        pending = true;
+        try {
+          const { mountCalendar } = await import('../calendar/mount');
+          calendar = mountCalendar(host);
+        } catch (error) { console.error('Calendar sidebar failed to load', error); }
+        finally { pending = false; }
+      }
+      calendar?.setVisible(desktop.matches && !document.hidden);
+    };
+    desktop.addEventListener('change', sync);
+    document.addEventListener('visibilitychange', sync);
+    new MutationObserver(sync).observe(document.body, {attributes:true, attributeFilter:['class','style']});
+    sync();
+  }
+</script>
