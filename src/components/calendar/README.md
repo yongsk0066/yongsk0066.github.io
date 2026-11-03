@@ -23,7 +23,7 @@ ambientCG (CC0). Holiday snapshot: hyunbinseo/holidays-kr (MIT).
 The circle artwork was supplied by the user (47584.jpg); no CC0 claim is made.
 
 Sidebar quality: 720px texture at standard/Retina DPR and a fixed 2× WebGL buffer.
-The renderer extends 260 CSS pixels beyond each stage edge, preserving the
+The renderer extends 320 CSS pixels beyond each stage edge, preserving the
 paper projection with a camera view offset. Its transparent canvas passes pointer
 events through; document raycasts capture actual paper grabs only. The invisible
 native HTML-in-Canvas source is inert to avoid intercepting article interaction.

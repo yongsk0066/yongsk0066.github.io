@@ -36,7 +36,7 @@ export function mountCalendar(host: HTMLElement) {
   toggleButton.addEventListener('click', ()=>setExpanded(!expanded));
   canvas.addEventListener('paperoutside', ()=>{if(expanded)setExpanded(false);});
   document.addEventListener('keydown', e=>{if(e.key==='Escape' && expanded){e.preventDefault();setExpanded(false);}});
-  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:260, pixelRatio:720/672, lighting:true});
+  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:320, pixelRatio:720/672, lighting:true});
   const sheet = host.querySelector<HTMLElement>('[data-paper]')!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const collapsedScale = 360 / 672;
