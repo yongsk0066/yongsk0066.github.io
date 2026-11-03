@@ -99,7 +99,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
    dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,0,1),contact.point);
    if(sim.startGrab(contact.point,.42)){wake();e.preventDefault();el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';}
   });
-  events.addEventListener('pointermove',event=>{const e=event as PointerEvent;if(!visible)return;if(!sim.isGrabbing){cast(e);calendarPointer('move',ray.intersectObject(mesh)[0]);el.style.cursor=canvas.dataset.interactive==='true'?'pointer':'grab';return;}cast(e);if(ray.ray.intersectPlane(dragPlane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-2.6,2.6);hit.y=THREE.MathUtils.clamp(hit.y,-height*.65,height*.45);hit.z=.7;sim.moveGrab(hit);}});
+  events.addEventListener('pointermove',event=>{const e=event as PointerEvent;if(!visible)return;if(!sim.isGrabbing){cast(e);calendarPointer('move',ray.intersectObject(mesh)[0]);el.style.cursor=canvas.dataset.interactive==='true'?'pointer':'grab';return;}cast(e);if(ray.ray.intersectPlane(dragPlane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-3.8,3.8);hit.y=THREE.MathUtils.clamp(hit.y,-height*.85,height*.48);hit.z=.7;sim.moveGrab(hit);}});
   const end=()=>{sim?.endGrab();el.style.cursor='grab';};
   events.addEventListener('pointerup',end);events.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
   loaded=true;
