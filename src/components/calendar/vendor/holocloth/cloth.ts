@@ -59,6 +59,8 @@ export class ClothSim {
   private cRest: Float32Array;
   private cMul: Float32Array;
   private stretchLambda: Float64Array;
+  private stretchAlpha: Float64Array;
+  private cachedStretchCompliance = NaN;
   private hinges: Int32Array;
   private hingeLambda: Float64Array;
   private hingeScale: Float64Array;
@@ -113,6 +115,7 @@ export class ClothSim {
     this.cRest = new Float32Array(a.length);
     this.computeRestLengths();
     this.stretchLambda = new Float64Array(a.length);
+    this.stretchAlpha = new Float64Array(a.length);
     // Match THREE.PlaneGeometry triangles; each shared edge has a signed hinge.
     const edges = new Map<string, number[]>(), hinges:number[]=[];
     const face=(a:number,b:number,c:number)=>{
@@ -304,6 +307,12 @@ export class ClothSim {
   }
 
   step(dt: number, params: ClothPhysicsParams) {
+    // Preserve the original Float64 expression and invalidate on live parameter edits.
+    if (params.stretchCompliance !== this.cachedStretchCompliance) {
+      for (let c = 0; c < this.stretchAlpha.length; c++)
+        this.stretchAlpha[c] = params.stretchCompliance / (SUBSTEP * SUBSTEP * this.cMul[c]);
+      this.cachedStretchCompliance = params.stretchCompliance;
+    }
     this.accumulator += Math.min(dt, 0.05);
     let steps = 0;
     while (this.accumulator >= SUBSTEP && steps < MAX_SUBSTEPS) {
@@ -356,18 +365,20 @@ export class ClothSim {
   }
 
   private updateMaterialHistory(params:ClothPhysicsParams){
+    const memoryBlend=1-Math.exp(-params.memoryRate*SUBSTEP);
+    const plasticBlend=1-Math.exp(-params.plasticRate*SUBSTEP);
     for(let h=0;h<this.hingeLambda.length;h++){
-      const angle=this.hingeAngle(h);if(!Number.isFinite(angle))continue;
+      const angle=this.hingeAngle(h,false);if(!Number.isFinite(angle))continue;
       const span=this.hingeSpan[h];
       const elastic=angle-this.plasticAngle[h];
       const loaded=this.isGrabbing && Math.abs(elastic)/span>.12;
       if(loaded){
         this.releaseAge[h]=0;
         const target=params.memoryFraction*elastic;
-        this.memoryAngle[h]+=(target-this.memoryAngle[h])*(1-Math.exp(-params.memoryRate*SUBSTEP));
+        this.memoryAngle[h]+=(target-this.memoryAngle[h])*memoryBlend;
         const yieldAngle=params.yieldCurvature*span;
         if(Math.abs(elastic)>yieldAngle){
-          const flow=(elastic-Math.sign(elastic)*yieldAngle)*(1-Math.exp(-params.plasticRate*SUBSTEP));
+          const flow=(elastic-Math.sign(elastic)*yieldAngle)*plasticBlend;
           this.plasticAngle[h]=Math.max(-1.25,Math.min(1.25,this.plasticAngle[h]+flow));
           this.memoryAngle[h]-=flow;
         }
@@ -388,8 +399,9 @@ export class ClothSim {
       const a=this.cA[c],b=this.cB[c],ia=a*3,ib=b*3;
       const wa=a<this.cols?0:1,wb=b<this.cols?0:1;if(!wa&&!wb)continue;
       const dx=p[ib]-p[ia],dy=p[ib+1]-p[ia+1],dz=p[ib+2]-p[ia+2];
-      const length=Math.hypot(dx,dy,dz);if(length<1e-9)continue;
-      const alpha=params.stretchCompliance/(SUBSTEP*SUBSTEP*this.cMul[c]);
+      // Float32 positions keep squared differences within Float64 range.
+      const length=Math.sqrt(dx*dx+dy*dy+dz*dz);if(length<1e-9)continue;
+      const alpha=this.stretchAlpha[c];
       const dl=(-(length-this.cRest[c])-alpha*this.stretchLambda[c])/(wa+wb+alpha);
       this.stretchLambda[c]+=dl;
       const scale=dl/length;
@@ -403,27 +415,29 @@ export class ClothSim {
    * Formulation reference: PositionBasedDynamics dihedral constraint, MIT.
    * atan2 keeps the sign continuous through the stress-free flat state.
    */
-  private hingeAngle(h:number){
+  private hingeAngle(h:number, withGradient=true){
     const p=this.positions,ids=this.hinges,g=this.gradient;
     const a=ids[h*4]*3,b=ids[h*4+1]*3,c=ids[h*4+2]*3,d=ids[h*4+3]*3;
     const ex=p[d]-p[c],ey=p[d+1]-p[c+1],ez=p[d+2]-p[c+2];
-    const len=Math.hypot(ex,ey,ez);if(len<1e-8)return NaN;
+    const len=Math.sqrt(ex*ex+ey*ey+ez*ez);if(len<1e-8)return NaN;
     const ux=p[c]-p[a],uy=p[c+1]-p[a+1],uz=p[c+2]-p[a+2];
     const vx=p[d]-p[b],vy=p[d+1]-p[b+1],vz=p[d+2]-p[b+2];
     const nx=uy*ez-uz*ey,ny=uz*ex-ux*ez,nz=ux*ey-uy*ex;
     const mx=ey*vz-ez*vy,my=ez*vx-ex*vz,mz=ex*vy-ey*vx;
     const n2=nx*nx+ny*ny+nz*nz,m2=mx*mx+my*my+mz*mz;
     if(n2<1e-14||m2<1e-14)return NaN;
-    const t=((p[a]-p[d])*ex+(p[a+1]-p[d+1])*ey+(p[a+2]-p[d+2])*ez)/len;
-    const u=((p[b]-p[d])*ex+(p[b+1]-p[d+1])*ey+(p[b+2]-p[d+2])*ez)/len;
-    const v=(ux*ex+uy*ey+uz*ez)/len;
-    const w=((p[c]-p[b])*ex+(p[c+1]-p[b+1])*ey+(p[c+2]-p[b+2])*ez)/len;
-    // Avoid allocating two temporary arrays for every hinge/iteration.
-    const nxs=nx/n2,nys=ny/n2,nzs=nz/n2,mxs=mx/m2,mys=my/m2,mzs=mz/m2;
-    g[0]=-len*nxs;g[1]=-len*nys;g[2]=-len*nzs;
-    g[3]=-len*mxs;g[4]=-len*mys;g[5]=-len*mzs;
-    g[6]=-t*nxs-u*mxs;g[7]=-t*nys-u*mys;g[8]=-t*nzs-u*mzs;
-    g[9]=-v*nxs-w*mxs;g[10]=-v*nys-w*mys;g[11]=-v*nzs-w*mzs;
+    if(withGradient){
+      const t=((p[a]-p[d])*ex+(p[a+1]-p[d+1])*ey+(p[a+2]-p[d+2])*ez)/len;
+      const u=((p[b]-p[d])*ex+(p[b+1]-p[d+1])*ey+(p[b+2]-p[d+2])*ez)/len;
+      const v=(ux*ex+uy*ey+uz*ez)/len;
+      const w=((p[c]-p[b])*ex+(p[c+1]-p[b+1])*ey+(p[c+2]-p[b+2])*ez)/len;
+      // Avoid allocating two temporary arrays for every hinge/iteration.
+      const nxs=nx/n2,nys=ny/n2,nzs=nz/n2,mxs=mx/m2,mys=my/m2,mzs=mz/m2;
+      g[0]=-len*nxs;g[1]=-len*nys;g[2]=-len*nzs;
+      g[3]=-len*mxs;g[4]=-len*mys;g[5]=-len*mzs;
+      g[6]=-t*nxs-u*mxs;g[7]=-t*nys-u*mys;g[8]=-t*nzs-u*mzs;
+      g[9]=-v*nxs-w*mxs;g[10]=-v*nys-w*mys;g[11]=-v*nzs-w*mzs;
+    }
     return Math.atan2(((ny*mz-nz*my)*ex+(nz*mx-nx*mz)*ey+(nx*my-ny*mx)*ez)/len,nx*mx+ny*my+nz*mz);
   }
 
@@ -433,17 +447,22 @@ export class ClothSim {
       const h=reverse?this.hingeLambda.length-1-j:j,angle=this.hingeAngle(h);
       if(!Number.isFinite(angle))continue;
       const alpha=this.bendAlpha[h];
+      const a=this.hinges[h*4],b=this.hinges[h*4+1],c=this.hinges[h*4+2],d=this.hinges[h*4+3];
       let denom=alpha;
-      for(let k=0;k<4;k++)if(this.hinges[h*4+k]>=this.cols)denom+=g[k*3]**2+g[k*3+1]**2+g[k*3+2]**2;
+      // Keep the original vertex and addition order; specialize the fixed four-vertex stencil.
+      if(a>=this.cols)denom+=g[0]**2+g[1]**2+g[2]**2;
+      if(b>=this.cols)denom+=g[3]**2+g[4]**2+g[5]**2;
+      if(c>=this.cols)denom+=g[6]**2+g[7]**2+g[8]**2;
+      if(d>=this.cols)denom+=g[9]**2+g[10]**2+g[11]**2;
       if(denom<1e-9)continue;
       const restAngle=this.plasticAngle[h]+this.memoryAngle[h];
       const error=Math.atan2(Math.sin(angle-restAngle),Math.cos(angle-restAngle));
       const dl=(-error-alpha*this.hingeLambda[h])/denom;
       this.hingeLambda[h]+=dl;
-      for(let k=0;k<4;k++){
-        const id=this.hinges[h*4+k];if(id<this.cols)continue;
-        for(let axis=0;axis<3;axis++)p[id*3+axis]+=dl*g[k*3+axis];
-      }
+      if(a>=this.cols){const i=a*3;p[i]+=dl*g[0];p[i+1]+=dl*g[1];p[i+2]+=dl*g[2];}
+      if(b>=this.cols){const i=b*3;p[i]+=dl*g[3];p[i+1]+=dl*g[4];p[i+2]+=dl*g[5];}
+      if(c>=this.cols){const i=c*3;p[i]+=dl*g[6];p[i+1]+=dl*g[7];p[i+2]+=dl*g[8];}
+      if(d>=this.cols){const i=d*3;p[i]+=dl*g[9];p[i+1]+=dl*g[10];p[i+2]+=dl*g[11];}
     }
   }
 
@@ -460,9 +479,9 @@ export class ClothSim {
       const length=Math.hypot(dx,dy,dz);
       if(length>reach){const scale=reach/length;tx=anchorX+dx*scale;ty=anchorY+dy*scale;tz=dz*scale;}
       const alpha=params.grabCompliance/(Math.max(g.weights[k],.01)*SUBSTEP*SUBSTEP);
-      const target=[tx,ty,tz];
       for(let axis=0;axis<3;axis++){
-        const l=k*3+axis,dl=(-(p[i+axis]-target[axis])-alpha*g.lambda[l])/(1+alpha);
+        const target=axis===0?tx:axis===1?ty:tz;
+        const l=k*3+axis,dl=(-(p[i+axis]-target)-alpha*g.lambda[l])/(1+alpha);
         g.lambda[l]+=dl;p[i+axis]+=dl;
       }
     }
