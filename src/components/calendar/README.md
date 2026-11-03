@@ -50,26 +50,36 @@ limited opacity; the HTML page itself is not part of the traced scene. No second
 CSS drop shadow is added.
 
 Calendar paint, background, or camera changes invalidate illumination history.
-Deformation instead reprojects history using the same BVH triangle and barycentric
-coordinates in the previous rendered geometry. Depth, normal, UV, front/back side,
-and sampled light visibility reject mismatches. Moving history is limited to 12
-frames; stationary history converges up to 128. This is a bounded custom temporal
-filter, not NRD/FFX, and indirect occlusion changes can still leave brief residual
-noise or lag. The unoccluded direct diffuse term is integrated analytically over
-the rectangle, clipped against both shading and geometric hemispheres. Four
-stratified rays estimate only its occlusion correction and weak coating term;
-six-bounce indirect transport remains stochastic. Only the albedo-demodulated
-residual is temporally blended: current direct light and printed detail are never
-reprojected. The geometry-guided spatial filter remains after reconstruction.
-Lighting and its history run at half the output dimensions; the final full-size
-pass interpolates valid surface UVs and samples the original ink texture directly.
-It never upscales a low-resolution image of the printed calendar. Silhouette and
-UV-discontinuity reconstruction are approximations, especially at grazing folds.
-Only one GPU
-submission is kept in flight. The last presented surface stays visible through
-asynchronous initialization and resize. Unsupported WebGPU, initialization errors,
-or device loss retain/restore the WebGL preview. Desktop visibility, reduced-motion
-pause, month navigation, expansion, Escape, and dragging retain their existing UI.
+Deformation reprojects the two lighting signals using the same BVH triangle and
+barycentric coordinates in the previous rendered geometry. Depth, normal, UV and
+front/back side reject mismatches. Direct occlusion/coating and indirect light
+have separate RGB histories, sample ages and first/second luminance moments.
+Motion, variance, visibility changes and significant illumination changes control
+reuse; moving caps reach 25 frames for direct correction and 49 for GI, while
+stationary history reaches 128. Individual Monte Carlo outliers do not invalidate
+otherwise stationary history. Two frame sets ping-pong without image-history copies.
+
+The primary diffuse term uses the rectangular emitter's cosine integral. The
+smooth unclipped vector irradiance is evaluated per vertex and interpolated over
+the small triangles; fragments crossing the emitter horizon use clipped integration.
+This is a spatial interpolation approximation, not a flat-pose special case.
+Adaptive direct correction uses 4/8/16 stratified rays; noisy, newly exposed and
+grazing surfaces receive 1/2/3 indirect paths with the original six-bounce transport.
+Only demodulated occlusion and GI are temporally blended, never the current analytic
+base or printed ink. Shadow correction gets a tight geometry/luminance-guided filter;
+GI gets variance-guided à-trous passes at strides 1, 2 and 4. Stable regions skip
+wide passes. This is a custom bounded reconstruction, not NRD/FFX or full SVGF.
+
+Lighting buffers stay at half the output dimensions. The final pass rasterizes the
+actual deformed triangles at full output resolution with a depth attachment and
+perspective-correct UVs, normals and positions. Full-resolution ink sampling and
+joint depth/normal/UV/side-guided light reconstruction preserve thin folds and print.
+There is no low-resolution UV/silhouette interpolation. Low-resolution lighting
+can still miss very narrow occlusion details, and temporal filtering can briefly lag
+changing indirect occlusion; neither exact transport nor zero noise is guaranteed.
+Only one GPU submission is kept in flight. Unsupported WebGPU, initialization
+errors or device loss restore the WebGL preview. Month navigation, expansion,
+Escape, dragging, mobile hide and fixed top attachment retain their existing UI.
 A unilateral wall contact keeps the paper in front of the traced wall. Optical
 coefficients are plausible defaults, not measurements of the physical calendar.
 
@@ -81,8 +91,8 @@ still determine ray offsets and reflection/transmission sides. This is a smooth
 shading approximation, not the original geometric-normal energy audit. The wall
 is 0.04 scene units behind the flat sheet and collision clearance is derived from
 that same setting. No flat-pose detection, exposure switch, or replacement image
-is used. One paper path per pixel is retained for interaction cost; wall visibility
-uses 16 fixed area-light samples, followed by the spatial filter. Conservative
+is used. Wall visibility starts with 16 fixed area-light samples and refines only
+partial-visibility pixels with 64 samples, followed by the tight spatial filter. Conservative
 projected BVH bounds skip shadow work in empty canvas padding. This removes
 random shadow grain, but finite quadrature can still produce subtle banding.
 The temporal renderer requests five storage textures per shader stage; unsupported
@@ -92,5 +102,5 @@ scene units (previously ±2.6), with a wider vertical range as well.
 Background on shading normals and albedo-demodulated reconstruction:
 - https://pbr-book.org/3ed-2018/Materials/BSDFs
 - https://research.nvidia.com/sites/default/files/pubs/2017-07_Spatiotemporal-Variance-Guided-Filtering%3A/svgf_preprint.pdf
-(The bounded temporal residual filter is not a full SVGF implementation.)
+(The custom variance-guided reconstruction is not a full SVGF implementation.)
 - https://eheitzresearch.wordpress.com/415-2/ (polygonal cosine integration)
