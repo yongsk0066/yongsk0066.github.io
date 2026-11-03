@@ -38,3 +38,23 @@ actual displayed width at 2× (720px texture collapsed, 1344px expanded). The la
 completed texture paint is retained during native canvas resize, and WebGL buffer
 resize is synchronously followed by a redraw. An expanded-only 12% drop shadow
 fades with the same transition. Reduced-motion disables the transition.
+
+Lighting: the blog lazily loads `lighting/preview.ts` and a WebGPU compute path
+tracer after the existing preview is visible. It uses the same deformed geometry,
+completed calendar Canvas, camera (including overflow view offset), and pointer
+hit tests. A broad rectangular emitter, six-bounce transport, thin two-flux paper
+reflection/transmission and a weak rough coating replace the Lambert lighting on
+supported devices. The paper remains neutral; wall reflectance follows the blog
+background. A ray-tested shadow catcher composites onto the DOM at a deliberately
+limited opacity; the HTML page itself is not part of the traced scene. No second
+CSS drop shadow is added.
+
+Geometry, calendar paint, background, or camera changes invalidate accumulation.
+Stationary frames accumulate up to 128 samples. Motion has visible Monte Carlo
+noise; no temporal denoiser or historical-frame blend hides it. Only one GPU
+submission is kept in flight. The last presented surface stays visible through
+asynchronous initialization and resize. Unsupported WebGPU, initialization errors,
+or device loss retain/restore the WebGL preview. Desktop visibility, reduced-motion
+pause, month navigation, expansion, Escape, and dragging retain their existing UI.
+A unilateral wall contact keeps the paper in front of the traced wall. Optical
+coefficients are plausible defaults, not measurements of the physical calendar.

@@ -323,6 +323,17 @@ export class ClothSim {
     if (steps === MAX_SUBSTEPS) this.accumulator = 0;
   }
 
+  /** Unilateral contact with the lighting scene's wall, without a rebound. */
+  constrainWall(minZ: number) {
+    for (let i = this.cols; i < this.count; i++) {
+      const z = i * 3 + 2;
+      if (this.positions[z] < minZ) {
+        this.positions[z] = minZ;
+        this.prev[z] = minZ;
+      }
+    }
+  }
+
   private substep(params: ClothPhysicsParams) {
     const p = this.positions;
     const prev = this.prev;

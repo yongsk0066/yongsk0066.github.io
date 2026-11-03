@@ -36,7 +36,7 @@ export function mountCalendar(host: HTMLElement) {
   toggleButton.addEventListener('click', ()=>setExpanded(!expanded));
   canvas.addEventListener('paperoutside', ()=>{if(expanded)setExpanded(false);});
   document.addEventListener('keydown', e=>{if(e.key==='Escape' && expanded){e.preventDefault();setExpanded(false);}});
-  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:160, pixelRatio:720/672});
+  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:160, pixelRatio:720/672, lighting:true});
   const sheet = host.querySelector<HTMLElement>('[data-paper]')!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const collapsedScale = 360 / 672;
@@ -60,7 +60,8 @@ export function mountCalendar(host: HTMLElement) {
     sheet.style.transition = reducedMotion.matches ? 'none' : 'transform 450ms cubic-bezier(.22,1,.36,1), filter 450ms cubic-bezier(.22,1,.36,1)';
     const shift = expanded ? innerWidth/2 - (host.getBoundingClientRect().left+180) : 0;
     sheet.style.transform = `translateX(${shift}px) scale(${expanded ? 1 : collapsedScale})`;
-    sheet.style.filter = expanded ? 'drop-shadow(0 8px 12px rgb(0 0 0 / 0.12))' : 'drop-shadow(0 0 0 rgb(0 0 0 / 0))';
+    // The WebGPU surface carries the area-light shadow; no second CSS shadow.
+    sheet.style.filter = 'none';
     followResolution();
   }
   window.addEventListener('resize', updateTransform);
