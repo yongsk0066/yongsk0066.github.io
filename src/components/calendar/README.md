@@ -50,11 +50,29 @@ limited opacity; the HTML page itself is not part of the traced scene. No second
 CSS drop shadow is added.
 
 Geometry, calendar paint, background, or camera changes invalidate accumulation.
-Stationary frames accumulate up to 128 samples. Motion has visible Monte Carlo
-noise; no temporal denoiser or historical-frame blend hides it. Only one GPU
+Stationary frames accumulate up to 128 samples. A spatial, geometry-guided filter
+smooths demodulated illumination and restores the unfiltered per-pixel ink color.
+Depth and normal boundaries stop the filter across folds. There is no temporal
+reprojection or historical-frame blending; motion may still show residual noise. Only one GPU
 submission is kept in flight. The last presented surface stays visible through
 asynchronous initialization and resize. Unsupported WebGPU, initialization errors,
 or device loss retain/restore the WebGL preview. Desktop visibility, reduced-motion
 pause, month navigation, expansion, Escape, and dragging retain their existing UI.
 A unilateral wall contact keeps the paper in front of the traced wall. Optical
 coefficients are plausible defaults, not measurements of the physical calendar.
+
+Lighting calibration uses a distant, neutral rectangular softbox with fixed
+radiance for every pose. Exact sRGB decoding/encoding and linear exposure replace
+the per-channel ACES curve so printed colors stay close to the source. Vertex
+normals are barycentrically interpolated for smooth shading; geometric normals
+still determine ray offsets and reflection/transmission sides. This is a smooth
+shading approximation, not the original geometric-normal energy audit. The wall
+is 0.04 scene units behind the flat sheet and collision clearance is derived from
+that same setting. No flat-pose detection, exposure switch, or replacement image
+is used. One paper path per pixel is retained for interaction cost; wall visibility
+uses four stratified samples, followed by the spatial filter.
+
+Background on shading normals and albedo-demodulated reconstruction:
+- https://pbr-book.org/3ed-2018/Materials/BSDFs
+- https://research.nvidia.com/sites/default/files/pubs/2017-07_Spatiotemporal-Variance-Guided-Filtering%3A/svgf_preprint.pdf
+(The filter here is spatial-only, not a full SVGF implementation.)

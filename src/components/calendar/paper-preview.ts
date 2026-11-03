@@ -116,7 +116,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   const dt=Math.min((now-last)/1000||1/60,.033);last=now;time+=dt;
   if((!paused&&!sleeping) || sim.isGrabbing){
    previousPositions!.set(sim.positions);sim.step(dt,params);
-   if(lighting?.active)sim.constrainWall(-.208);
+   if(lighting?.active)sim.constrainWall(lighting.wallMinZ);
    let delta=0;for(let i=0;i<sim.positions.length;i++)delta=Math.max(delta,Math.abs(sim.positions[i]-previousPositions![i]));
    if(delta>1e-6){geometryDirty=true;quietFrames=0;}else if(++quietFrames>60&&!sim.isGrabbing&&lighting?.active)sleeping=true;
   }

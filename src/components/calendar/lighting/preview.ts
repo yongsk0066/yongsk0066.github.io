@@ -40,6 +40,7 @@ export async function createPaperLighting(stage:HTMLElement, fallback:HTMLCanvas
   },
   paint(){if(failed)return;try{tracer.setInk(ink);syncBackground();}catch{fail();}},
   setVisible(value:boolean){visible=value;canvas.hidden=!value;},
+  get wallMinZ(){return tracer.values[13]+.012;},
   get active(){return active&&!failed;},
   get state(){return {active,failed,samples:tracer.samples,epoch:tracer.epoch,width:tracer.width,height:tracer.height};},
   dispose:fail,
