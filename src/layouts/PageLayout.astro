@@ -35,6 +35,7 @@ const {
   article,
 } = Astro.props;
 const excludeFromSearch = noindex || /^\/404(?:\/|\.html)?$/.test(Astro.url.pathname);
+const isHomePage = /^\/(?:en\/?|ja\/?)?$/.test(Astro.url.pathname);
 const canonicalURL = new URL(Astro.url.pathname, Astro.site).href;
 const siteURL = new URL("/", Astro.site).href;
 const authorId = `${siteURL}#author`;
@@ -81,7 +82,7 @@ const structuredData = {
   </head>
   <body>
     <Header />
-    <CalendarSidebar />
+    {!isHomePage && <CalendarSidebar />}
     <main>
       <slot />
     </main>
