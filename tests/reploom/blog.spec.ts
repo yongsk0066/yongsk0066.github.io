@@ -15,7 +15,7 @@ async function writeCode(editor: Locator, source: string) {
 }
 
 async function edit(article: Locator, path: string, source: string) {
-  await article.locator(".reploom-file-picker select").selectOption(path);
+  await article.getByRole("tab", { name: path, exact: true }).click();
   await writeCode(article.locator(".cm-content"), source);
 }
 
@@ -292,4 +292,48 @@ test("the article component fits a mobile viewport", async ({ page }, info) => {
     path: `test-results/reploom-${info.project.name}-mobile.png`,
     fullPage: true,
   });
+});
+
+test("article chrome stays isolated and the preview preserves authored spacing and toast placement", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/blog/useeffectevent/");
+  const wrapper = page.locator(".article-playground").first();
+  await wrapper.scrollIntoViewIfNeeded();
+  const article = wrapper.locator('[data-project="effect-event-ko-1"]');
+  await expect(article).toHaveAttribute("data-phase", "ready");
+  await expect(page.locator(".site-header")).toHaveCSS("position", "fixed");
+  await expect(article).toHaveCSS("position", "static");
+  expect(
+    await article.evaluate(
+      (element) => element.getRootNode() instanceof ShadowRoot
+    )
+  ).toBe(true);
+  const tabs = (await article.locator(".reploom-file-tabs").boundingBox())!;
+  const bar = (await article.locator(".reploom-preview-bar").boundingBox())!;
+  const iframe = (await article.locator("iframe").boundingBox())!;
+  expect(tabs.y).toBe(bar.y);
+  expect(tabs.height).toBe(40);
+  expect(iframe.y).toBe(bar.y + bar.height);
+  expect(iframe.height).toBe(300);
+  const preview = article.frameLocator("iframe");
+  await expect(preview.locator("body")).toHaveCSS("margin", "20px");
+  await expect(preview.locator("body")).toHaveCSS("padding", "0px");
+  await preview.locator("input[type=checkbox]").check();
+  const toast = preview.locator(".toastify").first();
+  await expect(toast).toBeVisible();
+  await expect
+    .poll(() =>
+      toast.evaluate((element) =>
+        Math.round(element.getBoundingClientRect().top)
+      )
+    )
+    .toBe(15);
+  expect(
+    await toast.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return box.left >= 0 && box.right <= innerWidth;
+    })
+  ).toBe(true);
 });

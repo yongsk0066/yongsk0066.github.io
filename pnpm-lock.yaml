@@ -222,7 +222,7 @@ importers:
         version: file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz
       '@yongsk0066/reploom-ui':
         specifier: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz
-        version: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz(react@19.3.1)
+        version: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       astro:
         specifier: 7.4.2
         version: 7.4.2(@astrojs/markdown-remark@7.3.4(supports-color@10.2.2))(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1847,13 +1847,16 @@ packages:
         optional: true
 
   '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-BezvR635/oHLyOFtvqPivQJTd1TwEHX4hJ/h6K3KG3bKcS3zv7svCH21VRzBB2/WpAu98drsrJnuDy+75Q1h/A==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-hVnXMw9B/LhQ7NrEZfsaWfsKTo2sLbeF71qDFWeRQKTNEpPKaPisJ5T2sHhG3OSS3+Iz9Q89jBuxAISwpA2aDg==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
     peerDependencies:
       react: 19.3.1
+      react-dom: 19.3.1
     peerDependenciesMeta:
       react:
+        optional: true
+      react-dom:
         optional: true
 
   '@yongsk0066/reploom@file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz':
@@ -5506,11 +5509,12 @@ snapshots:
       esbuild: 0.28.2
       react-refresh: 0.19.0
 
-  '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz(react@19.3.1)':
+  '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@yongsk0066/reploom': file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz
     optionalDependencies:
       react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   '@yongsk0066/reploom@file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz':
     dependencies:

@@ -48,7 +48,7 @@ body {
   @apply text-zinc-800;
 }
 
-header {
+.site-header {
   @apply fixed top-0 left-0 right-0 z-50 py-5;
   @apply bg-white/85 border-b border-black/10;
   @apply backdrop-blur-sm;

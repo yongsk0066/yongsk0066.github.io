@@ -1,10 +1,16 @@
-import { defaultLabels, type PlaygroundLabels } from "@yongsk0066/reploom-ui/react";
+import {
+  defaultLabels,
+  type PlaygroundLabels,
+} from "@yongsk0066/reploom-ui/react";
 
 export type Locale = "ko" | "en" | "ja";
 type ArticleLabels = PlaygroundLabels & { javascript: string };
 
 export const labels: Record<Locale, ArticleLabels> = {
-  en: { ...defaultLabels, javascript: "Enable JavaScript to run and edit this example." },
+  en: {
+    ...defaultLabels,
+    javascript: "Enable JavaScript to run and edit this example.",
+  },
   ko: {
     tools: "프로젝트 도구",
     files: "파일",
@@ -22,10 +28,22 @@ export const labels: Record<Locale, ArticleLabels> = {
     loading: "예제를 불러오는 중…",
     rerun: "다시 실행",
     reset: "코드 초기화",
+    resetDescription:
+      "원래 코드로 되돌리고 미리보기를 다시 시작할까요? 수정한 코드와 현재 실행 상태가 사라집니다.",
+    confirmReset: "원래 코드로 복원",
+    cancel: "취소",
+    rerunHint: "현재 코드로 다시 실행합니다. 미리보기의 상태는 초기화됩니다.",
+    view: "보기 방식",
+    code: "코드",
+    split: "함께 보기",
+    expand: "펼치기",
+    collapse: "접기",
+    help: "편집 안내",
     file: "파일",
     preview: "미리보기",
     edit: "코드 편집",
-    editorFallback: "코드 편집기를 불러오지 못해 기본 텍스트 편집기를 사용합니다.",
+    editorFallback:
+      "코드 편집기를 불러오지 못해 기본 텍스트 편집기를 사용합니다.",
     javascript: "JavaScript를 켜면 예제를 실행하고 편집할 수 있습니다.",
     source: (path) => `${path} 코드`,
     console: (count) => `콘솔 (${count})`,
@@ -62,7 +80,8 @@ export const labels: Record<Locale, ArticleLabels> = {
             initial: "실행 중",
             styles: "스타일 적용 · 상태 유지",
             refreshed: "변경 내용 적용 완료",
-            remounted: "컴포넌트를 다시 마운트했습니다. 일부 상태가 초기화될 수 있습니다.",
+            remounted:
+              "컴포넌트를 다시 마운트했습니다. 일부 상태가 초기화될 수 있습니다.",
             recovered: "오류 복구 완료",
             computed: "계산 완료",
             cancelled: "계산 중지",
@@ -87,10 +106,23 @@ export const labels: Record<Locale, ArticleLabels> = {
     loading: "サンプルを読み込み中…",
     rerun: "再実行",
     reset: "コードをリセット",
+    resetDescription:
+      "元のコードに戻して再実行しますか？編集内容と現在の実行状態は失われます。",
+    confirmReset: "元のコードに戻す",
+    cancel: "キャンセル",
+    rerunHint:
+      "現在のコードで再実行します。プレビューの状態はリセットされます。",
+    view: "表示方法",
+    code: "コード",
+    split: "両方",
+    expand: "広げる",
+    collapse: "縮める",
+    help: "編集について",
     file: "ファイル",
     preview: "プレビュー",
     edit: "コードを編集",
-    editorFallback: "コードエディターを読み込めないため、テキストエディターを使用します。",
+    editorFallback:
+      "コードエディターを読み込めないため、テキストエディターを使用します。",
     javascript: "JavaScriptを有効にするとサンプルを実行・編集できます。",
     source: (path) => `${path} のコード`,
     console: (count) => `コンソール (${count})`,
@@ -111,7 +143,9 @@ export const labels: Record<Locale, ArticleLabels> = {
         case "disposed":
           return "サンプルを終了しました。";
         case "editing":
-          return state.reason === "composition" ? "文字の確定を待機中…" : "編集を待機中…";
+          return state.reason === "composition"
+            ? "文字の確定を待機中…"
+            : "編集を待機中…";
         case "error":
           return state.requiresRestart
             ? "編集するとプレビューを再起動します。"
@@ -125,7 +159,8 @@ export const labels: Record<Locale, ArticleLabels> = {
             initial: "実行中",
             styles: "スタイル更新・状態維持",
             refreshed: "変更を適用しました",
-            remounted: "再マウントしました。一部の状態がリセットされた可能性があります。",
+            remounted:
+              "再マウントしました。一部の状態がリセットされた可能性があります。",
             recovered: "エラーから復旧しました",
             computed: "計算完了",
             cancelled: "計算停止",

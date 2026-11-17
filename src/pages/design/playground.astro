@@ -1,4 +1,6 @@
 ---
+import PageLayout from "../../layouts/PageLayout.astro";
+import Container from "../../components/layout/Container.astro";
 import Gallery from "../../components/article/reploom/Gallery";
 import manifest from "../../../public/reploom/manifest.json";
 const galleryProjects = Object.entries(manifest.projects)
@@ -6,52 +8,36 @@ const galleryProjects = Object.entries(manifest.projects)
   .map(([id, project]) => ({ id, title: project.title }));
 ---
 
-<!doctype html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex, nofollow" />
-    <title>브라우저 코드 실험실</title>
-  </head>
-  <body>
-    <main>
+<PageLayout
+  title="브라우저 코드 실험실"
+  description="React·DOM·Worker 예제를 브라우저에서 실행하고 편집해 보세요."
+  noindex
+>
+  <main>
+    <Container>
       <a href="/blog/useeffectevent/">← 원래 글 읽기</a>
       <h1>브라우저 코드 실험실</h1>
-      <p>
-        React, 순수 DOM, 계산 예제를 실행하고 코드를 직접 수정해 보세요. 채팅
-        예제에서는 세 가지 Effect 구현도 비교할 수 있습니다.
-      </p>
-      <p class="note">
-        코드는 브라우저에서 실행·편집됩니다. 프로젝트 도구에서 편집 내용을
-        저장하거나 다시 불러올 수 있습니다.
+      <p class="introduction">
+        예제를 선택하고 코드를 수정해 결과를 비교해 보세요.
       </p>
       <Gallery projects={galleryProjects} client:load />
-    </main>
-  </body>
-</html>
+    </Container>
+  </main>
+</PageLayout>
 <style>
-  :global(body) {
-    margin: 0;
-    background: #101012;
-    color: #f4f4f5;
-    font-family: system-ui, sans-serif;
-    line-height: 1.65;
+  h1 {
+    margin-block: 1.5rem 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 600;
   }
-  main {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 3rem 1.25rem;
+  .introduction {
+    margin-block: 0 1.5rem;
+    color: #52525b;
+    font-size: 0.875rem;
   }
   a {
-    color: #c7d2fe;
-  }
-  h1 {
-    margin-bottom: 0.5rem;
-    font-size: clamp(1.8rem, 4vw, 2.5rem);
-  }
-  .note {
-    color: #a1a1aa;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.25rem;
   }
 </style>

@@ -3,12 +3,21 @@ import { Playground as Reploom } from "@yongsk0066/reploom-ui/react";
 import type { BrowserPlatform } from "@yongsk0066/reploom/browser";
 import { acquirePlatform } from "./platform";
 import { labels, type Locale } from "./labels";
-import "@yongsk0066/reploom-ui/styles.css";
 import "./styles.css";
 
-export type PlaygroundProps = { project: string; title: string; locale?: Locale };
+export type PlaygroundProps = {
+  project: string;
+  title: string;
+  locale?: Locale;
+  tools?: boolean;
+};
 
-export default function Playground({ project, title, locale = "ko" }: PlaygroundProps) {
+export default function Playground({
+  project,
+  title,
+  locale = "ko",
+  tools = false,
+}: PlaygroundProps) {
   const [platform, setPlatform] = useState<BrowserPlatform>();
 
   useEffect(() => {
@@ -20,7 +29,14 @@ export default function Playground({ project, title, locale = "ko" }: Playground
   return (
     <div className="article-playground not-prose" lang={locale}>
       {platform ? (
-        <Reploom project={project} title={title} platform={platform} labels={labels[locale]} />
+        <Reploom
+          project={project}
+          title={title}
+          platform={platform}
+          labels={labels[locale]}
+          showTitle={false}
+          showTools={tools}
+        />
       ) : (
         <section className="reploom reploom-loading" aria-label={title}>
           <p>{title}</p>

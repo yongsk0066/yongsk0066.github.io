@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import Playground from "./Playground";
 
-export default function Gallery({ projects }: { projects: { id: string; title: string }[] }) {
+export default function Gallery({
+  projects,
+}: {
+  projects: { id: string; title: string }[];
+}) {
   const [id, setId] = useState(projects[0].id);
   const [mounted, setMounted] = useState(false);
   const selected = projects.find((project) => project.id === id)!;
@@ -10,9 +14,13 @@ export default function Gallery({ projects }: { projects: { id: string; title: s
 
   return (
     <>
-      <label>
+      <label className="playground-selector">
         예제 선택{" "}
-        <select disabled={!mounted} value={id} onChange={(event) => setId(event.target.value)}>
+        <select
+          disabled={!mounted}
+          value={id}
+          onChange={(event) => setId(event.target.value)}
+        >
           {projects.map((project) => (
             <option key={project.id} value={project.id}>
               {project.title}
@@ -20,7 +28,7 @@ export default function Gallery({ projects }: { projects: { id: string; title: s
           ))}
         </select>
       </label>
-      <Playground project={selected.id} title={selected.title} />
+      <Playground project={selected.id} title={selected.title} tools />
     </>
   );
 }
