@@ -9,10 +9,8 @@ draft: true
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Sandpack from "../../../components/article/Sandpack";
+import Playground from "../../../components/article/reploom/Playground";
 
-import problemExample from "../_examples/moveBefore/problem";
-import solutionExample from "../_examples/moveBefore/solution";
 
 You open a Modal Dialog, and your Toast notification disappears.
 
@@ -22,7 +20,7 @@ You already set `z-index: 9999999`. So why?
 
 Let's see it in action. Click "Show Toast" and then "Open Modal."
 
-<Sandpack client:visible files={problemExample} />
+<Playground client:visible project="move-before-problem" title="Toast hidden behind a modal" locale="en" />
 
 The Toast is hidden behind the Modal. No matter how high you crank the `z-index`, it makes no difference.
 
@@ -343,7 +341,7 @@ const ToastContainer = () => {
 
 Let's see the fixed version in action.
 
-<Sandpack client:visible files={solutionExample} />
+<Playground client:visible project="move-before-solution" title="Move a toast with the same Portal host" locale="en" />
 
 The Toast stays visible even when the Modal is open!
 

@@ -220,7 +220,7 @@ export default defineConfig({
         const path = new URL(page).pathname;
         // Non-blog locale pages currently redirect to Korean fallback pages.
         return (
-          !/\/design\/?$|\/404(?:\/|\.html)?$|\/index\.md$/.test(path) &&
+          !/\/design(?:\/|$)|\/404(?:\/|\.html)?$|\/index\.md$/.test(path) &&
           !/^\/(?:en|ja)(?:\/(?:about|unknown))?\/?$/.test(path)
         );
       },

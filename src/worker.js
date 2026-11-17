@@ -111,7 +111,7 @@ export default {
 
     // Only lowercase redirect for page URLs, not static assets
     const isStaticAsset =
-      /\.(?:js|css|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|webp|avif|ico|mp4|webm|json|xml|txt|wasm|md)$/i.test(
+      /\.(?:m?js|css|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|webp|avif|ico|mp4|webm|json|xml|txt|wasm|md)$/i.test(
         path
       ) ||
       path.startsWith("/_astro/") ||
@@ -133,6 +133,16 @@ export default {
     }
 
     const response = await env.ASSETS.fetch(request);
+
+    if (path.startsWith("/reploom/") && response.ok) {
+      const headers = new Headers(response.headers);
+      if (path.endsWith(".wasm")) headers.set("content-type", "application/wasm");
+      if (path.endsWith(".mjs")) headers.set("content-type", "text/javascript; charset=utf-8");
+      headers.set("cache-control", /\.[a-f0-9]{16,}\./.test(path)
+        ? "public, max-age=31536000, immutable"
+        : "no-cache");
+      return new Response(response.body, { status: response.status, headers });
+    }
 
     // Long-lived cache for hashed Astro assets
     if (path.startsWith("/_astro/") && response.ok) {

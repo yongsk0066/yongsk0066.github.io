@@ -1,5 +1,11 @@
 # build output
 dist/
+public/playground-generated/
+public/reploom/
+.reploom/
+.local/
+test-results/
+playwright-report/
 
 # generated types
 .astro/

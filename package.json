@@ -8,21 +8,26 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "26.12.1",
+      "version": "26.13.1",
       "onFail": "download"
     }
   },
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
+    "dev": "pnpm playground:prepare && astro dev",
+    "start": "pnpm dev",
+    "build": "pnpm playground:prepare && astro build",
     "preview": "astro preview",
     "astro": "astro",
     "check:seo": "node --test scripts/seo.test.mjs",
     "new:post": "node scripts/create-post.js",
     "cf:dev": "pnpm build && wrangler dev",
     "cf:deploy": "pnpm build && wrangler deploy",
-    "cf:preview": "wrangler dev"
+    "cf:preview": "wrangler dev",
+    "playground:prepare": "node scripts/reploom/prepare.mjs",
+    "playground:bootstrap": "node scripts/reploom/bootstrap.mjs",
+    "test:playground": "playwright test --config tests/reploom/playwright.config.ts",
+    "test:playground:modules": "node --test tests/reploom/*.test.mjs",
+    "check:playground": "tsc --project tests/reploom/tsconfig.json"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.4",
@@ -30,7 +35,6 @@
     "@astrojs/react": "7.1.1",
     "@astrojs/rss": "4.0.19",
     "@astrojs/sitemap": "3.7.4",
-    "@codesandbox/sandpack-react": "^2.20.0",
     "@lit/task": "^1.0.3",
     "@react-spring/three": "^10.1.2",
     "@react-three/drei": "^10.7.9",
@@ -55,7 +59,9 @@
     "tailwindcss": "^4.3.3",
     "three": "^0.186.1",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.1.0",
+    "@yongsk0066/reploom": "file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz",
+    "@yongsk0066/reploom-ui": "file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
@@ -69,7 +75,10 @@
     "prettier": "^3.9.10",
     "prettier-plugin-astro": "^1.1.1",
     "typescript": "6.0.3",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.152.0",
+    "@yongsk0066/reploom-build": "file:.reploom/packages/yongsk0066-reploom-build-0.1.0-alpha.0.tgz",
+    "@playwright/test": "1.65.1",
+    "toastify-js": "1.12.0"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.21.0"
 }

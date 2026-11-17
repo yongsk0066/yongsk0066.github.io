@@ -17,6 +17,7 @@ update:
 
 # Replaces Yarn's `resolutions`: pin transitive React to the installed version.
 overrides:
+  "@yongsk0066/reploom": "file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz"
   react: "19.3.1"
   react-dom: "19.3.1"
   # Math integrations still request KaTeX 0.16, which is affected by

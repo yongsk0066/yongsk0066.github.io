@@ -1,0 +1,40 @@
+.article-playground {
+  width: 100%;
+  min-width: 0;
+  font:
+    14px/1.6 system-ui,
+    sans-serif;
+  text-align: start;
+  --reploom-background: #18181b;
+  --reploom-text: #e4e4e7;
+  --reploom-border: #3f3f46;
+}
+
+.article-playground .reploom-heading {
+  padding-bottom: 1rem;
+}
+
+.article-playground .reploom-preview .reploom-hint {
+  color: #52525b;
+}
+
+.article-playground .reploom-tools {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--reploom-border);
+}
+
+.article-playground .reploom-tools summary {
+  cursor: pointer;
+}
+
+.article-playground .reploom-tools fieldset {
+  margin-block: 0.75rem;
+}
+
+.article-playground .reploom-tools input {
+  color: #18181b;
+}
+
+.article-playground .reploom-tools button {
+  margin: 0.25rem;
+}

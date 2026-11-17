@@ -9,10 +9,8 @@ draft: true
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Sandpack from "../../../components/article/Sandpack";
+import Playground from "../../../components/article/reploom/Playground";
 
-import problemExample from "../_examples/moveBefore/problem";
-import solutionExample from "../_examples/moveBefore/solution";
 
 Modal Dialogを開いたのに、Toastの通知が見えない。
 
@@ -22,7 +20,7 @@ Modal Dialogを開いたのに、Toastの通知が見えない。
 
 まず実際に体験してみよう。「Toastを表示」をクリックしてから「Modalを開く」を押してみよう。
 
-<Sandpack client:visible files={problemExample} />
+<Playground client:visible project="move-before-problem" title="Modalに隠れるToast" locale="ja" />
 
 ToastがModalの背後に隠れて見えない。`z-index` をいくら高くしても意味がない。
 
@@ -343,7 +341,7 @@ const ToastContainer = () => {
 
 では、解決後のバージョンを確認してみよう。
 
-<Sandpack client:visible files={solutionExample} />
+<Playground client:visible project="move-before-solution" title="同じPortal hostでToastを移動" locale="ja" />
 
 Modalを開いてもToastがちゃんと見える！
 

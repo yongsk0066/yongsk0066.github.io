@@ -31,5 +31,11 @@
     },
     "jsx": "react-jsx",
     "jsxImportSource": "react"
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".local",
+    ".reploom"
+  ]
 }

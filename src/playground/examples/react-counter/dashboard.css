@@ -1,0 +1,5 @@
+body { margin: 0; padding: 24px; font: 16px system-ui; background: #f5f7fa; color: #182230; }
+.dashboard { display: grid; gap: 16px; }
+.dashboard.active button { background: #2563eb; color: white; }
+button, input { padding: 8px 12px; font: inherit; }
+output { font-size: 12px; color: #526075; }

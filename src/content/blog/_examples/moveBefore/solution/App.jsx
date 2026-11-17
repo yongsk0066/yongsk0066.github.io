@@ -1,87 +1,171 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 function moveElement(element, targetParent) {
-  if (!element || !targetParent) return;
   if (element.parentElement === targetParent) return;
 
-  if ("moveBefore" in targetParent) {
+  if (typeof targetParent.moveBefore === "function") {
     targetParent.moveBefore(element, null);
   } else {
     targetParent.appendChild(element);
   }
 }
 
-function useToastMover(toastRef, dialogRef) {
-  const originalParentRef = useRef(null);
+export function useToastHost() {
+  const dialogRef = useRef(null);
+  const [portal, setPortal] = useState(null);
 
   useEffect(() => {
-    const toast = toastRef.current;
-    const dialog = dialogRef.current;
-    if (!toast || !dialog) return;
+    const ownerDocument = dialogRef.current?.ownerDocument ?? document;
+    const originalParent = ownerDocument.body;
+    const host = ownerDocument.createElement("div");
 
-    if (!originalParentRef.current) {
-      originalParentRef.current = toast.parentElement;
-    }
+    originalParent.appendChild(host);
+    setPortal({ host, originalParent });
 
-    const onToggle = () => {
-      if (dialog.open) {
-        moveElement(toast, dialog);
-      } else {
-        moveElement(toast, originalParentRef.current);
-      }
+    return () => {
+      host.remove();
     };
-
-    dialog.addEventListener("toggle", onToggle);
-    return () => dialog.removeEventListener("toggle", onToggle);
   }, []);
+
+  const attachDialog = useCallback(
+    (dialog) => {
+      if (!dialog) return;
+      dialogRef.current = dialog;
+
+      if (portal) {
+        moveElement(
+          portal.host,
+          dialog.matches(":modal") ? dialog : portal.originalParent
+        );
+      }
+
+      return () => {
+        if (portal?.host.parentNode === dialog) {
+          moveElement(portal.host, portal.originalParent);
+        }
+        if (dialogRef.current === dialog) {
+          dialogRef.current = null;
+        }
+      };
+    },
+    [portal]
+  );
+
+  const prepareClose = useCallback(
+    (event) => {
+      const dialog = event.currentTarget;
+      if (event.target !== dialog || event.newState !== "closed" || !portal)
+        return;
+
+      moveElement(portal.host, portal.originalParent);
+    },
+    [portal]
+  );
+
+  const syncParent = useCallback(
+    (event) => {
+      const dialog = event.currentTarget;
+      if (event.target !== dialog || !portal) return;
+
+      moveElement(
+        portal.host,
+        dialog.matches(":modal") ? dialog : portal.originalParent
+      );
+    },
+    [portal]
+  );
+
+  return {
+    toastHost: portal?.host ?? null,
+    dialogRef,
+    attachDialog,
+    prepareClose,
+    syncParent,
+  };
 }
 
 export default function App() {
+  const [toastId, setToastId] = useState(0);
   const [showToast, setShowToast] = useState(false);
-  const dialogRef = useRef(null);
-  const toastRef = useRef(null);
+  const timerRef = useRef(null);
+  const { toastHost, dialogRef, attachDialog, prepareClose, syncParent } =
+    useToastHost();
 
-  useToastMover(toastRef, dialogRef);
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const openModal = () => dialogRef.current?.showModal();
   const closeModal = () => dialogRef.current?.close();
 
-  const showToastFor3s = () => {
+  const showToastFor6s = () => {
+    clearTimeout(timerRef.current);
+    setToastId((id) => id + 1);
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    timerRef.current = setTimeout(() => setShowToast(false), 6000);
   };
 
-  const supportsMoveBefore = typeof document !== "undefined" && "moveBefore" in document.body;
+  const supportsMoveBefore =
+    toastHost && typeof toastHost.moveBefore === "function";
 
   return (
     <div>
+      <style>{`
+        @keyframes toast-countdown {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
       <h3>해결: Toast를 Dialog 안으로 이동</h3>
-      <p>{supportsMoveBefore ? "✅ moveBefore 지원" : "⚠️ appendChild fallback"}</p>
+      <p>
+        {supportsMoveBefore
+          ? "moveBefore 지원: 진행 막대가 이어집니다."
+          : "appendChild fallback: 이동 시 진행 막대가 다시 시작됩니다."}
+      </p>
       <hr />
-      <button onClick={showToastFor3s}>Toast 띄우기</button>{" "}
+      <button onClick={showToastFor6s}>Toast 띄우기</button>{" "}
       <button onClick={openModal}>Modal 열기</button>
-
-      <dialog ref={dialogRef} style={{ overflow: "visible" }}>
+      <dialog
+        ref={attachDialog}
+        onBeforeToggle={prepareClose}
+        onToggle={syncParent}
+        onClose={syncParent}
+        style={{ overflow: "visible" }}
+      >
         <h4>Modal (Top Layer)</h4>
         <p>Toast가 Dialog 안으로 이동해서 보입니다.</p>
-        <button onClick={showToastFor3s}>Toast 띄우기</button>{" "}
+        <button onClick={showToastFor6s}>Toast 띄우기</button>{" "}
         <button onClick={closeModal}>닫기</button>
       </dialog>
-
-      <div ref={toastRef}>
-        {showToast && (
-          <div style={{
-            position: "fixed",
-            top: 20,
-            right: 20,
-            padding: "12px 20px",
-            background: "#333",
-            color: "#fff",
-          }}>
-            Toast!
-          </div>
+      {toastHost &&
+        createPortal(
+          showToast && (
+            <div
+              key={toastId}
+              style={{
+                position: "fixed",
+                top: 20,
+                right: 20,
+                padding: "12px 20px",
+                background: "#333",
+                color: "#fff",
+                zIndex: 9999999,
+                pointerEvents: "none",
+              }}
+            >
+              Toast!
+              <div
+                style={{
+                  height: 3,
+                  marginTop: 8,
+                  background: "#8ee3ac",
+                  transformOrigin: "left",
+                  animation: "toast-countdown 6s linear forwards",
+                }}
+              />
+            </div>
+          ),
+          toastHost
         )}
-      </div>
     </div>
   );
 }

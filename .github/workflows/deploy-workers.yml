@@ -40,6 +40,9 @@ jobs:
           cache: true
           install: false
 
+      - name: Prepare pinned Reploom packages
+        run: node scripts/reploom/bootstrap.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
