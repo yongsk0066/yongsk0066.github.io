@@ -1847,7 +1847,7 @@ packages:
         optional: true
 
   '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-hVnXMw9B/LhQ7NrEZfsaWfsKTo2sLbeF71qDFWeRQKTNEpPKaPisJ5T2sHhG3OSS3+Iz9Q89jBuxAISwpA2aDg==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-xSDi7mjCr2G5QTCOi8DAVVmS+Y8/TNHcr8wt0hoH0m1YAINvESnvJWFCEP1rQTTuoKQtFdKrWVC++k4qil6U5g==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
     peerDependencies:
@@ -1860,7 +1860,7 @@ packages:
         optional: true
 
   '@yongsk0066/reploom@file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-WhaooK4v1LJK1/8Y6jg3TMGj/EFdozUhs9n+y82g6Ecy1u/OYj0dr+m8ZBF1Y2NfSqQrtpwTatIPqMFtuJYvpw==, tarball: file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-HQlPP5mZ2Ly1UafKLXb+g5Jss/avp5TqQcCbB32JRWhrtwKNJO/c67cePUm11YKzX3WfCasxTSIyPrgO5fQAlw==, tarball: file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
 

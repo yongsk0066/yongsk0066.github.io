@@ -33,6 +33,10 @@ const effectLocales = {
   },
 };
 
+const preferences = await files("src/playground/examples", {
+  "/preferences.js": "chat-preferences.js",
+});
+
 const effectProjects = (
   await Promise.all(
     Object.entries(effectLocales).map(([locale, { directory, titles }]) =>
@@ -43,12 +47,15 @@ const effectProjects = (
             title,
             runtime: "react",
             entry: "/App.jsx",
-            files: await files(`src/content/blog/_examples/${directory}/example${index + 1}`, {
-              "/App.jsx": "App.jsx",
-              "/chat.js": "chat.js",
-              "/notifications.js": "notifications.js",
-              "/styles.css": "styles.css",
-            }),
+            files: {
+              ...(await files(`src/content/blog/_examples/${directory}/example${index + 1}`, {
+                "/App.jsx": "App.jsx",
+                "/chat.js": "chat.js",
+                "/notifications.js": "notifications.js",
+                "/styles.css": "styles.css",
+              })),
+              ...preferences,
+            },
             styles: ["/styles.css"],
             dependencies: {
               "toastify-js": { version: "1.12.0" },

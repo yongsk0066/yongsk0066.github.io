@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
-import { Playground as Reploom } from "@yongsk0066/reploom-ui/react";
+import {
+  Playground as Reploom,
+  type PlaygroundView,
+} from "@yongsk0066/reploom-ui/react";
 import type { BrowserPlatform } from "@yongsk0066/reploom/browser";
 import { acquirePlatform } from "./platform";
 import { labels, type Locale } from "./labels";
+import { presentationFor } from "./presentation";
+import type { ProjectArchive } from "@yongsk0066/reploom";
 import "./styles.css";
 
 export type PlaygroundProps = {
@@ -10,6 +15,9 @@ export type PlaygroundProps = {
   title: string;
   locale?: Locale;
   tools?: boolean;
+  defaultView?: PlaygroundView;
+  defaultFile?: string;
+  initialArchive?: ProjectArchive;
 };
 
 export default function Playground({
@@ -17,7 +25,11 @@ export default function Playground({
   title,
   locale = "ko",
   tools = false,
+  defaultView,
+  defaultFile,
+  initialArchive,
 }: PlaygroundProps) {
+  const presentation = presentationFor(project);
   const [platform, setPlatform] = useState<BrowserPlatform>();
 
   useEffect(() => {
@@ -36,6 +48,11 @@ export default function Playground({
           labels={labels[locale]}
           showTitle={false}
           showTools={tools}
+          editorActivation="interaction"
+          defaultView={defaultView ?? presentation.view}
+          defaultFile={defaultFile ?? presentation.file}
+          initialArchive={initialArchive}
+          shareTarget={`/design/playground/shared/?lang=${locale}`}
         />
       ) : (
         <section className="reploom reploom-loading" aria-label={title}>

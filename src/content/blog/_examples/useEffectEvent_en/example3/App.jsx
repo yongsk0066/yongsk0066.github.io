@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useEffectEvent } from "react";
+import { useEffect, useEffectEvent } from "react";
+import { useChatPreferences } from "./preferences.js";
 import { createConnection } from "./chat.js";
 import { showNotification } from "./notifications.js";
 
@@ -29,8 +29,7 @@ function ChatRoom({ roomId, theme }) {
 }
 
 export default function App() {
-  const [roomId, setRoomId] = useState("general");
-  const [isDark, setIsDark] = useState(false);
+  const { roomId, setRoomId, isDark, setIsDark } = useChatPreferences();
   return (
     <>
       <label>
