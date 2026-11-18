@@ -114,6 +114,14 @@ for (const locale of ["ko", "en", "ja"]) {
     const article = page.locator(`[data-project="effect-event-${locale}-3"]`);
     const preview = article.frameLocator("iframe");
     await expect(article.locator(".reploom-source-preview")).toBeVisible();
+    const reader = article.locator(".reploom-source-preview");
+    const keyword = reader.locator(".tok-keyword").filter({ hasText: /^import$/ }).first();
+    const string = reader.locator(".tok-string").first();
+    await reader.scrollIntoViewIfNeeded();
+    await expect(keyword).toBeVisible();
+    const color = (element: Element) => getComputedStyle(element).color;
+    expect(await keyword.evaluate(color)).not.toBe(await reader.evaluate(color));
+    expect(await string.evaluate(color)).not.toBe(await keyword.evaluate(color));
     await expect(page.locator(".cm-content")).toHaveCount(0);
     await preview.locator("input[type=checkbox]").check();
     await preview.locator("select").selectOption("travel");
@@ -127,6 +135,7 @@ for (const locale of ["ko", "en", "ja"]) {
       ),
       "utf8"
     );
+    expect(await reader.textContent()).toBe(original);
     const changed = original.replace("</h1>", " · verified</h1>");
     const started = Date.now();
     await edit(article, "/App.jsx", changed);
@@ -423,6 +432,11 @@ test("a shared link restores edited source, selected file, view and registered R
     await expect(
       restored.getByRole("tab", { name: "/chat.js", exact: true })
     ).toHaveAttribute("aria-selected", "true");
+    await restored.getByRole("tab", { name: "/App.jsx", exact: true }).click();
+    const reader = restored.locator(".reploom-source-preview");
+    await reader.scrollIntoViewIfNeeded();
+    await expect(reader.locator(".tok-keyword").first()).toBeVisible();
+    await expect(reader).toContainText("공유됨");
     await expect(tab.locator(".cm-content")).toHaveCount(0);
     await tab.evaluate(() => (location.hash = "#reploom=broken"));
     await expect(tab.getByRole("status")).toContainText("링크 전체");
