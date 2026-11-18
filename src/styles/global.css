@@ -30,6 +30,8 @@
 
 html {
   --header-height: 4rem;
+  --content-width: var(--container-3xl);
+  --content-rail-start: calc(50% + var(--content-width) / 2 + 1.75rem);
   overflow-y: scroll;
   color-scheme: light;
   scroll-padding-top: var(--header-height);
@@ -351,7 +353,7 @@ article pre.no-scroll {
 }
 
 /* TOC Animation - reuse existing fadeInUp */
-@media (min-width: 1024px) {
+@media (min-width: 80rem) {
   #toc-container {
     opacity: 0;
     animation: fadeInUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;

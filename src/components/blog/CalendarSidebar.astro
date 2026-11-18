@@ -2,19 +2,17 @@
 
 <style>
   #calendar-sidebar { display: none; }
-  @media (min-width: 1440px) {
+  @media (min-width: 90rem) {
     #calendar-sidebar {
       display: block;
       position: fixed;
-      right: calc(50% + 21rem);
+      right: calc(50% + var(--content-width) / 2);
       top: 11rem;
-      width: 22.5rem;
+      width: min(22.5rem, calc(50% - var(--content-width) / 2 - .5rem));
       min-height: 30.15rem;
       z-index: 10;
-
     }
     #calendar-sidebar[data-expanded="true"] {
-
       z-index: 40;
     }
   }
@@ -25,7 +23,7 @@
 <script>
   const host = document.querySelector<HTMLElement>('#calendar-sidebar');
   if (host) {
-    const desktop = matchMedia('(min-width: 1440px)');
+    const desktop = matchMedia('(min-width: 90rem)');
     let calendar: Awaited<ReturnType<typeof import('../calendar/mount').mountCalendar>> | undefined;
     let pending = false;
     const sync = async () => {

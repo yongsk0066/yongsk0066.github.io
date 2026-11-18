@@ -1,4 +1,5 @@
 ---
+import Container from "@components/layout/Container.astro";
 import { type CollectionEntry, getCollection } from "astro:content";
 import PageLayout from "@layouts/PageLayout.astro";
 import BlogSidebar from "@components/blog/BlogSidebar.astro";
@@ -81,7 +82,7 @@ const isDev = import.meta.env.DEV;
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION}
   webmcpPageType="blog-list" webmcpCurrentLocale="ko">
-  <div class="mx-auto max-w-2xl px-5">
+  <Container>
     <div class="space-y-10">
       <h1 class="animate font-semibold text-black">블로그</h1>
       <BlogSidebar categories={categories} series={series} locale="ko" />
@@ -91,5 +92,5 @@ const isDev = import.meta.env.DEV;
         isDev={isDev}
       />
     </div>
-  </div>
+  </Container>
 </PageLayout>

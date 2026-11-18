@@ -22,12 +22,20 @@ overrides:
   react-dom: "19.3.1"
   # Math integrations still request KaTeX 0.16, which is affected by
   # GHSA-238p-pmpm-9mq7. Keep rendering and its CSS on the same patched version.
-  katex: "0.19.0"
+  katex: "0.19.1"
   # typography 0.5.20 pins selector-parser 6.0.10 (GHSA-rj75-hqrm-r3gf).
-  "@tailwindcss/typography>postcss-selector-parser": "7.1.7"
+  "@tailwindcss/typography>postcss-selector-parser": "7.2.1"
   # Keep development tools on patched versions within their existing major.
-  "miniflare>undici": "7.30.1"
+  "miniflare>undici": "7.30.2"
   "ajv>fast-uri": "3.1.9"
+  # Astro's checker still needs the TypeScript 6 Language Service API.
+  # Give it its own dependency while the project CLI uses TypeScript 7.
+  "@astrojs/check@0.9.12>typescript:peer": "-"
+
+packageExtensions:
+  "@astrojs/check@0.9.12":
+    dependencies:
+      typescript: "6.0.3"
 
 # pnpm 11+ blocks dependency build scripts by default (strictDepBuilds). Allow the
 # native deps that legitimately need to build / run postinstall.

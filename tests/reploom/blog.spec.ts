@@ -13,14 +13,14 @@ test.beforeEach(async ({ context, baseURL }) => {
   });
 });
 
-test("prepared assets use protocol 9 and remain on the blog origin", async ({
+test("prepared assets use protocol 10 and remain on the blog origin", async ({
   request,
 }) => {
   const response = await request.get("/reploom/manifest.json");
   expect(response.ok()).toBe(true);
   expect(response.headers()["cache-control"]).toBe("no-cache");
   const manifest = await response.json();
-  expect(manifest.protocol).toBe(9);
+  expect(manifest.protocol).toBe(10);
   expect(Object.keys(manifest.projects)).toHaveLength(9);
   expect(
     Object.keys(manifest.projects).every((id) =>

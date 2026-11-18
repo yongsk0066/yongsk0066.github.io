@@ -1,4 +1,5 @@
 ---
+import Container from "@components/layout/Container.astro";
 import { type CollectionEntry, getCollection } from "astro:content";
 import { SITE_DESCRIPTION, SITE_TITLE } from "@consts";
 import PageLayout from "@layouts/PageLayout.astro";
@@ -26,7 +27,7 @@ const years = Object.keys(questions).sort((a, b) => parseInt(b) - parseInt(a));
 ---
 
 <PageLayout title="unknown" description="나에게 아직 미지인 것들에 대한 기록">
-  <div class="mx-auto max-w-2xl px-5">
+  <Container>
     <div class="space-y-10">
       <div class="space-y-4">
         <h1 class="animate font-semibold text-black">
@@ -56,5 +57,5 @@ const years = Object.keys(questions).sort((a, b) => parseInt(b) - parseInt(a));
         }
       </div>
     </div>
-  </div>
+  </Container>
 </PageLayout>

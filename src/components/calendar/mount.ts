@@ -9,7 +9,7 @@ export function mountCalendar(host: HTMLElement) {
       <button hidden disabled></button><span role="status" hidden></span>
       <canvas content="drawable" style="display:block;width:100%"></canvas>
     </div>
-    <div data-paper style="width:672px;margin-left:-156px;transform:scale(0.5357142857142857);transform-origin:50% 0;will-change:transform"><div hidden><button data-paper-reset></button><button data-paper-poke></button><button data-paper-pause></button><span role="status"></span></div><div class="paper-stage" style="width:100%"></div></div>`;
+    <div data-paper style="width:672px;margin-left:calc((100% - 672px)/2);transform:scale(0.5357142857142857);transform-origin:50% 0;will-change:transform"><div hidden><button data-paper-reset></button><button data-paper-poke></button><button data-paper-pause></button><span role="status"></span></div><div class="paper-stage" style="width:100%"></div></div>`;
   const calendar = host.querySelector('yunjeon-calendar') as any;
   const date = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Seoul', year:'numeric', month:'2-digit'}).format(new Date()).split('-');
   calendar.setDate(+date[0], +date[1]);
@@ -39,7 +39,6 @@ export function mountCalendar(host: HTMLElement) {
   const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:320, pixelRatio:720/672, lighting:true});
   const sheet = host.querySelector<HTMLElement>('[data-paper]')!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  const collapsedScale = 360 / 672;
   let qualityFrame = 0;
   function followResolution() {
     cancelAnimationFrame(qualityFrame);
@@ -54,11 +53,13 @@ export function mountCalendar(host: HTMLElement) {
     qualityFrame=requestAnimationFrame(update);
   }
   function updateTransform() {
+    const rail = host.getBoundingClientRect();
+    const collapsedScale = rail.width / 672;
     const pin = paper.getTopOffset();
     sheet.style.transformOrigin = `50% ${pin}px`;
     sheet.style.marginTop = `${-(1-collapsedScale)*pin}px`;
     sheet.style.transition = reducedMotion.matches ? 'none' : 'transform 450ms cubic-bezier(.22,1,.36,1), filter 450ms cubic-bezier(.22,1,.36,1)';
-    const shift = expanded ? innerWidth/2 - (host.getBoundingClientRect().left+180) : 0;
+    const shift = expanded ? document.documentElement.clientWidth/2 - (rail.left+rail.width/2) : 0;
     sheet.style.transform = `translateX(${shift}px) scale(${expanded ? 1 : collapsedScale})`;
     // The WebGPU surface carries the area-light shadow; no second CSS shadow.
     sheet.style.filter = 'none';
