@@ -1,0 +1,36 @@
+---
+import Playground, { type PlaygroundProps } from "./Playground";
+import { prepareSource } from "@yongsk0066/reploom-ui/prepare-reader";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { Manifest } from "@yongsk0066/reploom/browser";
+import { presentationFor } from "./presentation";
+
+type Props = Pick<
+  PlaygroundProps,
+  "project" | "title" | "locale" | "defaultFile" | "defaultView"
+>;
+const props = Astro.props;
+const dev = import.meta.env.DEV;
+const base = dev ? ".reploom/gallery" : "public/reploom";
+const catalog: Manifest = JSON.parse(
+  await readFile(join(base, "manifest.json"), "utf8")
+);
+const project = catalog.projects[props.project];
+if (!project) throw new Error("Unknown article example " + props.project);
+const readAsset = async (asset: { url: string }) =>
+  JSON.parse(await readFile(join(base, asset.url.split("/").pop()!), "utf8"));
+const [config, files] = await Promise.all([
+  readAsset(project.configuration),
+  readAsset(project.sources),
+]);
+const file =
+  props.defaultFile ?? presentationFor(props.project).file ?? config.entry;
+const preparedSource = await prepareSource(file, files[file]);
+---
+
+<Playground
+  {...props}
+  preparedSource={preparedSource}
+  client:visible={{ rootMargin: "320px" }}
+/>

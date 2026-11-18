@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   Playground as Reploom,
+  PreparedSourceView,
+  type PreparedSource,
   type PlaygroundView,
 } from "@yongsk0066/reploom-ui/react";
 import type { BrowserPlatform } from "@yongsk0066/reploom/browser";
 import { acquirePlatform } from "./platform";
 import { labels, type Locale } from "./labels";
 import { presentationFor } from "./presentation";
-import type { ProjectArchive } from "@yongsk0066/reploom";
+import "@yongsk0066/reploom-ui/reader.css";
 import "./styles.css";
 
 export type PlaygroundProps = {
@@ -17,7 +19,7 @@ export type PlaygroundProps = {
   tools?: boolean;
   defaultView?: PlaygroundView;
   defaultFile?: string;
-  initialArchive?: ProjectArchive;
+  preparedSource?: PreparedSource;
 };
 
 export default function Playground({
@@ -27,7 +29,7 @@ export default function Playground({
   tools = false,
   defaultView,
   defaultFile,
-  initialArchive,
+  preparedSource,
 }: PlaygroundProps) {
   const presentation = presentationFor(project);
   const [platform, setPlatform] = useState<BrowserPlatform>();
@@ -51,12 +53,14 @@ export default function Playground({
           editorActivation="interaction"
           defaultView={defaultView ?? presentation.view}
           defaultFile={defaultFile ?? presentation.file}
-          initialArchive={initialArchive}
-          shareTarget={`/design/playground/shared/?lang=${locale}`}
+          preparedSource={preparedSource}
         />
       ) : (
         <section className="reploom reploom-loading" aria-label={title}>
-          <p>{title}</p>
+          {preparedSource &&
+            (defaultView ?? presentation.view) !== "preview" && (
+              <PreparedSourceView source={preparedSource} />
+            )}
           <p role="status">{labels[locale].loading}</p>
           <noscript>{labels[locale].javascript}</noscript>
         </section>

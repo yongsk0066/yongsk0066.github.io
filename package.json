@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "dev": "pnpm playground:prepare && astro dev",
+    "dev": "astro dev",
     "start": "pnpm dev",
     "build": "pnpm playground:prepare && astro build",
     "preview": "astro preview",

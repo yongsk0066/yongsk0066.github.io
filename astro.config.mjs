@@ -1,3 +1,4 @@
+import playgroundRoutes from "./scripts/reploom/astro.mjs";
 import mdx from "@astrojs/mdx";
 import { unified } from "@astrojs/markdown-remark";
 import { defineConfig, fontProviders } from "astro/config";
@@ -212,15 +213,14 @@ export default defineConfig({
     },
   ],
   integrations: [
+    playgroundRoutes(),
     mdx({ optimize: true }),
-    // /design 은 내부용 디자인 레퍼런스 — 사이트맵에서 제외 (페이지 자체는 noindex)
-    // i18n fallback이 만드는 /en/design, /ja/design 변형까지 함께 제외
     sitemap({
       filter: (page) => {
         const path = new URL(page).pathname;
         // Non-blog locale pages currently redirect to Korean fallback pages.
         return (
-          !/\/design(?:\/|$)|\/404(?:\/|\.html)?$|\/index\.md$/.test(path) &&
+          !/\/404(?:\/|\.html)?$|\/index\.md$/.test(path) &&
           !/^\/(?:en|ja)(?:\/(?:about|unknown))?\/?$/.test(path)
         );
       },

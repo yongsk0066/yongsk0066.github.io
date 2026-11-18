@@ -9,7 +9,7 @@ draft: true
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Playground from "../../../components/article/reploom/Playground";
+import Playground from "../../../components/article/reploom/Example.astro";
 
 
 You open a Modal Dialog, and your Toast notification disappears.
@@ -20,7 +20,7 @@ You already set `z-index: 9999999`. So why?
 
 Let's see it in action. Click "Show Toast" and then "Open Modal."
 
-<Playground client:visible project="move-before-problem" title="Toast hidden behind a modal" locale="en" />
+<Playground project="move-before-problem" title="Toast hidden behind a modal" locale="en" />
 
 The Toast is hidden behind the Modal. No matter how high you crank the `z-index`, it makes no difference.
 
@@ -341,7 +341,7 @@ const ToastContainer = () => {
 
 Let's see the fixed version in action.
 
-<Playground client:visible project="move-before-solution" title="Move a toast with the same Portal host" locale="en" />
+<Playground project="move-before-solution" title="Move a toast with the same Portal host" locale="en" />
 
 The Toast stays visible even when the Modal is open!
 

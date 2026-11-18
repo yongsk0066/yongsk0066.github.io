@@ -1,11 +1,8 @@
 ---
 import PageLayout from "../../layouts/PageLayout.astro";
 import Container from "../../components/layout/Container.astro";
-import Gallery from "../../components/article/reploom/Gallery";
-import manifest from "../../../public/reploom/manifest.json";
-const galleryProjects = Object.entries(manifest.projects)
-  .filter(([id]) => !/^effect-event-(en|ja)-/.test(id))
-  .map(([id, project]) => ({ id, title: project.title }));
+import Gallery from "./Gallery";
+import { galleryProjects } from "../../playground/projects.mjs";
 ---
 
 <PageLayout

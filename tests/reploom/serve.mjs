@@ -34,10 +34,10 @@ const env = {
 http
   .createServer(async (req, res) => {
     const response = await worker.fetch(
-      new Request(new URL(req.url, "http://127.0.0.1:4331"), { headers: req.headers }),
+      new Request(new URL(req.url, "http://127.0.0.1:4333"), { headers: req.headers }),
       env,
     );
     res.writeHead(response.status, Object.fromEntries(response.headers));
     res.end(Buffer.from(await response.arrayBuffer()));
   })
-  .listen(4331, "127.0.0.1");
+  .listen(4333, "127.0.0.1");

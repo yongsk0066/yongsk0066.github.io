@@ -1,46 +1,13 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-
-async function writeCode(editor: Locator, source: string) {
-  await editor.press("ControlOrMeta+a");
-  await editor.evaluate((element, value) => {
-    const event = new ClipboardEvent("paste", {
-      clipboardData: new DataTransfer(),
-      bubbles: true,
-      cancelable: true,
-    });
-    event.clipboardData!.setData("text/plain", value);
-    element.dispatchEvent(event);
-  }, source);
-}
-
-async function edit(article: Locator, path: string, source: string) {
-  if (!(await article.locator(".reploom-editor").isVisible()))
-    await article
-      .locator(".reploom-view-controls:visible button")
-      .last()
-      .click();
-  await article.getByRole("tab", { name: path, exact: true }).click();
-  const activate = article.locator(".reploom-code-editor > button");
-  if (await activate.count()) await activate.click();
-  await writeCode(article.locator(".cm-content"), source);
-}
-
-async function gallery(page: Page, id: string) {
-  await page.goto("/design/playground/");
-  await page.getByLabel("예제 선택").selectOption(id);
-  const article = page.locator(`[data-project="${id}"]`);
-  await expect(article).toHaveAttribute("data-phase", "ready");
-  return { article, preview: article.frameLocator("iframe") };
-}
+import { articleExample, edit } from "./helpers";
 
 test.beforeEach(async ({ context, baseURL }) => {
   const origin = new URL(baseURL!).origin;
   // Analytics and embeds on article pages are unrelated to executing examples.
   await context.route("**/*", (route) => {
     const url = new URL(route.request().url());
-    return url.origin === origin ||
-      ["blob:", "data:"].includes(url.protocol)
+    return url.origin === origin || ["blob:", "data:"].includes(url.protocol)
       ? route.continue()
       : route.abort();
   });
@@ -54,7 +21,12 @@ test("prepared assets use protocol 9 and remain on the blog origin", async ({
   expect(response.headers()["cache-control"]).toBe("no-cache");
   const manifest = await response.json();
   expect(manifest.protocol).toBe(9);
-  expect(Object.keys(manifest.projects)).toHaveLength(14);
+  expect(Object.keys(manifest.projects)).toHaveLength(9);
+  expect(
+    Object.keys(manifest.projects).every((id) =>
+      /^effect-event-(en|ko|ja)-[123]$/.test(id)
+    )
+  ).toBe(true);
   const assets = [manifest.bootstrap, manifest.compilerWorker, manifest.wasm];
   for (const project of Object.values(manifest.projects) as any[])
     assets.push(
@@ -64,31 +36,6 @@ test("prepared assets use protocol 9 and remain on the blog origin", async ({
       ...(project.worker ?? [])
     );
   for (const asset of assets) expect(asset.url).toMatch(/^\/reploom\/[\w.-]+$/);
-});
-
-test("the gallery waits for hydration before accepting a selection", async ({
-  page,
-}) => {
-  let resume!: () => void;
-  const waiting = new Promise<void>((resolve) => {
-    resume = resolve;
-  });
-  await page.route("**/_astro/Gallery.*.js", async (route) => {
-    await waiting;
-    await route.continue();
-  });
-  await page.goto("/design/playground/", { waitUntil: "domcontentloaded" });
-  try {
-    await expect(page.getByLabel("예제 선택")).toBeDisabled();
-  } finally {
-    resume();
-  }
-  await page.getByLabel("예제 선택").selectOption("dom-counter");
-  await expect(page.locator('[data-project="dom-counter"]')).toHaveAttribute(
-    "data-phase",
-    "ready"
-  );
-  await expect(page.locator(".reploom iframe")).toHaveCount(1);
 });
 
 for (const locale of ["ko", "en", "ja"]) {
@@ -109,19 +56,35 @@ for (const locale of ["ko", "en", "ja"]) {
       ).toHaveAttribute("data-phase", "ready");
     }
     expect(
-      requests.filter((url) => /compiler-worker|\.wasm(?:$|\?)/.test(url))
+      requests.filter((url) =>
+        /compiler-(?:worker|client)|\.wasm(?:$|\?)/.test(url)
+      )
+    ).toEqual([]);
+    expect(
+      requests.filter((url) =>
+        /\/reploom\/manifest\.json|\/(?:syntax|javascript|grammar)\.[^/]+\.js/.test(
+          url
+        )
+      )
     ).toEqual([]);
     const article = page.locator(`[data-project="effect-event-${locale}-3"]`);
     const preview = article.frameLocator("iframe");
     await expect(article.locator(".reploom-source-preview")).toBeVisible();
     const reader = article.locator(".reploom-source-preview");
-    const keyword = reader.locator(".tok-keyword").filter({ hasText: /^import$/ }).first();
+    const keyword = reader
+      .locator(".tok-keyword")
+      .filter({ hasText: /^import$/ })
+      .first();
     const string = reader.locator(".tok-string").first();
     await reader.scrollIntoViewIfNeeded();
     await expect(keyword).toBeVisible();
     const color = (element: Element) => getComputedStyle(element).color;
-    expect(await keyword.evaluate(color)).not.toBe(await reader.evaluate(color));
-    expect(await string.evaluate(color)).not.toBe(await keyword.evaluate(color));
+    expect(await keyword.evaluate(color)).not.toBe(
+      await reader.evaluate(color)
+    );
+    expect(await string.evaluate(color)).not.toBe(
+      await keyword.evaluate(color)
+    );
     await expect(page.locator(".cm-content")).toHaveCount(0);
     await preview.locator("input[type=checkbox]").check();
     await preview.locator("select").selectOption("travel");
@@ -140,6 +103,7 @@ for (const locale of ["ko", "en", "ja"]) {
     const started = Date.now();
     await edit(article, "/App.jsx", changed);
     await expect(preview.locator("h1")).toContainText("verified");
+    await expect(article.locator(".cm-content")).toHaveCSS("font-size", "12px");
     await expect(preview.locator("select")).toHaveValue("travel");
     await expect(preview.locator("input[type=checkbox]")).toBeChecked();
     await edit(article, "/App.jsx", changed + "\nconst = ;");
@@ -189,113 +153,9 @@ for (const locale of ["ko", "en", "ja"]) {
   });
 }
 
-test("moveBefore examples retain the existing Dialog and Portal behavior", async ({
-  page,
-}) => {
-  const { article, preview } = await gallery(page, "move-before-solution");
-  await article.locator("iframe").scrollIntoViewIfNeeded();
-  await preview
-    .getByRole("button", { name: "Toast 띄우기", exact: true })
-    .first()
-    .click();
-  await expect(preview.getByText("Toast!", { exact: true })).toBeVisible();
-  await preview.getByRole("button", { name: "Modal 열기" }).click();
-  await expect(preview.locator("dialog")).toHaveAttribute("open", "");
-  await expect(
-    preview.locator("dialog").getByText("Toast!", { exact: true })
-  ).toBeVisible();
-  await preview.getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(preview.locator("dialog")).not.toHaveAttribute("open");
-  await expect(preview.getByText("Toast!", { exact: true })).toBeVisible();
-  const source = await readFile(
-    new URL(
-      "../../src/content/blog/_examples/moveBefore/solution/App.jsx",
-      import.meta.url
-    ),
-    "utf8"
-  );
-  await edit(
-    article,
-    "/App.jsx",
-    source.replace("해결: Toast를 Dialog 안으로 이동", "Portal example edited")
-  );
-  await expect(preview.locator("h3")).toHaveText("Portal example edited");
-  await article.locator("iframe").scrollIntoViewIfNeeded();
-  await preview.getByRole("button", { name: "Modal 열기" }).click();
-  await preview
-    .locator("dialog")
-    .getByRole("button", { name: "Toast 띄우기" })
-    .click();
-  await expect(
-    preview.locator("dialog").getByText("Toast!", { exact: true })
-  ).toBeVisible();
-  await page.getByLabel("예제 선택").selectOption("move-before-problem");
-  const problem = page.locator('[data-project="move-before-problem"]');
-  await expect(problem).toHaveAttribute("data-phase", "ready");
-  await expect(page.locator(".reploom iframe")).toHaveCount(1);
-  await problem
-    .frameLocator("iframe")
-    .getByRole("button", { name: "Modal 열기" })
-    .click();
-  await expect(
-    problem.frameLocator("iframe").locator("dialog")
-  ).toHaveAttribute("open", "");
-});
-
-test("the packaged adapters preserve React and DOM state and execute computations", async ({
-  page,
-}) => {
-  const { article, preview } = await gallery(page, "react-counter");
-  await preview.getByRole("button").click({ clickCount: 2 });
-  await preview.getByRole("textbox").fill("Retained input");
-  const reference = await preview.locator("output").textContent();
-  const source = await readFile(
-    new URL(
-      "../../src/playground/examples/react-counter/Dashboard.tsx",
-      import.meta.url
-    ),
-    "utf8"
-  );
-  await edit(
-    article,
-    "/src/Dashboard.tsx",
-    source.replace("{settings.title}", "Updated {settings.title}")
-  );
-  await expect(preview.locator("h1")).toContainText("Updated");
-  await expect(preview.getByRole("button")).toHaveText("count 2");
-  await expect(preview.getByRole("textbox")).toHaveValue("Retained input");
-  await expect(preview.locator("output")).toHaveText(reference!);
-  await page.getByLabel("예제 선택").selectOption("dom-counter");
-  const dom = page.locator('[data-project="dom-counter"]');
-  await expect(dom).toHaveAttribute("data-phase", "ready");
-  const domPreview = dom.frameLocator("iframe");
-  await domPreview.getByRole("button").click({ clickCount: 2 });
-  await domPreview.getByRole("textbox").fill("DOM input");
-  await edit(
-    dom,
-    "/format.ts",
-    "export const formatCount = (count: number) => `Updated DOM ${count}`;"
-  );
-  await expect(domPreview.getByRole("button")).toHaveText("Updated DOM 2");
-  await expect(domPreview.getByRole("textbox")).toHaveValue("DOM input");
-  await domPreview.getByRole("button").click();
-  await expect(domPreview.getByRole("button")).toHaveText("Updated DOM 3");
-  await page.getByLabel("예제 선택").selectOption("compute-primes");
-  const compute = page.locator('[data-project="compute-primes"]');
-  await expect(compute).toHaveAttribute("data-phase", "ready");
-  await expect(compute.frameLocator("iframe").locator("body")).toContainText(
-    '"documentAvailable": false'
-  );
-  await edit(compute, "/settings.json", '{"limit":10000}');
-  await expect(compute.frameLocator("iframe").locator("body")).toContainText(
-    '"runs": 2'
-  );
-  await expect(page.locator(".reploom iframe")).toHaveCount(1);
-});
-
 test("the article component fits a mobile viewport", async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const { article } = await gallery(page, "effect-event-ko-3");
+  const article = await articleExample(page, 3);
   await article.locator(".reploom-code-editor > button").click();
   await expect(article.locator(".cm-line span").first()).toBeVisible();
   await article.locator("iframe").scrollIntoViewIfNeeded();
@@ -335,7 +195,18 @@ test("article chrome stays isolated and the preview preserves authored spacing a
   expect(tabs.y).toBe(bar.y);
   expect(tabs.height).toBe(40);
   expect(iframe.y).toBe(bar.y + bar.height);
-  expect(iframe.height).toBe(300);
+  expect(iframe.height).toBeCloseTo(300, 0);
+  await expect(article.locator(".reploom-source-preview")).toHaveCSS(
+    "font-size",
+    "12px"
+  );
+  const physical = await article
+    .locator("iframe")
+    .evaluate((element) => element.clientWidth);
+  expect(iframe.width / physical).toBeCloseTo(0.94, 2);
+  await expect(
+    article.getByRole("button", { name: "공유", exact: true })
+  ).toHaveCount(0);
   const preview = article.frameLocator("iframe");
   await expect(preview.locator("body")).toHaveCSS("margin", "20px");
   await expect(preview.locator("body")).toHaveCSS("padding", "0px");
@@ -357,126 +228,85 @@ test("article chrome stays isolated and the preview preserves authored spacing a
   ).toBe(true);
 });
 
-test("a narrow example opens at its declared panel and file with the view switch first", async ({
-  page,
+test("design references, the gallery and shared examples are local to the development server", async ({
+  request,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const { article } = await gallery(page, "compute-primes");
-  await expect(
-    article.getByRole("tab", { name: "/primes.ts" })
-  ).toHaveAttribute("aria-selected", "true");
-  const groups = article.locator(".reploom-view-controls:visible");
-  await expect(groups).toHaveCount(1);
-  const toolbar = await groups.boundingBox(),
-    panes = await article.locator(".reploom-panes").boundingBox();
-  expect(toolbar!.y + toolbar!.height).toBeLessThanOrEqual(panes!.y + 1);
-  await page.getByLabel("예제 선택").selectOption("move-before-solution");
-  const modal = page.locator('[data-project="move-before-solution"]');
-  await expect(modal).toHaveAttribute("data-view", "preview");
-  await modal
-    .locator(".reploom-view-controls:visible")
-    .getByRole("button", { name: "코드", exact: true })
-    .click();
-  await expect(modal.locator(".reploom-source-preview")).toBeVisible();
-  await expect(modal.locator(".cm-content")).toHaveCount(0);
-});
-
-test("a shared link restores edited source, selected file, view and registered React state", async ({
-  page,
-  browser,
-}) => {
-  const { article, preview } = await gallery(page, "effect-event-ko-3");
-  await preview.locator("select").selectOption("travel");
-  await preview.locator("input[type=checkbox]").check();
-  const source = await article.locator(".reploom-source-preview").textContent();
-  await edit(article, "/App.jsx", source!.replace("</h1>", " · 공유됨</h1>"));
-  await expect(preview.locator("h1")).toContainText("공유됨");
-  await article.getByRole("tab", { name: "/chat.js", exact: true }).click();
-  await article
-    .locator(".reploom-view-controls:visible")
-    .getByRole("button", { name: "미리보기", exact: true })
-    .click();
-  await article.getByRole("button", { name: "공유", exact: true }).click();
-  const dialog = article.getByRole("dialog");
-  const link = dialog.getByRole("link", { name: "공유 예제 열기" });
-  await expect(link).toBeVisible();
-  const url = (await link.getAttribute("href"))!;
-  expect(new URL(url).pathname).toBe("/design/playground/shared/");
-  expect(new URL(url).hash).toMatch(/^#reploom=1\.preview\./);
-  const clean = await browser.newContext({ serviceWorkers: "block" });
-  try {
-    const external: string[] = [];
-    await clean.route("**/*", (route) => {
-      const u = new URL(route.request().url());
-      if (
-        ["blob:", "data:"].includes(u.protocol) ||
-        u.origin === new URL(url).origin
-      )
-        return route.continue();
-      external.push(u.origin);
-      return route.abort();
-    });
-    const tab = await clean.newPage();
-    await tab.goto(url);
-    const restored = tab.locator('[data-project="effect-event-ko-3"]');
-    await expect(restored).toHaveAttribute("data-phase", "ready");
-    await expect(restored).toHaveAttribute("data-view", "preview");
-    const result = restored.frameLocator("iframe");
-    await expect(result.locator("h1")).toContainText("공유됨");
-    await expect(result.locator("select")).toHaveValue("travel");
-    await expect(result.locator("input[type=checkbox]")).toBeChecked();
-    await restored
-      .locator(".reploom-view-controls:visible")
-      .getByRole("button", { name: "함께 보기", exact: true })
-      .click();
-    await expect(
-      restored.getByRole("tab", { name: "/chat.js", exact: true })
-    ).toHaveAttribute("aria-selected", "true");
-    await restored.getByRole("tab", { name: "/App.jsx", exact: true }).click();
-    const reader = restored.locator(".reploom-source-preview");
-    await reader.scrollIntoViewIfNeeded();
-    await expect(reader.locator(".tok-keyword").first()).toBeVisible();
-    await expect(reader).toContainText("공유됨");
-    await expect(tab.locator(".cm-content")).toHaveCount(0);
-    await tab.evaluate(() => (location.hash = "#reploom=broken"));
-    await expect(tab.getByRole("status")).toContainText("링크 전체");
-    await expect(tab.locator(".reploom iframe")).toHaveCount(0);
-    expect(external).toEqual([]);
-  } finally {
-    await clean.close();
-  }
-});
-
-test("opening a link to prepared source keeps compilation deferred and state optional", async ({
-  page,
-  context,
-}) => {
-  const { article, preview } = await gallery(page, "effect-event-ko-1");
-  await preview.locator("select").selectOption("music");
-  await article.getByRole("button", { name: "공유", exact: true }).click();
-  const box = article.getByRole("dialog");
-  const link = box.getByRole("link", { name: "공유 예제 열기" });
-  await expect(link).toBeVisible();
-  const withState = await link.getAttribute("href");
-  await box.getByRole("checkbox").uncheck();
-  await expect.poll(() => link.getAttribute("href")).not.toBe(withState);
-  for (const [url, room] of [
-    [withState!, "music"],
-    [(await link.getAttribute("href"))!, "general"],
+  for (const path of [
+    "/design/",
+    "/design/playground/",
+    "/design/playground/shared/",
+    "/en/design/",
+    "/ja/design/playground/",
+    "/design/assets/manifest.json",
   ]) {
-    const tab = await context.newPage();
-    const compiler: string[] = [];
-    tab.on("request", (r) => {
-      if (/compiler-worker|\.wasm(?:\?|$)/.test(r.url()))
-        compiler.push(r.url());
-    });
-    await tab.goto(url);
-    const shared = tab.locator('[data-project="effect-event-ko-1"]');
-    await expect(shared).toHaveAttribute("data-phase", "ready");
-    await expect(shared.frameLocator("iframe").locator("select")).toHaveValue(
-      room
-    );
-    expect(compiler).toEqual([]);
-    await tab.close();
+    expect((await request.get(path)).status(), path).toBe(404);
   }
+});
+
+test("the initial article source is colored in HTML before hydration", async ({
+  browser,
+  baseURL,
+}) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    baseURL,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto("/blog/useeffectevent/");
+    const examples = page.locator(".article-playground");
+    await expect(examples).toHaveCount(3);
+    for (const example of await examples.all()) {
+      const reader = example.locator(".reploom-source-preview");
+      await expect(reader.locator(".tok-keyword").first()).toHaveText("import");
+      const color = (element: Element) => getComputedStyle(element).color;
+      expect(
+        await reader.locator(".tok-keyword").first().evaluate(color)
+      ).not.toEqual(await reader.evaluate(color));
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("the first input reaches the project while CodeMirror is still downloading", async ({
+  page,
+}) => {
+  const example = await articleExample(page, 1);
+  const preview = example.frameLocator("iframe");
+  await preview.locator("select").selectOption("travel");
+  const reader = example.locator(".reploom-source-preview");
+  const source = await reader.textContent();
+  expect(source).toContain("</h1>");
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/editor[-.][^/]*\.js(?:\?|$)/, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  try {
+    await example.locator(".reploom-code-editor > button").click();
+    const input = example.locator(".reploom-code-editor textarea");
+    await expect(input).toBeFocused();
+    await input.fill(source!.replace("</h1>", " · first input</h1>"));
+    await expect(preview.locator("h1")).toContainText("first input");
+    await expect(preview.locator("select")).toHaveValue("travel");
+  } finally {
+    release();
+  }
+  const editor = example.locator(".cm-content");
+  await editor.press("ControlOrMeta+a");
+  const copied = await editor.evaluate((element) => {
+    const event = new ClipboardEvent("copy", {
+      clipboardData: new DataTransfer(),
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(event);
+    return event.clipboardData?.getData("text/plain");
+  });
+  expect(copied).toBe(source!.replace("</h1>", " · first input</h1>"));
+  await expect(preview.locator("select")).toHaveValue("travel");
 });

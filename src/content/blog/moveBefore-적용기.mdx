@@ -9,7 +9,7 @@ draft: true
 ---
 
 import LinkPreview from "../../components/embeds/LinkPreview.astro";
-import Playground from "../../components/article/reploom/Playground";
+import Playground from "../../components/article/reploom/Example.astro";
 
 
 Modal Dialog를 열었는데, Toast 알림이 안 보인다.
@@ -20,7 +20,7 @@ Modal Dialog를 열었는데, Toast 알림이 안 보인다.
 
 먼저 직접 체험해보자. "Toast 띄우기"를 누른 뒤 "Modal 열기"를 눌러보자.
 
-<Playground client:visible project="move-before-problem" title="Modal에 가려지는 Toast" locale="ko" />
+<Playground project="move-before-problem" title="Modal에 가려지는 Toast" locale="ko" />
 
 Toast가 Modal 뒤에 가려져서 안 보인다. `z-index`를 아무리 높여도 소용이 없다.
 
@@ -341,7 +341,7 @@ const ToastContainer = () => {
 
 이제 해결된 버전을 확인해보자.
 
-<Playground client:visible project="move-before-solution" title="같은 Portal host로 Toast 이동" locale="ko" />
+<Playground project="move-before-solution" title="같은 Portal host로 Toast 이동" locale="ko" />
 
 Modal을 열어도 Toast가 잘 보인다!
 

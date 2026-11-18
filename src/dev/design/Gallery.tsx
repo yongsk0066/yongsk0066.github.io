@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import Playground from "./Playground";
+import Playground from "../../components/article/reploom/Playground";
 
 export default function Gallery({
   projects,

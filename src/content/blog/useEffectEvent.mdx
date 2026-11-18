@@ -8,7 +8,7 @@ heroImage: "/post/images/useEffectEvent/thumb.png"
 ---
 
 import LinkPreview from "../../components/embeds/LinkPreview.astro";
-import Playground from "../../components/article/reploom/Playground";
+import Playground from "../../components/article/reploom/Example.astro";
 
 
 `useEffectEvent`는 흑마법이다. 그럴까?
@@ -71,7 +71,7 @@ function ChatRoom({ roomId, theme }) {
 
 아래 예제를 통해서 theme 을 전환해보자.
 
-<Playground client:visible project="effect-event-ko-1" title="테마 변경과 재연결" locale="ko" />
+<Playground project="effect-event-ko-1" title="테마 변경과 재연결" locale="ko" />
 
 (다른 문제도 같이 있는것 같지만 일단 연결 문제에 집중해보자)
 `theme`을 바꿨는데 연결이 다시 이루어지는걸 볼 수 있다.
@@ -103,7 +103,7 @@ function ChatRoom({ roomId, theme }) {
 편법이긴하나 이렇게 하면 `theme`이 바뀌어도 새로운 커넥션을 맺지 않을 것이다. 그러기 위해 우리는 우선 React의 룰을 어겨야했다.\
 그럼 이것이 문제를 해결해주었을까? 한번 실행해보자.
 
-<Playground client:visible project="effect-event-ko-2" title="오래된 테마를 읽는 Effect" locale="ko" />
+<Playground project="effect-event-ko-2" title="오래된 테마를 읽는 Effect" locale="ko" />
 
 `theme`을 바꾸고 다른 채팅방으로 연결해보았다.
 이제 `theme`을 바꾸어도 커넥션이 새롭게 다시 맺어지지는 않는다. 그렇지만 여전히 문제가 있다. `theme`을 바꾼뒤 다른 채팅방으로 연결하면
@@ -143,7 +143,7 @@ function ChatRoom({ roomId, theme }) {
 위와 같이 각 핸들러들을 `useEffectEvent`로 감싸주었다. 그러고 이를 `useEffect`안에 참조하니 더이상 eslint 경고도 뜨지 않았다.
 한번 실행해서 `theme` 을 바꾼뒤 채팅방을 변경해보자.
 
-<Playground client:visible project="effect-event-ko-3" title="useEffectEvent로 최신 테마 읽기" locale="ko" />
+<Playground project="effect-event-ko-3" title="useEffectEvent로 최신 테마 읽기" locale="ko" />
 
 오! 의도된 대로 토스트가 최신 `theme`값에 맞춰서 나오게 된다.
 `useEffect` 내의 코드도 보다 의도가 명확하게 드러나게 roomId 만 변경시 cleanup 된다라고 작성할 수 있게 되었다.

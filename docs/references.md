@@ -31,7 +31,7 @@ EPR 논문은 양자역학의 완전성을 물었다.<Citation source={reference
 - 본문 인용 없는 읽을거리 목록은 `<References sources={references} backlinks={false} />`로 작성한다. 다른 언어의 글에서는 `label="References"`처럼 접근성 이름도 바꿀 수 있다.
 - 영문·일문 하위 폴더의 글에서는 import 경로에 `../`를 하나 더 붙인다.
 
-실물은 `/design#references`에서 확인할 수 있다. 브라우저 스크립트 없이 정적 HTML과 앵커 링크로 작동한다.
+실물은 개발 서버의 `/design#references`에서 확인할 수 있다. 브라우저 스크립트 없이 정적 HTML과 앵커 링크로 작동한다.
 
 ## 표현 기준
 

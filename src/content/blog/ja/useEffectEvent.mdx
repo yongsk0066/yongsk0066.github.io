@@ -8,7 +8,7 @@ heroImage: "/post/images/useEffectEvent/thumb.png"
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Playground from "../../../components/article/reploom/Playground";
+import Playground from "../../../components/article/reploom/Example.astro";
 
 
 `useEffectEvent`は黒魔術だ。本当にそうだろうか？
@@ -71,7 +71,7 @@ function ChatRoom({ roomId, theme }) {
 
 下の例題でthemeを切り替えてみよう。
 
-<Playground client:visible project="effect-event-ja-1" title="テーマ変更と再接続" locale="ja" />
+<Playground project="effect-event-ja-1" title="テーマ変更と再接続" locale="ja" />
 
 （他にも問題がありそうだが、まずは接続の問題に集中しよう）
 `theme`を変えただけで接続がやり直されるのが分かる。
@@ -103,7 +103,7 @@ function ChatRoom({ roomId, theme }) {
 裏技ではあるが、こうすれば`theme`が変わっても新しいコネクションは張らなくなる。ただし、そのためにはまずReactのルールを破る必要があった。\
 ではこれで問題は解決しただろうか？実行してみよう。
 
-<Playground client:visible project="effect-event-ja-2" title="古いテーマを読むEffect" locale="ja" />
+<Playground project="effect-event-ja-2" title="古いテーマを読むEffect" locale="ja" />
 
 `theme`を変えてから別のチャットルームに接続してみてほしい。
 今度は`theme`を変えてもコネクションが再確立されることはない。しかしまだ問題がある。themeを変えた後に別のチャットルームに接続すると、
@@ -143,7 +143,7 @@ function ChatRoom({ roomId, theme }) {
 上のように各ハンドラを`useEffectEvent`でラップした。そしてこれを`useEffect`内で参照するようにしたことで、eslint警告も出なくなった。
 `theme`を変えてからチャットルームを切り替えてみよう。
 
-<Playground client:visible project="effect-event-ja-3" title="useEffectEventで最新のテーマを読む" locale="ja" />
+<Playground project="effect-event-ja-3" title="useEffectEventで最新のテーマを読む" locale="ja" />
 
 おお！意図した通り、トーストが最新の`theme`値に合わせて表示されるようになった。
 `useEffect`内のコードも、roomIdが変わったときだけcleanupされるという意図がより明確に表現できるようになった。

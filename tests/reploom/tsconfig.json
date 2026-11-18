@@ -14,6 +14,8 @@
   "include": [
     "../../src/components/article/reploom/**/*.ts",
     "../../src/components/article/reploom/**/*.tsx",
+    "../../src/dev/design/**/*.tsx",
+    "../../src/dev/design/**/*.ts",
     "./*.ts"
   ]
 }

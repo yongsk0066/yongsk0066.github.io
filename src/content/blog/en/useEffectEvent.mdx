@@ -8,7 +8,7 @@ heroImage: "/post/images/useEffectEvent/thumb.png"
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Playground from "../../../components/article/reploom/Playground";
+import Playground from "../../../components/article/reploom/Example.astro";
 
 
 `useEffectEvent` is black magic. Or is it?
@@ -64,7 +64,7 @@ The problem is when `theme` changes. When `theme` changes, the `useEffect` re-ru
 
 Try toggling the theme in the example below.
 
-<Playground client:visible project="effect-event-en-1" title="Reconnect on theme changes" locale="en" />
+<Playground project="effect-event-en-1" title="Reconnect on theme changes" locale="en" />
 
 (There are other issues here too, but let's focus on the connection problem for now.)
 You can see that changing the `theme` causes the connection to be re-established.
@@ -96,7 +96,7 @@ function ChatRoom({ roomId, theme }) {
 It's a workaround, but this way changing `theme` won't trigger a new connection. To do this, though, we had to break React's rules first.\
 So does this actually solve the problem? Let's run it and see.
 
-<Playground client:visible project="effect-event-en-2" title="An Effect reading a stale theme" locale="en" />
+<Playground project="effect-event-en-2" title="An Effect reading a stale theme" locale="en" />
 
 Try changing the `theme` and then switching to a different chat room.
 Now changing the `theme` doesn't re-establish the connection. But there's still a problem. If you change the theme and then switch to a different chat room, the "Disconnected" notification still shows with the old theme, while the new "Connected!" notification shows with the updated theme.
@@ -135,7 +135,7 @@ function ChatRoom({ roomId, theme }) {
 We wrapped each handler with `useEffectEvent`. And since we reference them inside `useEffect`, the eslint warning is gone too.
 Try changing the `theme` and then switching chat rooms.
 
-<Playground client:visible project="effect-event-en-3" title="Read the latest theme with useEffectEvent" locale="en" />
+<Playground project="effect-event-en-3" title="Read the latest theme with useEffectEvent" locale="en" />
 
 Nice! The toasts now correctly reflect the latest `theme` value, just as intended.
 The code inside `useEffect` also expresses its intent more clearly — cleanup only happens when `roomId` changes.

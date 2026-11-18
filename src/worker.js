@@ -134,13 +134,6 @@ export default {
 
     const response = await env.ASSETS.fetch(request);
 
-    if (/^\/design\/playground\/shared\/?$/.test(path) && response.ok) {
-      const headers = new Headers(response.headers);
-      headers.set("cache-control", "public, no-cache, no-transform");
-      headers.set("content-security-policy", "script-src-elem 'self' 'unsafe-inline' blob:");
-      return new Response(response.body, { status: response.status, headers });
-    }
-
     if (path.startsWith("/reploom/") && response.ok) {
       const headers = new Headers(response.headers);
       if (path.endsWith(".wasm")) headers.set("content-type", "application/wasm");

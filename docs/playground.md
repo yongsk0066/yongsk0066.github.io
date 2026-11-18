@@ -1,6 +1,6 @@
 # 블로그의 코드 예제
 
-편집 가능한 예제는 [Reploom](https://github.com/yongsk0066/reploom)의 패키지를 사용한다. 한국어·영어·일본어 `useEffectEvent` 글의 아홉 예제와 `moveBefore` 글의 두 예제를 준비한다. 세 언어의 `moveBefore` 글은 같은 예제 소스를 공유한다. 실험실에는 React·DOM·계산 Worker 예제도 있으며, 선택한 프로젝트 하나만 마운트한다.
+편집 가능한 예제는 [Reploom](https://github.com/yongsk0066/reploom)의 패키지를 사용한다. 운영 빌드는 발행된 한국어·영어·일본어 글에서 사용하는 프로젝트만 준비한다. 현재는 `useEffectEvent` 예제 아홉 개다. 개발 서버의 `/design/playground/`에서는 `moveBefore` 초안과 React·DOM·계산 Worker 예제도 편집할 수 있다.
 
 ## 설치와 실행
 
@@ -14,7 +14,7 @@ pnpm dev
 
 현재 통신 규약은 프로토콜 9다. 갱신할 때는 release의 커밋·패키지 버전·프로토콜을 확인하고 bootstrap을 실행한 다음 `pnpm install --no-frozen-lockfile`로 아카이브 무결성 값을 갱신한다. `pnpm build`로 prepared 자산을 다시 만들고 검증한 뒤 잠금 파일과 함께 반영한다. 생성기는 프로토콜이 맞지 않으면 실패하며, 배포는 새 호스트 코드와 `public/reploom` 전체를 같은 빌드에서 가져간다.
 
-글은 `src/components/article/reploom/Playground.tsx`에 프로젝트 ID, 제목, 언어만 전달한다. 예제 원문은 `_examples`에 두고 `src/playground/projects.mjs`에서 파일·진입점·정확한 의존성 버전을 선언한다. 이 목록은 Node 빌드 입력이다. 브라우저와 Astro 페이지는 준비된 manifest를 사용한다.
+글은 `src/components/article/reploom/Example.astro`에 프로젝트 ID, 제목, 언어만 전달한다. 예제 원문은 `_examples`에 두고 `src/playground/projects.mjs`에서 파일·진입점·정확한 의존성 버전을 선언한다. 이 목록은 Node 빌드 입력이다. Astro는 빌드 때 첫 파일의 문법 강조를 HTML로 출력한다. 브라우저에서는 글에 고정한 manifest를 사용해 예제가 화면에 가까워지면 초기 프로그램과 의존성을 같은 출처에서 가져오고, 편집 시 CodeMirror와 Oxc를 불러온다.
 
 ## 실행 흐름
 
@@ -32,7 +32,7 @@ flowchart TD
   Preview -->|적용 확인| Session
 ```
 
-빌드 단계에서 의존성을 묶고 최초 실행 코드를 컴파일한다. 읽기만 하는 방문자는 compiler Worker나 WASM을 받지 않는다. `client:visible`이 예제의 React UI를 마운트하면 미리 준비된 프로그램으로 iframe을 시작하고, CodeMirror가 코드를 표시한다.
+글의 HTML에 첫 파일의 코드와 색상이 포함된다. `client:visible`이 예제 가까이에서 React UI를 마운트하면 브라우저가 미리 컴파일한 프로그램을 격리된 iframe에서 실행한다. 독자가 편집을 선택하면 CodeMirror가 읽기 화면을 이어받고, 소스 변경 시 컴파일러 Worker와 WASM이 로드된다.
 
 편집 시 `ProjectSession`이 소스 revision과 변경 내용을 관리하고, Worker의 Oxc가 변경된 모듈을 컴파일한다. 실행 코드는 전용 MessagePort로 미리보기에 전달한다. 미리보기의 적용 확인을 다음 변경의 기준으로 삼고, 기준이 어긋나면 전체 프로그램으로 다시 동기화한다. React Fast Refresh가 호환되는 컴포넌트 편집의 상태를 유지하고, 컴파일 실패 시 마지막으로 동작한 미리보기를 남긴다.
 
@@ -44,7 +44,7 @@ React와 DOM 사용자 코드는 iframe의 Window 이벤트 루프에서 실행�
 
 ## 배포와 검증
 
-`pnpm build`가 `public/reploom`을 준비한 뒤 Astro를 빌드한다. 생성 디렉터리는 통째로 배포한다. Cloudflare Worker는 WASM과 모듈의 MIME 타입을 지정하고, 해시가 붙은 파일은 장기 캐시하며 manifest는 재검증한다. 실행 중 패키지 CDN이나 원격 컴파일 서비스는 필요하지 않다.
+`pnpm build`가 `public/reploom`을 준비한 뒤 Astro를 빌드한다. 배포 디렉터리는 이번 manifest와 여기에 등재된 자산만 담는다. Cloudflare Worker는 WASM과 모듈의 MIME 타입을 지정하고, 해시가 붙은 파일은 장기 캐시하며 manifest는 재검증한다. 실행 중 패키지 CDN이나 원격 컴파일 서비스는 필요하지 않다.
 
 ```sh
 pnpm check:playground
@@ -55,4 +55,4 @@ pnpm test:playground
 
 위 검증 명령은 로컬에서 실행한다. 블로그 배포 파이프라인은 고정 패키지 준비·설치·빌드·배포를 수행한다.
 
-브라우저 검증은 실제 정적 빌드를 Chromium·Firefox·WebKit에서 연다. 외부 요청을 차단한 상태에서 언어별 글의 편집·상태 유지·오류 복구, 여러 예제의 compiler 공유, Dialog·Portal, React·DOM·계산 Worker, 모바일 너비를 확인한다. 전체 블로그의 외부 임베드·분석 도구 요청은 실행기의 의존성과 별개다.
+브라우저 검증은 Chromium·Firefox·WebKit에서 정적 빌드와 로컬 개발 서버를 각각 연다. 정적 글에서는 외부 요청을 차단하고 첫 코드의 색상, 언어별 편집·상태 유지·오류 복구, 컴파일러 공유, 모바일 너비와 비공개 경로의 404 응답을 확인한다. 개발 서버에서는 Dialog·Portal과 React·DOM·계산 Worker 예제를 검증한다. 전체 블로그의 외부 임베드·분석 도구 요청은 실행기의 의존성과 별개다.

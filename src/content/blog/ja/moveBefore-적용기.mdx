@@ -9,7 +9,7 @@ draft: true
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
-import Playground from "../../../components/article/reploom/Playground";
+import Playground from "../../../components/article/reploom/Example.astro";
 
 
 Modal Dialogを開いたのに、Toastの通知が見えない。
@@ -20,7 +20,7 @@ Modal Dialogを開いたのに、Toastの通知が見えない。
 
 まず実際に体験してみよう。「Toastを表示」をクリックしてから「Modalを開く」を押してみよう。
 
-<Playground client:visible project="move-before-problem" title="Modalに隠れるToast" locale="ja" />
+<Playground project="move-before-problem" title="Modalに隠れるToast" locale="ja" />
 
 ToastがModalの背後に隠れて見えない。`z-index` をいくら高くしても意味がない。
 
@@ -341,7 +341,7 @@ const ToastContainer = () => {
 
 では、解決後のバージョンを確認してみよう。
 
-<Playground client:visible project="move-before-solution" title="同じPortal hostでToastを移動" locale="ja" />
+<Playground project="move-before-solution" title="同じPortal hostでToastを移動" locale="ja" />
 
 Modalを開いてもToastがちゃんと見える！
 

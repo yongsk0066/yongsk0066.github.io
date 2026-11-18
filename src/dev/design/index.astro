@@ -2,7 +2,7 @@
 /**
  * /design — 디자인 레퍼런스 페이지.
  * 블로그를 구성하는 모든 시각 요소를 실물 컴포넌트로 한 페이지에 나열한다.
- * 스타일 변경 시 이 페이지를 기준으로 확인한다. (noindex + sitemap 제외)
+ * 스타일 변경 시 이 페이지를 기준으로 확인한다. (개발 서버 전용)
  *
  * 원칙: 마크업 복사 금지, 실제 컴포넌트를 임포트한다.
  * 유일한 예외는 About 아이템 패턴(about.astro 인라인 마크업)으로, 해당 섹션에 원본 경로를 명시했다.
@@ -248,7 +248,7 @@ const dummySeries = [
         <ArticleProse>
           <Sample />
         </ArticleProse>
-        <ImageLightbox client:load />
+        <ImageLightbox client:only="react" />
       </SpecSection>
 
       <SpecSection

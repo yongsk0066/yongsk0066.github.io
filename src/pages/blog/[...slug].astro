@@ -175,7 +175,7 @@ const t = useTranslations(currentLocale as any);
     <ArticleProse>
       <Content />
     </ArticleProse>
-    <ImageLightbox client:load />
+    <ImageLightbox client:only="react" />
     {
       seriesPosts.length > 1 && (
         <div class="animate text-zinc-500">
