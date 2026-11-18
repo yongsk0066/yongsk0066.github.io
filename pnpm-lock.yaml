@@ -1847,7 +1847,7 @@ packages:
         optional: true
 
   '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-5Q5jvtkj6BPiwXvOc/c88cp05rgCjPFD12ITO8OUBWSJ23X7XUtJy/BzFfzW5jShfE369QXvFcFWBJVcouRj7w==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-xwvDXfoKXg1Au2kCB1OXyQ3eApqoW2udT2B13xpmsp6wGSXW4PBCHEVlEbIFYKloIJ1rK4rt6QpsJXbs5yFFtw==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
     peerDependencies:
