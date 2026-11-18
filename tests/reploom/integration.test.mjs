@@ -72,3 +72,17 @@ test("the production worker serves Reploom MIME types and revalidates its manife
     assert.equal(response.headers.get("cache-control"), cache);
   }
 });
+
+test("the shared document keeps its scripts on the page origin at the edge", async () => {
+  const env = { ASSETS: { fetch: async () => new Response("html") } };
+  const response = await worker.fetch(
+    new Request("https://example.test/design/playground/shared/?lang=ko"), env,
+  );
+  assert.match(response.headers.get("cache-control"), /\bno-transform\b/);
+  assert.equal(
+    response.headers.get("content-security-policy"),
+    "script-src-elem 'self' 'unsafe-inline' blob:",
+  );
+  const gallery = await worker.fetch(new Request("https://example.test/design/playground/"), env);
+  assert.equal(gallery.headers.get("content-security-policy"), null);
+});
