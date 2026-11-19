@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import paperColor from './textures/paper001-color.jpg?url';
 import paperBump from './textures/paper001-bump.jpg?url';
+import {PaperPhysics} from './paper-physics';
 import {ClothSim,PAPER_PARAMS} from './vendor/holocloth/cloth';
 
 // Canvas is the existing HTML-in-Canvas surface (or its explicit SVG fallback).
-export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, options:{rail?:boolean;compact?:boolean;overflow?:number;pixelRatio?:number;lighting?:boolean}={}){
+export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, options:{rail?:boolean;compact?:boolean;overflow?:number;pixelRatio?:number;lighting?:boolean;worker?:boolean}={}){
  const stage=panel.querySelector('.paper-stage') as HTMLElement;
  const status=panel.querySelector('[role=status]')!;
  let renderer:THREE.WebGLRenderer, scene:THREE.Scene, camera:THREE.PerspectiveCamera;
@@ -13,10 +14,10 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  let loaded=false, textureRevision=0, geometryDirty=true;
  let textureWidth=0,textureHeight=0;
  let lighting:Awaited<ReturnType<typeof import('./lighting/preview').createPaperLighting>>|undefined;
- let previousPositions:Float32Array|undefined,quietFrames=0,sleeping=false;
+ let physics:PaperPhysics|undefined,quietFrames=0,sleeping=false;
  let fallbackDirty=true;
  function invalidate(){fallbackDirty=true;start();}
- function wake(){sleeping=false;quietFrames=0;start();}
+ function wake(){physics?.interrupt();sleeping=false;quietFrames=0;start();}
  // Keep the last completed paint while the native source canvas is resized.
  const paintedCanvas=document.createElement('canvas');
  const paintedContext=paintedCanvas.getContext('2d')!;
@@ -37,17 +38,31 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
  const fiber=new THREE.TextureLoader().load(paperColor,invalidate);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
  const bump=new THREE.TextureLoader().load(paperBump,invalidate);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(3,4);
+ let sourceAspect:string|undefined;
  function rebuild(){
   const nextHeight=4*canvas.height/canvas.width;
-  if(sim && Math.abs(nextHeight-height)<.01)return;
+  const aspect=canvas.dataset.paperAspect;
+  if(sim && (aspect ? aspect===sourceAspect : Math.abs(nextHeight-height)<.01))return;
+  sourceAspect=aspect;
   height=nextHeight;sim=new ClothSim(4,height,24,Math.round(24*height/4));
+  physics?.dispose();physics=new PaperPhysics(sim,options.worker===true,start);
   geometry?.dispose();geometry=new THREE.PlaneGeometry(4,height,sim.segX,sim.segY);
-  geometry.setAttribute('position',new THREE.BufferAttribute(sim.positions,3));geometryDirty=true;previousPositions=new Float32Array(sim.positions);wake();
+  geometry.setAttribute('position',new THREE.BufferAttribute(sim.positions,3));geometryDirty=true;wake();
   if(mesh)mesh.geometry=geometry;else{mesh=new THREE.Mesh(geometry,material);scene.add(mesh);}
   if(rail){scene.remove(rail);rail.geometry.dispose();(rail.material as THREE.Material).dispose();}
   if(options.rail!==false){rail=new THREE.Mesh(new THREE.BoxGeometry(4.12,.065,.065),new THREE.MeshLambertMaterial({color:0x817e75}));
   rail.position.set(0,height/2+.015,.035);scene.add(rail);}
   resize();
+ }
+ let surfaceWidth=0,surfaceHeight=0,reservedRatio=0;
+ function syncDrawingSize(notifyLighting=true){
+  if(!renderer||!surfaceWidth||!surfaceHeight)return;
+  const ratio=options.pixelRatio??Math.min(Math.max(devicePixelRatio,2),3);
+  const width=Math.floor(surfaceWidth*ratio),height=Math.floor(surfaceHeight*ratio);
+  if(!lighting?.active&&(renderer.domElement.width!==width||renderer.domElement.height!==height||renderer.getPixelRatio()!==ratio)){
+   renderer.setDrawingBufferSize(surfaceWidth,surfaceHeight,ratio);
+  }
+  if(notifyLighting)lighting?.resize(width,height,Math.floor(surfaceWidth*reservedRatio),Math.floor(surfaceHeight*reservedRatio));
  }
  function resize(){
   if(!renderer || !visible)return;
@@ -55,12 +70,8 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   const padding=options.overflow||0;
   stage.style.height=h+'px';stage.style.position='relative';
   if(padding)stage.style.overflow='visible';
-  const ratio=options.pixelRatio??Math.min(Math.max(devicePixelRatio,2),3);
-  const width=w+padding*2, outputHeight=h+padding*2;
-  if(renderer.domElement.width!==Math.floor(width*ratio)||renderer.domElement.height!==Math.floor(outputHeight*ratio)||renderer.getPixelRatio()!==ratio){
-   renderer.setDrawingBufferSize(width,outputHeight,ratio);
-  }
-  renderer.domElement.style.width=width+'px';renderer.domElement.style.height=outputHeight+'px';
+  surfaceWidth=w+padding*2;surfaceHeight=h+padding*2;
+  renderer.domElement.style.width=surfaceWidth+'px';renderer.domElement.style.height=surfaceHeight+'px';
   Object.assign(renderer.domElement.style,{position:'absolute',left:-padding+'px',top:-padding+'px',display:'block'});
   camera.aspect=w/h;
   const fov=THREE.MathUtils.degToRad(camera.fov/2);
@@ -68,7 +79,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   camera.lookAt(0,0,0);
   if(padding)camera.setViewOffset(w,h,-padding,-padding,w+padding*2,h+padding*2);
   else camera.clearViewOffset();
-  camera.updateProjectionMatrix();camera.updateMatrixWorld();lighting?.resize();invalidate();
+  camera.updateProjectionMatrix();camera.updateMatrixWorld();syncDrawingSize();invalidate();
  }
  function init(){
   try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});}
@@ -106,13 +117,13 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
    if(sim.startGrab(contact.point,.42)){wake();e.preventDefault();el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';}
   });
   events.addEventListener('pointermove',event=>{const e=event as PointerEvent;if(!visible)return;if(!sim.isGrabbing){cast(e);calendarPointer('move',ray.intersectObject(mesh)[0]);el.style.cursor=canvas.dataset.interactive==='true'?'pointer':'grab';return;}cast(e);if(ray.ray.intersectPlane(dragPlane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-3.8,3.8);hit.y=THREE.MathUtils.clamp(hit.y,-height*.85,height*.48);hit.z=.7;sim.moveGrab(hit);}});
-  const end=()=>{sim?.endGrab();el.style.cursor='grab';};
+  const end=()=>{if(sim?.isGrabbing){sim.endGrab();wake();}el.style.cursor='grab';};
   events.addEventListener('pointerup',end);events.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
   loaded=true;
   if(options.lighting){
    stage.dataset.lighting='initializing';
    void import('./lighting/preview').then(m=>m.createPaperLighting(stage,el,geometry,paintedCanvas,camera,invalidate)).then(next=>{
-    lighting=next;lighting.setVisible(visible);lighting.paint();geometryDirty=true;invalidate();
+    lighting=next;lighting.setVisible(visible);syncDrawingSize();lighting.paint();geometryDirty=true;invalidate();
    }).catch(()=>{stage.dataset.lighting='fallback';invalidate();});
   }
   return true;
@@ -121,15 +132,18 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   if(!visible || document.hidden){frame=0;return;}
   const dt=Math.min((now-last)/1000||1/60,.033);last=now;
   if((!paused&&!sleeping) || sim.isGrabbing){
-   previousPositions!.set(sim.positions);sim.step(dt,params);
-   if(lighting?.active)sim.constrainWall(lighting.wallMinZ);
-   let delta=0;for(let i=0;i<sim.positions.length;i++)delta=Math.max(delta,Math.abs(sim.positions[i]-previousPositions![i]));
-   if(delta>1e-6){geometryDirty=true;quietFrames=0;}else if(++quietFrames>60&&!sim.isGrabbing&&lighting?.active)sleeping=true;
+   const delta=physics!.step(dt,params,lighting?.active?lighting.wallMinZ:undefined);
+   if(delta!==undefined){
+    if(delta>1e-6){geometryDirty=true;quietFrames=0;}
+    else if(++quietFrames>60 && !sim.isGrabbing && (lighting?.active || sim.flatAndStill)){
+     sleeping=true;physics!.interrupt();
+    }
+   }
   }
   const changed=geometryDirty;
   if(changed){geometry.attributes.position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();geometryDirty=false;}
   lighting?.draw(geometry,changed);
-  if(!lighting?.active && (changed || fallbackDirty)){renderer.render(scene,camera);fallbackDirty=false;}
+  if(!lighting?.active && (changed || fallbackDirty)){syncDrawingSize(false);renderer.render(scene,camera);fallbackDirty=false;}
   const running=(!paused&&!sleeping)||sim.isGrabbing||lighting?.needsFrame;
   frame=running?requestAnimationFrame(tick):0;
  }
@@ -139,13 +153,17 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  panel.querySelector('[data-paper-poke]')!.addEventListener('click',()=>{if(!sim)return;wake();geometryDirty=true;for(let i=sim.cols;i<sim.count;i++){const y=Math.floor(i/sim.cols)/sim.segY;sim.positions[i*3+2]+=.075*Math.sin(i%sim.cols/sim.segX*Math.PI)*y*y;}});
  panel.querySelector('[data-paper-pause]')!.addEventListener('click',e=>{paused=!paused;wake();(e.currentTarget as HTMLElement).textContent=paused?'움직임 재개':'일시정지';(e.currentTarget as HTMLElement).setAttribute('aria-pressed',String(paused));});
  document.addEventListener('visibilitychange',start);new ResizeObserver(resize).observe(stage);
- const api={setPixelRatio(ratio:number){
+ const api={reservePixelRatio(ratio:number){
+  if(reservedRatio===ratio)return;
+  reservedRatio=ratio;syncDrawingSize();invalidate();
+ },setPixelRatio(ratio:number){
+  if(options.pixelRatio===ratio)return;
   options.pixelRatio=ratio;
-  if(!renderer || Math.abs(renderer.getPixelRatio()-ratio)<.002)return;
-  renderer.setPixelRatio(ratio);lighting?.resize();invalidate();
+  if(!renderer)return;
+  syncDrawingSize();invalidate();
   // Resize and redraw in the same task; never present a cleared WebGL buffer.
   if(lighting?.active)lighting.draw(geometry,false);else renderer.render(scene,camera);
- },getTopOffset(){if(!camera)return 0;const top=new THREE.Vector3(0,height/2,0).project(camera);return (1-top.y)/2*(stage.clientHeight+2*(options.overflow||0))-(options.overflow||0);},show(){visible=true;lighting?.setVisible(true);if(!loaded && !init())return;rebuild();syncTexture();resize();start();},hide(){visible=false;lighting?.setVisible(false);sim?.endGrab();cancelAnimationFrame(frame);frame=0;},getState(){return {loaded,lighting:lighting?.state,textureRevision,positions:sim?Array.from(sim.positions):[],cols:sim?.cols,height,grabbing:sim?.isGrabbing,paused,visible,material:sim?.measure()};}};
+ },getTopOffset(){if(!camera)return 0;const top=new THREE.Vector3(0,height/2,0).project(camera);return (1-top.y)/2*(stage.clientHeight+2*(options.overflow||0))-(options.overflow||0);},show(){visible=true;lighting?.setVisible(true);if(!loaded && !init())return;rebuild();syncTexture();resize();start();},hide(){visible=false;lighting?.setVisible(false);sim?.endGrab();physics?.interrupt();cancelAnimationFrame(frame);frame=0;},getState(){return {loaded,lighting:lighting?.state,textureRevision,positions:sim?Array.from(sim.positions):[],cols:sim?.cols,height,grabbing:sim?.isGrabbing,paused,visible,material:sim?.measure()};}};
  if(reduced){paused=true;panel.querySelector('[data-paper-pause]')!.textContent='움직임 재개';panel.querySelector('[data-paper-pause]')!.setAttribute('aria-pressed','true');}
  return api;
 };

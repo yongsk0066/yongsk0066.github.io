@@ -13,6 +13,7 @@ export async function createPaperLighting(
   const tracer = await PaperTracer.create(canvas, bvh, ink);
   const background = new Color();
   let active = false, failed = false, visible = true;
+  let width = fallback.width, height = fallback.height, reserveWidth = 0, reserveHeight = 0;
   let shapeDirty = false, inkDirty = true, sizeDirty = true;
   let submitted = 0, completed = 0, waiting = false;
   const maxInFlight = 3;
@@ -68,7 +69,7 @@ export async function createPaperLighting(
           canvas.style.cssText = fallback.style.cssText;
           canvas.style.pointerEvents = 'none';
           canvas.style.opacity = active ? '1' : '0';
-          tracer.setCamera(camera, fallback.width, fallback.height);
+          tracer.setCamera(camera, width, height, reserveWidth, reserveHeight);
           sizeDirty = false;
         }
         if (inkDirty) {
@@ -90,7 +91,10 @@ export async function createPaperLighting(
       } catch { fail(); }
     },
     paint() { inkDirty = true; },
-    resize() { sizeDirty = true; },
+    resize(w: number, h: number, reserveW: number, reserveH: number) {
+      width = w; height = h; reserveWidth = reserveW; reserveHeight = reserveH;
+      sizeDirty = true;
+    },
     setVisible(value: boolean) { visible = value; canvas.hidden = !value; },
     get needsFrame() { return needsFrame(); },
     get wallMinZ() { return tracer.values[13] + .012; },

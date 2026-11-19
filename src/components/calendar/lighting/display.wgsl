@@ -13,7 +13,7 @@ struct Background { @builtin(position) position:vec4f, @location(0) uv:vec2f }
  let x=f32((i<<1u)&2u);let y=f32(i&2u);return Background(vec4f(x*2.-1.,y*2.-1.,.999999,1),vec2f(x,1.-y));
 }
 @fragment fn fs(v:Background)->@location(0) vec4f {
- let size=vec2i(textureDimensions(directTex));let coord=v.uv*vec2f(size)-.5;let origin=vec2i(floor(coord));let fraction=fract(coord);var alpha=0.;
+ let size=vec2i(param.size.xy);let coord=v.uv*vec2f(size)-.5;let origin=vec2i(floor(coord));let fraction=fract(coord);var alpha=0.;
  for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let q=clamp(origin+vec2i(x,y),vec2i(0),size-1);
   if(abs(textureLoad(surfaces,q,0).z)<.5){alpha+=textureLoad(directTex,q,0).a*select(1.-fraction.x,fraction.x,x==1)*select(1.-fraction.y,fraction.y,y==1);}
@@ -45,7 +45,7 @@ struct PaperVertex {
  let albedo=max(select(mix(vec3f(1),ink,.12),ink,front),vec3f(.002));
  let delta=v.world-param.camera.xyz;
  let ndc=(delta.xy/(-delta.z)-param.projection.zw)/param.projection.xy;
- let size=vec2i(textureDimensions(directTex));let coord=(ndc*vec2f(.5,-.5)+.5)*vec2f(size)-.5;
+ let size=vec2i(param.size.xy);let coord=(ndc*vec2f(.5,-.5)+.5)*vec2f(size)-.5;
  let center=vec2i(floor(coord));var correction=vec3f(0);var indirect=vec3f(0);var sum=0.;
  // Joint bilateral upsampling uses full-resolution depth, normal, side and UV.
  for(var y=0;y<2;y++){for(var x=0;x<2;x++){

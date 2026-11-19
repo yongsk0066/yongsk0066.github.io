@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 // Adapted from holocloth a6078ba: flat paper, gravity, pinned top edge. MIT.
 
 export interface ClothPhysicsParams {
@@ -27,13 +26,23 @@ export const PAPER_PARAMS: ClothPhysicsParams = {
   grabCompliance:.0015,
 };
 
-interface GrabState {
+export interface PaperPoint { x: number; y: number; z: number }
+
+export interface MotionSnapshot {
+  buffer: ArrayBuffer;
+  accumulator: number;
+  target?: PaperPoint;
+}
+
+export interface GrabRegion {
   indices: number[];
   weights: number[];
-  /** offset of each grabbed vertex from the grab origin, 3 floats per entry */
   offsets: Float32Array;
-  target: THREE.Vector3;
-  cursor: THREE.Vector3;
+}
+
+interface GrabState extends GrabRegion {
+  target: PaperPoint;
+  cursor: PaperPoint;
   lambda: Float64Array;
 }
 
@@ -51,6 +60,7 @@ export class ClothSim {
   readonly count: number;
   readonly positions: Float32Array;
   private prev: Float32Array;
+  private motion: Uint8Array;
   private rest: Float32Array;
 
   // constraints as flat arrays: [ia, ib] pairs + rest length + strength mul
@@ -88,11 +98,8 @@ export class ClothSim {
     this.cols = segX + 1;
     this.rows = segY + 1;
     this.count = this.cols * this.rows;
-    this.positions = new Float32Array(this.count * 3);
-    this.prev = new Float32Array(this.count * 3);
     this.rest = new Float32Array(this.count * 3);
 
-    this.initPositions();
 
     // Structural + both shear diagonals preserve printed cell shape; bending is separate.
     const a: number[] = [];
@@ -132,9 +139,20 @@ export class ClothSim {
     this.hinges=new Int32Array(hinges);
     this.hingeLambda=new Float64Array(hinges.length/4);
     this.hingeScale=new Float64Array(hinges.length/4);
-    this.memoryAngle=new Float64Array(hinges.length/4);
-    this.plasticAngle=new Float64Array(hinges.length/4);
-    this.releaseAge=new Float64Array(hinges.length/4);
+    // One transferable checkpoint contains the values carried into the next substep.
+    // XPBD multipliers and per-iteration gradients are reset or recomputed there.
+    const coordinates = this.count * 3;
+    const coordinateBytes = coordinates * Float32Array.BYTES_PER_ELEMENT;
+    const hingeCount = hinges.length / 4;
+    const angleBytes = hingeCount * Float64Array.BYTES_PER_ELEMENT;
+    const storage = new ArrayBuffer(2 * coordinateBytes + 3 * angleBytes);
+    this.motion = new Uint8Array(storage);
+    this.positions = new Float32Array(storage, 0, coordinates);
+    this.prev = new Float32Array(storage, coordinateBytes, coordinates);
+    this.memoryAngle = new Float64Array(storage, 2 * coordinateBytes, hingeCount);
+    this.plasticAngle = new Float64Array(storage, 2 * coordinateBytes + angleBytes, hingeCount);
+    this.releaseAge = new Float64Array(storage, 2 * coordinateBytes + 2 * angleBytes, hingeCount);
+    this.initPositions();
     this.hingeSpan=new Float64Array(hinges.length/4);
     this.hingeGrain=new Float64Array(hinges.length/4);
     this.bendAlpha=new Float64Array(hinges.length/4);
@@ -157,6 +175,42 @@ export class ClothSim {
         this.neighbors[i + 3] = y + 1 < this.rows ? idx(x, y + 1) : -1;
       }
     }
+  }
+
+  saveMotion(spare?: ArrayBuffer): MotionSnapshot {
+    const buffer = spare ?? new ArrayBuffer(this.motion.byteLength);
+    new Uint8Array(buffer).set(this.motion);
+    return {buffer, accumulator: this.accumulator, target: this.grab ? {...this.grab.target} : undefined};
+  }
+
+  restoreMotion(state: MotionSnapshot) {
+    this.motion.set(new Uint8Array(state.buffer));
+    this.accumulator = state.accumulator;
+    if (this.grab && state.target) Object.assign(this.grab.target, state.target);
+  }
+
+  get grabRegion(): GrabRegion | null {
+    if (!this.grab) return null;
+    const {indices, weights, offsets} = this.grab;
+    return {indices, weights, offsets};
+  }
+
+  get grabCursor() { return this.grab?.cursor; }
+
+  setGrabRegion(region: GrabRegion | null) {
+    this.grab = region && {...region, target: {x:0,y:0,z:0}, cursor: {x:0,y:0,z:0},
+      lambda: new Float64Array(region.indices.length * 3)};
+  }
+
+  get flatAndStill() {
+    if (this.grab) return false;
+    for (let i = 0; i < this.positions.length; i++) {
+      if (this.positions[i] !== this.prev[i] || (i % 3 === 2 && this.positions[i] !== 0)) return false;
+    }
+    for (let h = 0; h < this.memoryAngle.length; h++) {
+      if (this.memoryAngle[h] !== 0 || this.plasticAngle[h] !== 0) return false;
+    }
+    return true;
   }
 
   /** Stress-free flat sheet. */
@@ -187,8 +241,8 @@ export class ClothSim {
   }
 
   reset() {
-    this.memoryAngle.fill(0);this.plasticAngle.fill(0);this.releaseAge.fill(0);
     this.initPositions();
+    this.memoryAngle.fill(0);this.plasticAngle.fill(0);this.releaseAge.fill(0);
     this.grab = null;
     this.accumulator = 0;
   }
@@ -198,11 +252,9 @@ export class ClothSim {
     const p = this.positions;
     const ci = Math.floor(Math.random() * this.count);
     const cx = p[ci * 3], cy = p[ci * 3 + 1], cz = p[ci * 3 + 2];
-    const dir = new THREE.Vector3(
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-    ).normalize().multiplyScalar(strength * 0.09);
+    const rx=Math.random()-.5, ry=Math.random()-.5, rz=Math.random()-.5;
+    const inverseLength=1/(Math.sqrt(rx*rx+ry*ry+rz*rz)||1), amplitude=strength*.09;
+    const dir={x:rx*inverseLength*amplitude, y:ry*inverseLength*amplitude, z:rz*inverseLength*amplitude};
     const radius = Math.max(this.width, this.height) * 0.28;
     for (let i = this.cols; i < this.count; i++) {
       const dx = p[i * 3] - cx, dy = p[i * 3 + 1] - cy, dz = p[i * 3 + 2] - cz;
@@ -217,7 +269,7 @@ export class ClothSim {
   }
 
   /** Begin a grab around a world-space point. Returns false if nothing near. */
-  startGrab(point: THREE.Vector3, radius: number): boolean {
+  startGrab(point: PaperPoint, radius: number): boolean {
     const p = this.positions;
     const indices: number[] = [];
     const weights: number[] = [];
@@ -241,15 +293,15 @@ export class ClothSim {
       indices,
       weights,
       offsets: new Float32Array(offsets),
-      target: point.clone(),
-      cursor: point.clone(),
+      target: {x:point.x, y:point.y, z:point.z},
+      cursor: {x:point.x, y:point.y, z:point.z},
       lambda: new Float64Array(indices.length*3),
     };
     return true;
   }
 
-  moveGrab(target: THREE.Vector3) {
-    if (this.grab && [target.x,target.y,target.z].every(Number.isFinite)) this.grab.cursor.copy(target);
+  moveGrab(target: PaperPoint) {
+    if (this.grab && [target.x,target.y,target.z].every(Number.isFinite)) Object.assign(this.grab.cursor, target);
   }
 
   endGrab() {
@@ -354,7 +406,10 @@ export class ClothSim {
       const g=this.grab;g.lambda.fill(0);
       // Input filtering is independent of slow material relaxation. The old
       // 3 units/s cap added ~330ms lag to a one-unit pointer movement.
-      g.target.lerp(g.cursor,1-Math.exp(-SUBSTEP/.012));
+      const blend = 1-Math.exp(-SUBSTEP/.012);
+      g.target.x += (g.cursor.x-g.target.x)*blend;
+      g.target.y += (g.cursor.y-g.target.y)*blend;
+      g.target.z += (g.cursor.z-g.target.z)*blend;
     }
     // Rest geometry and damage do not change during relaxation iterations.
     for(let h=0;h<this.bendAlpha.length;h++){

@@ -38,6 +38,7 @@ export function createCalendarCanvas(calendar, panel, options = {}) {
   if(panel.hidden || !snapshot)return;
   const width=canvas.getBoundingClientRect().width;if(!width)return;
   const svg=shadow.querySelector('svg'), vb=svg.viewBox.baseVal;
+  canvas.dataset.paperAspect=String(vb.height/vb.width);
   const height=width*vb.height/vb.width;
   source.style.width=width+'px';source.style.height=height+'px';
   canvas.style.height=height+'px';

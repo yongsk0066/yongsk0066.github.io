@@ -36,24 +36,28 @@ export function mountCalendar(host: HTMLElement) {
   toggleButton.addEventListener('click', ()=>setExpanded(!expanded));
   canvas.addEventListener('paperoutside', ()=>{if(expanded)setExpanded(false);});
   document.addEventListener('keydown', e=>{if(e.key==='Escape' && expanded){e.preventDefault();setExpanded(false);}});
-  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:320, pixelRatio:720/672, lighting:true});
+  const paper = createPaperPreview(host.querySelector<HTMLElement>('[data-paper]')!, canvas, {rail:false, compact:true, overflow:320, pixelRatio:720/672, lighting:true, worker:true});
   const sheet = host.querySelector<HTMLElement>('[data-paper]')!;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let qualityFrame = 0;
-  function followResolution() {
+  function followResolution(targetWidth: number) {
     cancelAnimationFrame(qualityFrame);
+    paper.reservePixelRatio(2*targetWidth/672);
     const end = performance.now()+550;
     const update = () => {
       const width=Math.round(sheet.getBoundingClientRect().width);
+      if(width<1){paper.reservePixelRatio(0);return;}
       // Two texture pixels per displayed CSS pixel, at every intermediate scale.
       surface.setPixelRatio(2*width/672);
       paper.setPixelRatio(2*width/672);
       if(performance.now()<end)qualityFrame=requestAnimationFrame(update);
+      else paper.reservePixelRatio(0);
     };
     qualityFrame=requestAnimationFrame(update);
   }
   function updateTransform() {
     const rail = host.getBoundingClientRect();
+    if (!rail.width) return;
     const collapsedScale = rail.width / 672;
     const pin = paper.getTopOffset();
     sheet.style.transformOrigin = `50% ${pin}px`;
@@ -63,7 +67,7 @@ export function mountCalendar(host: HTMLElement) {
     sheet.style.transform = `translateX(${shift}px) scale(${expanded ? 1 : collapsedScale})`;
     // The WebGPU surface carries the area-light shadow; no second CSS shadow.
     sheet.style.filter = 'none';
-    followResolution();
+    followResolution(expanded ? 672 : rail.width);
   }
   window.addEventListener('resize', updateTransform);
   let visible = true, started = false;
@@ -80,8 +84,13 @@ export function mountCalendar(host: HTMLElement) {
       if (next) {
         background = color;
         surface.refresh();
-        if (showing && canvas.dataset.mode) {started = true; paper.show();}
-      } else {if(expanded)setExpanded(false);paper.hide();}
+        if (showing && canvas.dataset.mode) {started = true; paper.show(); updateTransform();}
+      } else {
+        if(expanded)setExpanded(false);
+        cancelAnimationFrame(qualityFrame);
+        paper.reservePixelRatio(0);
+        paper.hide();
+      }
     },
   };
 }

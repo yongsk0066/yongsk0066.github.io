@@ -1,5 +1,7 @@
 // Variance-guided, geometry-aware à-trous reconstruction of two separate signals.
 @id(0) override step:i32=1;
+struct FilterSize { size:vec4u }
+@group(0) @binding(7) var<uniform> frame:FilterSize;
 @group(0) @binding(0) var directTex:texture_2d<f32>;
 @group(0) @binding(1) var indirectTex:texture_2d<f32>;
 @group(0) @binding(2) var guides:texture_2d<f32>;
@@ -9,8 +11,8 @@
 @group(0) @binding(6) var indirectOut:texture_storage_2d<rgba16float,write>;
 fn luminance(c:vec3f)->f32 {return dot(c,vec3f(.2126,.7152,.0722));}
 @compute @workgroup_size(8,8) fn main(@builtin(global_invocation_id) id:vec3u){
- if(any(id.xy>=textureDimensions(directTex))){return;}
- let center=vec2i(id.xy);let size=vec2i(textureDimensions(directTex));let guide=textureLoad(guides,center,0);
+ if(any(id.xy>=frame.size.xy)){return;}
+ let center=vec2i(id.xy);let size=vec2i(frame.size.xy);let guide=textureLoad(guides,center,0);
  let surface=textureLoad(surfaces,center,0);let d=textureLoad(directTex,center,0);let gi=textureLoad(indirectTex,center,0);let m=textureLoad(momentsTex,center,0);
  let paper=abs(surface.z)>.5;
  // Empty padding and settled low-variance GI need no wide filter passes.

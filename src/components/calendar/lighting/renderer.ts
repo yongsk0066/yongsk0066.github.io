@@ -19,6 +19,7 @@ export class PaperTracer {
  frames:Frame[]=[]; scratch:LightPair[]=[];
  groups:GPUBindGroup[]=[]; filterGroups:GPUBindGroup[][]=[]; displayGroups:GPUBindGroup[]=[]; paperGroups:GPUBindGroup[]=[];
  width=0; height=0; lightingWidth=0; lightingHeight=0; samples=0; seed=0; epoch=0; lastReason='initial';
+ capacityWidth=0; capacityHeight=0;
  historyValid=false; moving=false; frameIndex=0; triangleCount=0;
  values=new Float32Array(44); textureWidth=0; textureHeight=0; disposed=false;
  static async create(canvas:HTMLCanvasElement,bvh:DynamicBVH,ink:HTMLCanvasElement){
@@ -56,21 +57,42 @@ export class PaperTracer {
   }
   this.device.queue.copyExternalImageToTexture({source:ink},{texture:this.texture},[ink.width,ink.height]);this.reset('calendarpaint');
  }
- setCamera(camera:PerspectiveCamera,width:number,height:number){
+ setCamera(camera:PerspectiveCamera,width:number,height:number,reserveWidth=0,reserveHeight=0){
   const p=camera.projectionMatrix.elements;
   const next=[camera.position.x,camera.position.y,camera.position.z,0,1/p[0],1/p[5],p[8]/p[0],p[9]/p[5]];let changed=false;
   for(let i=0;i<4;i++){if(this.values[4+i]!==Math.fround(next[i]))changed=true;this.values[4+i]=next[i];}
   for(let i=0;i<4;i++){if(this.values[24+i]!==Math.fround(next[4+i]))changed=true;this.values[24+i]=next[4+i];}
   width=Math.max(1,Math.round(width));height=Math.max(1,Math.round(height));
   if(width!==this.width||height!==this.height){
-   this.width=width;this.height=height;const canvas=this.context.canvas as HTMLCanvasElement;canvas.width=width;canvas.height=height;
-   this.destroyTargets();this.lightingWidth=Math.ceil(width/2);this.lightingHeight=Math.ceil(height/2);
-   const make=()=>this.device.createTexture({size:[this.lightingWidth,this.lightingHeight],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});
-   this.frames=Array.from({length:2},()=>({direct:make(),indirect:make(),moments:make(),guide:make(),surface:make()}));
-   this.scratch=Array.from({length:2},()=>({direct:make(),indirect:make()}));
+   this.width=width;this.height=height;
+   const canvas=this.context.canvas as HTMLCanvasElement;
+   canvas.width=width;canvas.height=height;
+   this.lightingWidth=Math.ceil(width/2);this.lightingHeight=Math.ceil(height/2);
+   // WebGPU requires the depth and current presentation attachments to match.
+   this.depth?.destroy();
    this.depth=this.device.createTexture({size:[width,height],format:'depth24plus',usage:GPUTextureUsage.RENDER_ATTACHMENT});
-   this.frameIndex=0;this.bind();changed=true;
+   changed=true;
   }
+  const capacityWidth=reserveWidth?Math.max(this.capacityWidth,this.lightingWidth,Math.ceil(reserveWidth/2)):this.lightingWidth;
+  const capacityHeight=reserveHeight?Math.max(this.capacityHeight,this.lightingHeight,Math.ceil(reserveHeight/2)):this.lightingHeight;
+  if(capacityWidth!==this.capacityWidth||capacityHeight!==this.capacityHeight){
+   const oldFrames=this.frames, oldTargets=[...this.frames,...this.scratch];
+   this.capacityWidth=capacityWidth;this.capacityHeight=capacityHeight;
+   const make=(copyable=false)=>this.device.createTexture({size:[capacityWidth,capacityHeight],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|(copyable?GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST:0)});
+   this.frames=Array.from({length:2},()=>({direct:make(true),indirect:make(true),moments:make(true),guide:make(true),surface:make(true)}));
+   this.scratch=Array.from({length:2},()=>({direct:make(),indirect:make()}));
+   if(!changed && this.historyValid){
+    // Switching capacity alone preserves the previous sample used for reprojection.
+    const previous=1-this.frameIndex, encoder=this.device.createCommandEncoder();
+    for(const key of Object.keys(oldFrames[previous]) as (keyof Frame)[]){
+     encoder.copyTextureToTexture({texture:oldFrames[previous][key]},{texture:this.frames[previous][key]},[this.lightingWidth,this.lightingHeight]);
+    }
+    this.device.queue.submit([encoder.finish()]);
+   }
+   for(const target of oldTargets)for(const texture of Object.values(target))texture.destroy();
+   this.bind();
+  }
+  if(changed)this.frameIndex=0;
   if(changed)this.reset('camera');
  }
  setBackground(color:{r:number;g:number;b:number}){
@@ -85,9 +107,9 @@ export class PaperTracer {
    this.groups.push(this.device.createBindGroup({layout:this.pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:this.nodes}},{binding:1,resource:{buffer:this.triangles}},{binding:2,resource:{buffer:this.previousTriangles}},entry(3,f.direct),{binding:4,resource:{buffer:this.uniform}},entry(5,this.texture),{binding:6,resource:this.sampler},entry(7,f.guide),entry(8,f.moments),entry(9,old.indirect),entry(10,old.guide),entry(11,old.surface),entry(12,f.indirect),entry(13,f.surface),entry(14,old.direct),entry(15,old.moments)]}));
    this.filterGroups.push(this.filters.map((pipeline,j)=>{
     const input=j===0?f:this.scratch[(j-1)%2],output=this.scratch[j%2];
-    return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[entry(0,input.direct),entry(1,input.indirect),entry(2,f.guide),entry(3,f.surface),entry(4,f.moments),entry(5,output.direct),entry(6,output.indirect)]});
+    return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[entry(0,input.direct),entry(1,input.indirect),entry(2,f.guide),entry(3,f.surface),entry(4,f.moments),entry(5,output.direct),entry(6,output.indirect),{binding:7,resource:{buffer:this.uniform}}]});
    }));
-   this.displayGroups.push(this.device.createBindGroup({layout:this.display.getBindGroupLayout(0),entries:[entry(0,this.scratch[0].direct),entry(5,f.surface)]}));
+   this.displayGroups.push(this.device.createBindGroup({layout:this.display.getBindGroupLayout(0),entries:[entry(0,this.scratch[0].direct),entry(5,f.surface),{binding:7,resource:{buffer:this.uniform}}]}));
    this.paperGroups.push(this.device.createBindGroup({layout:this.paper.getBindGroupLayout(0),entries:[entry(0,this.scratch[0].direct),entry(1,this.scratch[0].indirect),entry(2,this.texture),{binding:3,resource:this.sampler},entry(4,f.guide),entry(5,f.surface),{binding:6,resource:{buffer:this.triangles}},{binding:7,resource:{buffer:this.uniform}}]}));
   }
  }
@@ -104,10 +126,10 @@ export class PaperTracer {
   const draw=encoder.beginRenderPass({colorAttachments:[{view:this.context.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:0}}],depthStencilAttachment:{view:this.depth.createView(),depthClearValue:1,depthLoadOp:'clear',depthStoreOp:'discard'}});
   draw.setPipeline(this.display);draw.setBindGroup(0,this.displayGroups[this.frameIndex]);draw.draw(3);
   draw.setPipeline(this.paper);draw.setBindGroup(0,this.paperGroups[this.frameIndex]);draw.draw(this.triangleCount*3);draw.end();
-  encoder.copyBufferToBuffer(this.triangles,0,this.previousTriangles,0,this.triangles.size);
+  if(this.moving)encoder.copyBufferToBuffer(this.triangles,0,this.previousTriangles,0,this.triangles.size);
   this.device.queue.submit([encoder.finish()]);this.samples++;this.historyValid=true;this.moving=false;this.frameIndex=1-this.frameIndex;
   this.values.set(this.values.subarray(4,8),32);this.values.set(this.values.subarray(24,28),36);
  }
- private destroyTargets(){for(const f of [...this.frames,...this.scratch])for(const t of Object.values(f))t.destroy();this.frames=[];this.scratch=[];this.depth?.destroy();}
- dispose(){this.disposed=true;this.nodes?.destroy();this.triangles?.destroy();this.previousTriangles?.destroy();this.uniform?.destroy();this.destroyTargets();this.texture?.destroy();this.context?.unconfigure();this.device?.destroy();}
+ private destroyHistory(){for(const f of [...this.frames,...this.scratch])for(const t of Object.values(f))t.destroy();this.frames=[];this.scratch=[];}
+ dispose(){this.disposed=true;this.nodes?.destroy();this.triangles?.destroy();this.previousTriangles?.destroy();this.uniform?.destroy();this.destroyHistory();this.depth?.destroy();this.texture?.destroy();this.context?.unconfigure();this.device?.destroy();}
 }
