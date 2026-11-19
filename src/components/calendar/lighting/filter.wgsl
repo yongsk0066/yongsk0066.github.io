@@ -24,7 +24,7 @@ fn filterLight(center:vec2i,step:i32)->Filtered{
  var ds=vec4f(0);var dw=0.;var gs=vec3f(0);var gw=0.;
  for(var y=-2;y<=2;y++){for(var x=-2;x<=2;x++){
   let q=clamp(center+vec2i(x,y)*step,vec2i(0),size-1);let os=textureLoad(surfaces,q,0);
-  if(os.z!=surface.z){continue;}if(paper&&distance(os.xy,surface.xy)>.05*f32(step)){continue;}
+  if(sign(os.z)!=sign(surface.z)){continue;}if(paper&&distance(os.xy,surface.xy)>.05*f32(step)){continue;}
   let og=textureLoad(guides,q,0);
   let spatial=exp(-f32(x*x+y*y)*.55);
   let shape=pow(max(0.,dot(guide.xyz,og.xyz)),32.)*exp(-abs(guide.w-og.w)*45./f32(step));

@@ -19,6 +19,7 @@ export class PaperTracer {
  private meshVertices?:GPUBuffer;
  private vertexData?:Float32Array<ArrayBuffer>;
  private topology?:DynamicBVH;
+ private previousLightAndScene=new Float32Array(8);
  pipeline!:GPUComputePipeline; filters:GPUComputePipeline[]=[];
  display!:GPURenderPipeline; paper!:GPURenderPipeline;
  nodes!:GPUBuffer; triangles!:GPUBuffer; previousTriangles!:GPUBuffer; uniform!:GPUBuffer;
@@ -165,7 +166,17 @@ export class PaperTracer {
  render(){
   if(!this.groups.length||this.disposed)return;
   const u=new Uint32Array(this.values.buffer);u[0]=this.lightingWidth;u[1]=this.lightingHeight;u[2]=this.samples;u[3]=this.seed++;
-  this.values[40]=this.historyValid?1:0;this.values[41]=this.moving?1:0;this.device.queue.writeBuffer(this.uniform,0,this.values);
+  // Primary visibility and wall quadrature also depend on the emitter and wall planes.
+  let reuseVisibility=this.historyValid && !this.moving;
+  for(let i=0;i<this.previousLightAndScene.length;i++){
+   const value=this.values[8+i];
+   if(this.previousLightAndScene[i]!==value)reuseVisibility=false;
+   this.previousLightAndScene[i]=value;
+  }
+  this.values[40]=this.historyValid?1:0;
+  this.values[41]=this.moving?1:0;
+  this.values[42]=reuseVisibility?1:0;
+  this.device.queue.writeBuffer(this.uniform,0,this.values);
   const encoder=this.device.createCommandEncoder();
   if(this.moving && this.expand && this.meshGroup){
    const pass=encoder.beginComputePass({label:'Expand calendar mesh'});

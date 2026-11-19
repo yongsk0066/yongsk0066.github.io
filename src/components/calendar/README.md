@@ -70,6 +70,19 @@ last valid history once. The browser uploads the bounding boxes and shared mesh
 vertices for the most recent pose. A compute pass expands them in the fixed BVH
 triangle order before tracing. CPU expansion is available if that pipeline fails.
 
+Each 32-byte BVH node contains a child or packed leaf range and a continuation
+index. Bounds refits preserve those links. Rays traverse the same primitives in
+the same order at shared edges and overlapping folds. Shadow segments can return
+at the first blocker. Camera and bounce rays keep the closest surface.
+
+During stationary refinement, the existing binary16 surface texture holds the
+visible triangle index and side. A camera ray intersects that triangle again to
+recover full-precision shading inputs. Zero indicates a background ray, and tag
+2048 requests a fresh traversal for indices beyond the exact stored range. The
+wall reuses its deterministic emitter visibility from the preceding frame.
+Mesh uploads, camera changes, calendar paint, background changes and edits to
+the emitter or wall all require fresh visibility.
+
 The primary diffuse term uses the rectangular emitter's cosine integral. The
 smooth unclipped vector irradiance is evaluated per vertex and interpolated over
 the small triangles; fragments crossing the emitter horizon use clipped integration.

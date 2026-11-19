@@ -50,10 +50,22 @@ export class DynamicBVH {
     build(Array.from({length:count},(_,i)=>i));
     this.nodeData = new Float32Array(this.nodes.length * 8);
     const nodeBits = new Int32Array(this.nodeData.buffer);
-    for (let i = 0; i < this.nodes.length; i++) {
-      nodeBits[8*i+3] = this.nodes[i].left;
-      nodeBits[8*i+7] = this.nodes[i].right;
-    }
+    // Precompute where a ray continues after a missed box or an exhausted leaf.
+    // Visit the right child first, as in the original LIFO traversal, including coplanar ties.
+    const thread = (index: number, escape: number) => {
+      const node = this.nodes[index];
+      const offset = 8 * index;
+      nodeBits[offset + 7] = escape;
+      if (node.ids) {
+        const first = -node.left - 1;
+        nodeBits[offset + 3] = ~(first * 4 + node.ids.length - 1);
+      } else {
+        nodeBits[offset + 3] = node.right;
+        thread(node.right, node.left);
+        thread(node.left, escape);
+      }
+    };
+    thread(0, this.nodes.length);
     this.refit();
   }
 

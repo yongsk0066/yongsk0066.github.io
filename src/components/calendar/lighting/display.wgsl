@@ -50,7 +50,7 @@ struct PaperVertex {
  // Joint bilateral upsampling uses full-resolution depth, normal, side and UV.
  for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let q=clamp(center+vec2i(x,y),vec2i(0),size-1);let s=textureLoad(surfaces,q,0);let g=textureLoad(guides,q,0);
-  if(s.z!=side||distance(s.xy,v.uv)>.025||dot(n,g.xyz)<.8){continue;}
+  if(sign(s.z)!=side||distance(s.xy,v.uv)>.025||dot(n,g.xyz)<.8){continue;}
   let offset=vec2f(q)-coord;let weight=exp(-dot(offset,offset)*1.5)*exp(-abs(g.w-length(delta))*45.)*pow(max(0.,dot(n,g.xyz)),24.);
   correction+=textureLoad(directTex,q,0).rgb*weight;indirect+=textureLoad(indirectTex,q,0).rgb*weight;sum+=weight;
  }}

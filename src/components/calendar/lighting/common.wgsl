@@ -1,4 +1,4 @@
-struct Node { lo:vec3f,left:i32,hi:vec3f,right:i32 }
+struct Node { lo:vec3f,childOrLeaf:i32,hi:vec3f,escape:u32 }
 struct Triangle { a:vec4f,b:vec4f,c:vec4f,na:vec4f,nb:vec4f,nc:vec4f,uv01:vec4f,uv2:vec4f }
 struct Params { size:vec4u, camera:vec4f, light:vec4f, scene:vec4f, optical:vec4f, flags:vec4f, projection:vec4f, background:vec4f, previousCamera:vec4f, previousProjection:vec4f, temporal:vec4f }
 

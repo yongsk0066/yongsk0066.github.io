@@ -19,22 +19,147 @@
 var<private> rng:u32;
 fn random()->f32 {rng=rng*747796405u+2891336453u;let w=((rng>>((rng>>28u)+4u))^rng)*277803737u;return f32((w>>22u)^w)/4294967296.;}
 fn boxHit(ro:vec3f,inv:vec3f,node:Node,limit:f32)->bool {let a=(node.lo-ro)*inv;let b=(node.hi-ro)*inv;let lo=min(a,b);let hi=max(a,b);return max(max(lo.x,lo.y),max(lo.z,0.))<=min(min(hi.x,hi.y),min(hi.z,limit));}
-fn trace(ro:vec3f,rd:vec3f,limit:f32)->Hit {
- var hit:Hit;hit.t=limit;hit.kind=0;var stack:array<i32,64>;var ptr=1;stack[0]=0;
- let inv=1./select(rd,vec3f(1e-8),abs(rd)<vec3f(1e-8));
- for(var iter=0;iter<2048&&ptr>0;iter++){
-  ptr--;let node=nodes[stack[ptr]];if(!boxHit(ro,inv,node,hit.t)){continue;}
-  if(node.left>=0){if(ptr<62){stack[ptr]=node.left;stack[ptr+1]=node.right;ptr+=2;}continue;}
-  for(var k=0;k<node.right;k++){
-   let tri=tris[-node.left-1+k];let e1=tri.b.xyz-tri.a.xyz;let e2=tri.c.xyz-tri.a.xyz;let pv=cross(rd,e2);let det=dot(e1,pv);if(abs(det)<1e-9){continue;}
-   let tv=ro-tri.a.xyz;let u=dot(tv,pv)/det;if(u<0.||u>1.){continue;}let q=cross(tv,e1);let v=dot(rd,q)/det;if(v<0.||u+v>1.){continue;}
-   let t=dot(e2,q)/det;if(t>EPS&&t<hit.t){hit.t=t;hit.kind=1;hit.triangle=-node.left-1+k;hit.bary=vec2f(u,v);hit.gn=normalize(cross(e1,e2));hit.n=normalize(tri.na.xyz*(1.-u-v)+tri.nb.xyz*u+tri.nc.xyz*v);hit.uv=tri.uv01.xy*(1.-u-v)+tri.uv01.zw*u+tri.uv2.xy*v;}
+struct PlaneHit { distance:f32, kind:i32 }
+
+fn intersectPlanes(ro:vec3f, rd:vec3f, limit:f32)->PlaneHit {
+ var plane=PlaneHit(limit,0);
+ if(abs(rd.z)>1e-8){
+  let t=(param.scene.y-ro.z)/rd.z;
+  if(t>EPS && t<plane.distance){plane=PlaneHit(t,2);}
+ }
+ let t=(param.light.z-ro.z)/rd.z;
+ if(t>EPS && t<plane.distance){
+  let p=ro+rd*t-param.light.xyz;
+  if(abs(p.x)<param.light.w*.5 && abs(p.y)<param.scene.x*.5 && rd.z*param.scene.w<0.){
+   plane=PlaneHit(t,3);
   }
  }
- if(abs(rd.z)>1e-8){let t=(param.scene.y-ro.z)/rd.z;if(t>EPS&&t<hit.t){hit.t=t;hit.kind=2;hit.n=vec3f(0,0,1);hit.gn=hit.n;}}
- let lz=(param.light.z-ro.z)/rd.z;
- if(lz>EPS&&lz<hit.t){let p=ro+rd*lz-param.light.xyz;if(abs(p.x)<param.light.w*.5&&abs(p.y)<param.scene.x*.5&&rd.z*param.scene.w<0.){hit.t=lz;hit.kind=3;}}
+ return plane;
+}
+
+// Barycentric coordinates and distance in the open ray segment. Zero distance means a miss.
+fn intersectTriangle(index:u32, ro:vec3f, rd:vec3f, limit:f32)->vec3f {
+ let a=tris[index].a.xyz;
+ let e1=tris[index].b.xyz-a;
+ let e2=tris[index].c.xyz-a;
+ let pv=cross(rd,e2);
+ let det=dot(e1,pv);
+ if(abs(det)<1e-9){return vec3f(0);}
+ let tv=ro-a;
+ let u=dot(tv,pv)/det;
+ if(u<0. || u>1.){return vec3f(0);}
+ let q=cross(tv,e1);
+ let v=dot(rd,q)/det;
+ if(v<0. || u+v>1.){return vec3f(0);}
+ let t=dot(e2,q)/det;
+ if(t>EPS && t<limit){return vec3f(u,v,t);}
+ return vec3f(0);
+}
+
+// The wall counts only paper before or on its nearest analytic surface.
+fn paperBlocks(ro:vec3f, rd:vec3f, limit:f32, planeLimit:f32)->bool {
+ let inv=1./select(rd,vec3f(1e-8),abs(rd)<vec3f(1e-8));
+ var cursor=0u;
+ while(cursor<arrayLength(&nodes)){
+  let node=nodes[cursor];
+  cursor=node.escape;
+  if(!boxHit(ro,inv,node,limit)){continue;}
+  if(node.childOrLeaf>=0){
+   cursor=u32(node.childOrLeaf);
+   continue;
+  }
+  let leaf=u32(~node.childOrLeaf);
+  let first=leaf>>2u;
+  let count=(leaf&3u)+1u;
+  for(var i=0u;i<count;i++){
+   let t=intersectTriangle(first+i,ro,rd,limit).z;
+   if(t>0. && t<=planeLimit){return true;}
+  }
+ }
+ return false;
+}
+
+// Keep the full hit calculation together. Moving barycentrics across a helper boundary
+// changed interpolated values on shared edges on tested WebGPU backends.
+fn considerTriangle(index:u32, ro:vec3f, rd:vec3f, hit:ptr<function,Hit>){
+ let tri=tris[index];
+ let e1=tri.b.xyz-tri.a.xyz;
+ let e2=tri.c.xyz-tri.a.xyz;
+ let pv=cross(rd,e2);
+ let det=dot(e1,pv);
+ if(abs(det)<1e-9){return;}
+ let tv=ro-tri.a.xyz;
+ let u=dot(tv,pv)/det;
+ if(u<0. || u>1.){return;}
+ let q=cross(tv,e1);
+ let v=dot(rd,q)/det;
+ if(v<0. || u+v>1.){return;}
+ let t=dot(e2,q)/det;
+ if(t>EPS && t<(*hit).t){
+  (*hit).t=t;
+  (*hit).kind=1;
+  (*hit).triangle=i32(index);
+  (*hit).bary=vec2f(u,v);
+  (*hit).gn=normalize(cross(e1,e2));
+  (*hit).n=normalize(tri.na.xyz*(1.-u-v)+tri.nb.xyz*u+tri.nc.xyz*v);
+  (*hit).uv=tri.uv01.xy*(1.-u-v)+tri.uv01.zw*u+tri.uv2.xy*v;
+ }
+}
+
+fn finishWithPlanes(ro:vec3f, rd:vec3f, hit:ptr<function,Hit>){
+ let plane=intersectPlanes(ro,rd,(*hit).t);
+ if(plane.kind==0){return;}
+ (*hit).t=plane.distance;
+ (*hit).kind=plane.kind;
+ if(plane.kind==2){(*hit).n=vec3f(0,0,1);(*hit).gn=(*hit).n;}
+}
+
+fn trace(ro:vec3f,rd:vec3f,limit:f32)->Hit {
+ var hit:Hit;
+ hit.t=limit;
+ var cursor=0u;
+ let inv=1./select(rd,vec3f(1e-8),abs(rd)<vec3f(1e-8));
+ while(cursor<arrayLength(&nodes)){
+  let node=nodes[cursor];
+  cursor=node.escape;
+  if(!boxHit(ro,inv,node,hit.t)){continue;}
+  if(node.childOrLeaf>=0){
+   cursor=u32(node.childOrLeaf);
+   continue;
+  }
+  let leaf=u32(~node.childOrLeaf);
+  let first=leaf>>2u;
+  let count=(leaf&3u)+1u;
+  for(var i=0u;i<count;i++){considerTriangle(first+i,ro,rd,&hit);}
+ }
+ finishWithPlanes(ro,rd,&hit);
  return hit;
+}
+
+// surface.z stores side * (primitive index + 1). All tags fit exactly in binary16.
+// Zero denotes no paper; 2048 asks for a fresh intersection on larger meshes.
+const UNCACHED_TRIANGLE=2048.;
+fn primaryHit(ro:vec3f, rd:vec3f, pixel:vec2i)->Hit {
+ let far=1e5;
+ if(param.temporal.z>.5){
+  let tag=abs(textureLoad(previousSurface,pixel,0).z);
+  var hit:Hit;
+  hit.t=far;
+  if(tag==0.){
+   finishWithPlanes(ro,rd,&hit);
+   return hit;
+  }
+  if(tag<UNCACHED_TRIANGLE){
+   considerTriangle(u32(tag)-1u,ro,rd,&hit);
+   if(hit.kind==1){return hit;}
+  }
+ }
+ return trace(ro,rd,far);
+}
+
+fn segmentBlocked(ro:vec3f,rd:vec3f,limit:f32)->bool {
+ if(intersectPlanes(ro,rd,limit).kind!=0){return true;}
+ return paperBlocks(ro,rd,limit,limit);
 }
 fn basis(n:vec3f,v:vec3f)->vec3f {let t=normalize(cross(select(vec3f(0,0,1),vec3f(0,1,0),abs(n.z)>.99),n));return t*v.x+cross(n,t)*v.y+n*v.z;}
 fn cosine(n:vec3f)->vec3f {let r=sqrt(random());let a=2.*PI*random();return basis(n,vec3f(r*cos(a),r*sin(a),sqrt(max(0.,1.-r*r))));}
@@ -62,9 +187,9 @@ fn directCorrection(p:vec3f,n:vec3f,gn:vec3f,wo:vec3f,m:Material,count:i32)->Dir
   let lp=param.light.xyz+vec3f((uv-.5)*vec2f(param.light.w,param.scene.x),0.);
   let delta=lp-p;let dist=length(delta);let wi=delta/dist;let cosL=max(0.,-wi.z*param.scene.w);
   if(cosL>0.&&dot(n,wi)*dot(gn,wi)>0.){
-   let blocker=trace(p+gn*select(-EPS*3.,EPS*3.,dot(wi,gn)>0.),wi,dist-EPS*8.);
+   let occluded=segmentBlocked(p+gn*select(-EPS*3.,EPS*3.,dot(wi,gn)>0.),wi,dist-EPS*8.);
    let diffuse=select(m.t,m.r,dot(n,wi)>0.)/PI;var correction=-diffuse;
-   if(blocker.kind==0){correction=evaluate(m,n,wo,wi)-diffuse;}else{blocked+=1./f32(count);}
+   if(!occluded){correction=evaluate(m,n,wo,wi)-diffuse;}else{blocked+=1./f32(count);}
    value+=correction*abs(dot(n,wi))*param.scene.z*cosL*param.light.w*param.scene.x/(dist*dist*f32(count));
   }
  }
@@ -81,8 +206,8 @@ fn indirectRadiance(ro0:vec3f,rd0:vec3f,primary:Hit)->vec3f {
    let lp=param.light.xyz+vec3f((vec2f(random(),random())-.5)*vec2f(param.light.w,param.scene.x),0.);
    let delta=lp-p;let dist=length(delta);let wi=delta/dist;let cosL=max(0.,-wi.z*param.scene.w);
    if(cosL>0.&&dot(n,wi)*dot(gn,wi)>0.){
-    let blocker=trace(p+gn*select(-EPS*3.,EPS*3.,dot(wi,gn)>0.),wi,dist-EPS*8.);
-    if(blocker.kind==0){result+=throughput*evaluate(m,n,wo,wi)*abs(dot(n,wi))*param.scene.z*cosL*param.light.w*param.scene.x/(dist*dist);}
+    let occluded=segmentBlocked(p+gn*select(-EPS*3.,EPS*3.,dot(wi,gn)>0.),wi,dist-EPS*8.);
+    if(!occluded){result+=throughput*evaluate(m,n,wo,wi)*abs(dot(n,wi))*param.scene.z*cosL*param.light.w*param.scene.x/(dist*dist);}
    }
   }
   let next=sampleDirection(m,n,wo);if(length(next)<.5||dot(n,next)*dot(gn,next)<=0.){break;}
@@ -106,7 +231,7 @@ fn reproject(hit:Hit,n:vec3f,side:f32,pixel:vec2f)->History {
  for(var y=0;y<2;y++){for(var x=0;x<2;x++){
   let q=origin+vec2i(x,y);if(any(q<vec2i(0))||any(q>=vec2i(param.size.xy))){continue;}
   let g=textureLoad(previousGuide,q,0);let s=textureLoad(previousSurface,q,0);let old=textureLoad(previousIndirect,q,0);
-  if(old.a<1.||dot(g.xyz,n)<.94||abs(g.w-length(delta))>.035||distance(s.xy,hit.uv)>.012||s.z!=side){continue;}
+  if(old.a<1.||dot(g.xyz,n)<.94||abs(g.w-length(delta))>.035||distance(s.xy,hit.uv)>.012||sign(s.z)!=side){continue;}
   let w=select(1.-fraction.x,fraction.x,x==1)*select(1.-fraction.y,fraction.y,y==1);
   result.direct+=textureLoad(previousDirect,q,0)*w;result.indirect+=old*w;
   result.moments+=textureLoad(previousMoments,q,0)*w;result.visibility+=s.w*w;weights+=w;
@@ -120,7 +245,9 @@ fn wallBlocked(p:vec3f,grid:i32)->f32 {
  for(var i=0;i<grid*grid;i++){
   let uv=(vec2f(f32(i%grid),f32(i/grid))+.5)/f32(grid)-.5;
   let delta=param.light.xyz+vec3f(uv*vec2f(param.light.w,param.scene.x),0.)-p;let dist=length(delta);
-  if(trace(p+vec3f(0,0,EPS*3.),delta/dist,dist-EPS*8.).kind==1){blocked+=1.;}
+  let ro=p+vec3f(0,0,EPS*3.);let rd=delta/dist;let limit=dist-EPS*8.;
+  let plane=intersectPlanes(ro,rd,limit);
+  if(paperBlocks(ro,rd,limit,plane.distance)){blocked+=1.;}
  }
  return blocked/f32(grid*grid);
 }
@@ -128,7 +255,7 @@ fn wallBlocked(p:vec3f,grid:i32)->f32 {
  if(any(id.xy>=param.size.xy)){return;}let index=id.y*param.size.x+id.x;
  rng=(index+1u)*1973u+(param.size.w+1u)*9277u;
  let uv=(vec2f(id.xy)+.5)/vec2f(param.size.xy);let q=(uv*2.-1.)*vec2f(1.,-1.);
- let ray=normalize(vec3f(q*param.projection.xy+param.projection.zw,-1.));let hit=trace(param.camera.xyz,ray,1e5);
+ let ray=normalize(vec3f(q*param.projection.xy+param.projection.zw,-1.));let hit=primaryHit(param.camera.xyz,ray,vec2i(id.xy));
  var direct=vec4f(0);var indirect=vec4f(0);var moments=vec4f(0);var surface=vec4f(0);var normal=vec3f(0,0,1);
  if(hit.kind==1){
   let p=param.camera.xyz+ray*hit.t;let front=dot(hit.gn,-ray)>0.;let side=select(-1.,1.,front);
@@ -158,16 +285,21 @@ fn wallBlocked(p:vec3f,grid:i32)->f32 {
   let da=1./(dAge+1.);let ia=1./(iAge+1.);
   direct=vec4f(mix(old.direct.rgb,d,da),dAge+1.);indirect=vec4f(mix(old.indirect.rgb,gi,ia),iAge+1.);
   moments=vec4f(mix(old.moments.xy,vec2f(dl,dl*dl),da),mix(old.moments.zw,vec2f(il,il*il),ia));
-  surface=vec4f(hit.uv,side,correction.blocked);
+  surface=vec4f(hit.uv,side*min(f32(hit.triangle+1),UNCACHED_TRIANGLE),correction.blocked);
  }else if(hit.kind==2){
-  let p=param.camera.xyz+ray*hit.t;let root=nodes[0];
-  let spread=max(0.,root.hi.z-param.scene.y)/max(EPS,param.light.z-root.hi.z);
-  let reach=(max(abs(param.light.xy-root.lo.xy),abs(param.light.xy-root.hi.xy))+vec2f(param.light.w,param.scene.x)*.5)*spread;
-  if(all(p.xy>=root.lo.xy-reach)&&all(p.xy<=root.hi.xy+reach)){
-   var blocked=wallBlocked(p,4);
-   // Refine only the penumbra; fixed quadrature has no temporal random grain.
-   if(blocked>0.&&blocked<1.){blocked=wallBlocked(p,8);}
-   direct.a=.18*blocked;
+  if(param.temporal.z>.5){
+   // The quadrature over the emitter is deterministic for this camera and pose.
+   direct.a=textureLoad(previousDirect,vec2i(id.xy),0).a;
+  }else{
+   let p=param.camera.xyz+ray*hit.t;let root=nodes[0];
+   let spread=max(0.,root.hi.z-param.scene.y)/max(EPS,param.light.z-root.hi.z);
+   let reach=(max(abs(param.light.xy-root.lo.xy),abs(param.light.xy-root.hi.xy))+vec2f(param.light.w,param.scene.x)*.5)*spread;
+   if(all(p.xy>=root.lo.xy-reach)&&all(p.xy<=root.hi.xy+reach)){
+    var blocked=wallBlocked(p,4);
+    // Refine only the penumbra; fixed quadrature has no temporal random grain.
+    if(blocked>0.&&blocked<1.){blocked=wallBlocked(p,8);}
+    direct.a=.18*blocked;
+   }
   }
  }
  textureStore(directOut,vec2i(id.xy),direct);textureStore(indirectOut,vec2i(id.xy),indirect);
