@@ -8,7 +8,7 @@ import {slabRT} from './material';
 import type {PerspectiveCamera} from 'three';
 
 type Frame = {direct:GPUTexture; indirect:GPUTexture; moments:GPUTexture; guide:GPUTexture; surface:GPUTexture};
-type LightPair = {direct:GPUTexture; indirect:GPUTexture};
+type FilterTargets = {direct:GPUTexture; indirect:GPUTexture; intermediate:GPUTexture};
 
 /** Analytic direct light, independently reconstructed shadows/GI, full-resolution paper raster. */
 export class PaperTracer {
@@ -23,7 +23,7 @@ export class PaperTracer {
  display!:GPURenderPipeline; paper!:GPURenderPipeline;
  nodes!:GPUBuffer; triangles!:GPUBuffer; previousTriangles!:GPUBuffer; uniform!:GPUBuffer;
  texture!:GPUTexture; sampler!:GPUSampler; depth!:GPUTexture;
- frames:Frame[]=[]; scratch:LightPair[]=[];
+ frames:Frame[]=[]; scratch?:FilterTargets;
  groups:GPUBindGroup[]=[]; filterGroups:GPUBindGroup[][]=[]; displayGroups:GPUBindGroup[]=[]; paperGroups:GPUBindGroup[]=[];
  width=0; height=0; lightingWidth=0; lightingHeight=0; samples=0; seed=0; epoch=0; lastReason='initial';
  capacityWidth=0; capacityHeight=0;
@@ -45,7 +45,7 @@ export class PaperTracer {
     r.device.createComputePipelineAsync({label:'Calendar mesh expansion',layout:'auto',compute:{module:r.device.createShaderModule({code:meshShader}),entryPoint:'expand'}}).catch(()=>undefined),
    ]);
    const filtering=r.device.createShaderModule({code:filterShader});
-   for(const step of [1,2,4])r.filters.push(await r.device.createComputePipelineAsync({layout:'auto',compute:{module:filtering,entryPoint:'main',constants:{0:step}}}));
+   r.filters=await Promise.all(['tight','wide2','wide4'].map(entryPoint=>r.device.createComputePipelineAsync({layout:'auto',compute:{module:filtering,entryPoint}})));
    const display=r.device.createShaderModule({code:commonShader+'\n'+displayShader});
    r.display=await r.device.createRenderPipelineAsync({layout:'auto',vertex:{module:display,entryPoint:'vs'},fragment:{module:display,entryPoint:'fs',targets:[{format}]},primitive:{topology:'triangle-list'},depthStencil:{format:'depth24plus',depthWriteEnabled:false,depthCompare:'always'}});
    r.paper=await r.device.createRenderPipelineAsync({layout:'auto',vertex:{module:display,entryPoint:'vsPaper'},fragment:{module:display,entryPoint:'fsPaper',targets:[{format}]},primitive:{topology:'triangle-list',cullMode:'none'},depthStencil:{format:'depth24plus',depthWriteEnabled:true,depthCompare:'less'}});
@@ -96,11 +96,11 @@ export class PaperTracer {
   const capacityWidth=reserveWidth?Math.max(this.capacityWidth,this.lightingWidth,Math.ceil(reserveWidth/2)):this.lightingWidth;
   const capacityHeight=reserveHeight?Math.max(this.capacityHeight,this.lightingHeight,Math.ceil(reserveHeight/2)):this.lightingHeight;
   if(capacityWidth!==this.capacityWidth||capacityHeight!==this.capacityHeight){
-   const oldFrames=this.frames, oldTargets=[...this.frames,...this.scratch];
+   const oldFrames=this.frames, oldTargets=this.historyTextures();
    this.capacityWidth=capacityWidth;this.capacityHeight=capacityHeight;
    const make=(copyable=false)=>this.device.createTexture({size:[capacityWidth,capacityHeight],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|(copyable?GPUTextureUsage.COPY_SRC|GPUTextureUsage.COPY_DST:0)});
    this.frames=Array.from({length:2},()=>({direct:make(true),indirect:make(true),moments:make(true),guide:make(true),surface:make(true)}));
-   this.scratch=Array.from({length:2},()=>({direct:make(),indirect:make()}));
+   this.scratch={direct:make(),indirect:make(),intermediate:make()};
    if(!changed && this.historyValid){
     // Switching capacity alone preserves the previous sample used for reprojection.
     const previous=1-this.frameIndex, encoder=this.device.createCommandEncoder();
@@ -109,7 +109,7 @@ export class PaperTracer {
     }
     this.device.queue.submit([encoder.finish()]);
    }
-   for(const target of oldTargets)for(const texture of Object.values(target))texture.destroy();
+   for(const texture of oldTargets)texture.destroy();
    this.bind();
   }
   if(changed)this.frameIndex=0;
@@ -120,17 +120,22 @@ export class PaperTracer {
   this.values.set([color.r,color.g,color.b,0],28);this.reset('background');
  }
  private bind(){
+  const scratch=this.scratch!;
   const entry=(binding:number,texture:GPUTexture):GPUBindGroupEntry=>({binding,resource:texture.createView()});
   this.groups=[];this.filterGroups=[];this.displayGroups=[];this.paperGroups=[];
   for(let i=0;i<2;i++){
    const f=this.frames[i],old=this.frames[1-i];
    this.groups.push(this.device.createBindGroup({layout:this.pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:this.nodes}},{binding:1,resource:{buffer:this.triangles}},{binding:2,resource:{buffer:this.previousTriangles}},entry(3,f.direct),{binding:4,resource:{buffer:this.uniform}},entry(5,this.texture),{binding:6,resource:this.sampler},entry(7,f.guide),entry(8,f.moments),entry(9,old.indirect),entry(10,old.guide),entry(11,old.surface),entry(12,f.indirect),entry(13,f.surface),entry(14,old.direct),entry(15,old.moments)]}));
+   // The tight pass finishes direct light. Only indirect light alternates in the two wide passes.
    this.filterGroups.push(this.filters.map((pipeline,j)=>{
-    const input=j===0?f:this.scratch[(j-1)%2],output=this.scratch[j%2];
-    return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[entry(0,input.direct),entry(1,input.indirect),entry(2,f.guide),entry(3,f.surface),entry(4,f.moments),entry(5,output.direct),entry(6,output.indirect),{binding:7,resource:{buffer:this.uniform}}]});
+    const input=j===0?f.indirect:j===1?scratch.indirect:scratch.intermediate;
+    const output=j===1?scratch.intermediate:scratch.indirect;
+    const entries=[entry(0,j===0?f.direct:scratch.direct),entry(1,input),entry(2,f.guide),entry(3,f.surface),entry(4,f.moments),entry(6,output),{binding:7,resource:{buffer:this.uniform}}];
+    if(j===0)entries.push(entry(5,scratch.direct));
+    return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries});
    }));
-   this.displayGroups.push(this.device.createBindGroup({layout:this.display.getBindGroupLayout(0),entries:[entry(0,this.scratch[0].direct),entry(5,f.surface),{binding:7,resource:{buffer:this.uniform}}]}));
-   this.paperGroups.push(this.device.createBindGroup({layout:this.paper.getBindGroupLayout(0),entries:[entry(0,this.scratch[0].direct),entry(1,this.scratch[0].indirect),entry(2,this.texture),{binding:3,resource:this.sampler},entry(4,f.guide),entry(5,f.surface),{binding:6,resource:{buffer:this.triangles}},{binding:7,resource:{buffer:this.uniform}}]}));
+   this.displayGroups.push(this.device.createBindGroup({layout:this.display.getBindGroupLayout(0),entries:[entry(0,scratch.direct),entry(5,f.surface),{binding:7,resource:{buffer:this.uniform}}]}));
+   this.paperGroups.push(this.device.createBindGroup({layout:this.paper.getBindGroupLayout(0),entries:[entry(0,scratch.direct),entry(1,scratch.indirect),entry(2,this.texture),{binding:3,resource:this.sampler},entry(4,f.guide),entry(5,f.surface),{binding:6,resource:{buffer:this.triangles}},{binding:7,resource:{buffer:this.uniform}}]}));
   }
  }
  upload(bvh:DynamicBVH){
@@ -177,6 +182,11 @@ export class PaperTracer {
   this.device.queue.submit([encoder.finish()]);this.samples++;this.historyValid=true;this.moving=false;this.frameIndex=1-this.frameIndex;
   this.values.set(this.values.subarray(4,8),32);this.values.set(this.values.subarray(24,28),36);
  }
- private destroyHistory(){for(const f of [...this.frames,...this.scratch])for(const t of Object.values(f))t.destroy();this.frames=[];this.scratch=[];}
+ private historyTextures(){
+  const textures=this.frames.flatMap(frame=>Object.values(frame));
+  if(this.scratch)textures.push(...Object.values(this.scratch));
+  return textures;
+ }
+ private destroyHistory(){for(const texture of this.historyTextures())texture.destroy();this.frames=[];this.scratch=undefined;}
  dispose(){this.disposed=true;this.meshIndices?.destroy();this.meshVertices?.destroy();this.nodes?.destroy();this.triangles?.destroy();this.previousTriangles?.destroy();this.uniform?.destroy();this.destroyHistory();this.depth?.destroy();this.texture?.destroy();this.context?.unconfigure();this.device?.destroy();}
 }

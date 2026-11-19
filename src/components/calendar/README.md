@@ -78,7 +78,8 @@ Adaptive direct correction uses 4/8/16 stratified rays; noisy, newly exposed and
 grazing surfaces receive 1/2/3 indirect paths with the original six-bounce transport.
 Only demodulated occlusion and GI are temporally blended, never the current analytic
 base or printed ink. Shadow correction gets a tight geometry/luminance-guided filter;
-GI gets variance-guided à-trous passes at strides 1, 2 and 4. Stable regions skip
+GI gets variance-guided à-trous passes at strides 1, 2 and 4. Only the first pass
+writes direct light. The two wider passes alternate between two indirect-light textures. Stable regions skip
 wide passes. This is a custom bounded reconstruction, not NRD/FFX or full SVGF.
 
 Lighting buffers stay at half the output dimensions. The final pass rasterizes the
