@@ -72,12 +72,15 @@ export function mountCalendar(host: HTMLElement) {
   return {
     paper,
     setVisible(next: boolean) {
+      const color = getComputedStyle(document.body).backgroundColor;
+      if (visible === next && (!next || color === background)) return;
+      const showing = !visible && next;
       visible = next;
       source.hidden = !next;
       if (next) {
-        background = getComputedStyle(document.body).backgroundColor;
+        background = color;
         surface.refresh();
-        if (canvas.dataset.mode) {started = true; paper.show();}
+        if (showing && canvas.dataset.mode) {started = true; paper.show();}
       } else {if(expanded)setExpanded(false);paper.hide();}
     },
   };

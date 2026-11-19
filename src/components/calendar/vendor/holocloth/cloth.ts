@@ -467,7 +467,8 @@ export class ClothSim {
       if(d>=this.cols)denom+=g[9]**2+g[10]**2+g[11]**2;
       if(denom<1e-9)continue;
       const restAngle=this.plasticAngle[h]+this.memoryAngle[h];
-      const error=Math.atan2(Math.sin(angle-restAngle),Math.cos(angle-restAngle));
+      const delta = angle - restAngle;
+      const error = Math.abs(delta) < Math.PI ? delta : Math.atan2(Math.sin(delta), Math.cos(delta));
       const dl=(-error-alpha*this.hingeLambda[h])/denom;
       this.hingeLambda[h]+=dl;
       if(a>=this.cols){const i=a*3;p[i]+=dl*g[0];p[i+1]+=dl*g[1];p[i+2]+=dl*g[2];}

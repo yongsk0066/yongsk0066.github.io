@@ -10,11 +10,13 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  let renderer:THREE.WebGLRenderer, scene:THREE.Scene, camera:THREE.PerspectiveCamera;
  let sim:ClothSim, mesh:THREE.Mesh, geometry:THREE.PlaneGeometry, material:THREE.MeshLambertMaterial;
  let texture:THREE.CanvasTexture, rail:THREE.Mesh, height=5, frame=0, last=0, visible=false, paused=false;
- let loaded=false, time=0, textureRevision=0, geometryDirty=true;
+ let loaded=false, textureRevision=0, geometryDirty=true;
  let textureWidth=0,textureHeight=0;
  let lighting:Awaited<ReturnType<typeof import('./lighting/preview').createPaperLighting>>|undefined;
  let previousPositions:Float32Array|undefined,quietFrames=0,sleeping=false;
- const wake=()=>{sleeping=false;quietFrames=0;};
+ let fallbackDirty=true;
+ function invalidate(){fallbackDirty=true;start();}
+ function wake(){sleeping=false;quietFrames=0;start();}
  // Keep the last completed paint while the native source canvas is resized.
  const paintedCanvas=document.createElement('canvas');
  const paintedContext=paintedCanvas.getContext('2d')!;
@@ -28,13 +30,13 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
    textureWidth=canvas.width;textureHeight=canvas.height;
    if(material)material.map=texture;old?.dispose();
   }
-  texture.needsUpdate=true;lighting?.paint();
+  texture.needsUpdate=true;lighting?.paint();invalidate();
  }
  const params={...PAPER_PARAMS};
  const pointer=new THREE.Vector2(), ray=new THREE.Raycaster(), dragPlane=new THREE.Plane(), hit=new THREE.Vector3();
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- const fiber=new THREE.TextureLoader().load(paperColor);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
- const bump=new THREE.TextureLoader().load(paperBump);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(3,4);
+ const fiber=new THREE.TextureLoader().load(paperColor,invalidate);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
+ const bump=new THREE.TextureLoader().load(paperBump,invalidate);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(3,4);
  function rebuild(){
   const nextHeight=4*canvas.height/canvas.width;
   if(sim && Math.abs(nextHeight-height)<.01)return;
@@ -53,8 +55,12 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   const padding=options.overflow||0;
   stage.style.height=h+'px';stage.style.position='relative';
   if(padding)stage.style.overflow='visible';
-  renderer.setPixelRatio(options.pixelRatio??Math.min(Math.max(devicePixelRatio,2),3));
-  renderer.setSize(w+padding*2,h+padding*2);
+  const ratio=options.pixelRatio??Math.min(Math.max(devicePixelRatio,2),3);
+  const width=w+padding*2, outputHeight=h+padding*2;
+  if(renderer.domElement.width!==Math.floor(width*ratio)||renderer.domElement.height!==Math.floor(outputHeight*ratio)||renderer.getPixelRatio()!==ratio){
+   renderer.setDrawingBufferSize(width,outputHeight,ratio);
+  }
+  renderer.domElement.style.width=width+'px';renderer.domElement.style.height=outputHeight+'px';
   Object.assign(renderer.domElement.style,{position:'absolute',left:-padding+'px',top:-padding+'px',display:'block'});
   camera.aspect=w/h;
   const fov=THREE.MathUtils.degToRad(camera.fov/2);
@@ -62,7 +68,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   camera.lookAt(0,0,0);
   if(padding)camera.setViewOffset(w,h,-padding,-padding,w+padding*2,h+padding*2);
   else camera.clearViewOffset();
-  camera.updateProjectionMatrix();camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();camera.updateMatrixWorld();lighting?.resize();invalidate();
  }
  function init(){
   try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});}
@@ -86,7 +92,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
     if(!gl_FrontFacing) diffuseColor.rgb=vec3(1.0-(1.0-fiberValue)*0.025);`);
   };
   rebuild();
-  const el=renderer.domElement;el.style.touchAction='none';el.style.cursor='grab';
+  const el=renderer.domElement;el.addEventListener('webglcontextrestored',invalidate);el.style.touchAction='none';el.style.cursor='grab';
   // The enlarged transparent surface must not block article links. Hit-test
   // document pointer events against the paper and capture only real grabs.
   const events=options.overflow?document:el;
@@ -105,15 +111,15 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   loaded=true;
   if(options.lighting){
    stage.dataset.lighting='initializing';
-   void import('./lighting/preview').then(m=>m.createPaperLighting(stage,el,geometry,paintedCanvas,camera)).then(next=>{
-    lighting=next;lighting.setVisible(visible);lighting.paint();geometryDirty=true;
-   }).catch(()=>{stage.dataset.lighting='fallback';});
+   void import('./lighting/preview').then(m=>m.createPaperLighting(stage,el,geometry,paintedCanvas,camera,invalidate)).then(next=>{
+    lighting=next;lighting.setVisible(visible);lighting.paint();geometryDirty=true;invalidate();
+   }).catch(()=>{stage.dataset.lighting='fallback';invalidate();});
   }
   return true;
  }
  function tick(now:number){
   if(!visible || document.hidden){frame=0;return;}
-  const dt=Math.min((now-last)/1000||1/60,.033);last=now;time+=dt;
+  const dt=Math.min((now-last)/1000||1/60,.033);last=now;
   if((!paused&&!sleeping) || sim.isGrabbing){
    previousPositions!.set(sim.positions);sim.step(dt,params);
    if(lighting?.active)sim.constrainWall(lighting.wallMinZ);
@@ -123,10 +129,11 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   const changed=geometryDirty;
   if(changed){geometry.attributes.position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();geometryDirty=false;}
   lighting?.draw(geometry,changed);
-  if(!lighting?.active)renderer.render(scene,camera);
-  frame=requestAnimationFrame(tick);
+  if(!lighting?.active && (changed || fallbackDirty)){renderer.render(scene,camera);fallbackDirty=false;}
+  const running=(!paused&&!sleeping)||sim.isGrabbing||lighting?.needsFrame;
+  frame=running?requestAnimationFrame(tick):0;
  }
- function start(){if(!frame && visible && !document.hidden){last=performance.now();frame=requestAnimationFrame(tick);}}
+ function start(){if(!frame && loaded && visible && !document.hidden){last=performance.now();frame=requestAnimationFrame(tick);}}
  canvas.addEventListener('calendarpaint',()=>{if(!loaded)return;syncTexture();textureRevision++;rebuild();status.textContent=`${canvas.dataset.date?.replace('-','년 ')}월 · 윗변 고정 · 무광 종이 · ${canvas.dataset.mode==='native'?'HTML-in-Canvas':'SVG Canvas 대체 경로'}`;});
  panel.querySelector('[data-paper-reset]')!.addEventListener('click',()=>{sim?.reset();wake();geometryDirty=true;});
  panel.querySelector('[data-paper-poke]')!.addEventListener('click',()=>{if(!sim)return;wake();geometryDirty=true;for(let i=sim.cols;i<sim.count;i++){const y=Math.floor(i/sim.cols)/sim.segY;sim.positions[i*3+2]+=.075*Math.sin(i%sim.cols/sim.segX*Math.PI)*y*y;}});
@@ -135,7 +142,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  const api={setPixelRatio(ratio:number){
   options.pixelRatio=ratio;
   if(!renderer || Math.abs(renderer.getPixelRatio()-ratio)<.002)return;
-  renderer.setPixelRatio(ratio);
+  renderer.setPixelRatio(ratio);lighting?.resize();invalidate();
   // Resize and redraw in the same task; never present a cleared WebGL buffer.
   if(lighting?.active)lighting.draw(geometry,false);else renderer.render(scene,camera);
  },getTopOffset(){if(!camera)return 0;const top=new THREE.Vector3(0,height/2,0).project(camera);return (1-top.y)/2*(stage.clientHeight+2*(options.overflow||0))-(options.overflow||0);},show(){visible=true;lighting?.setVisible(true);if(!loaded && !init())return;rebuild();syncTexture();resize();start();},hide(){visible=false;lighting?.setVisible(false);sim?.endGrab();cancelAnimationFrame(frame);frame=0;},getState(){return {loaded,lighting:lighting?.state,textureRevision,positions:sim?Array.from(sim.positions):[],cols:sim?.cols,height,grabbing:sim?.isGrabbing,paused,visible,material:sim?.measure()};}};
