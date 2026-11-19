@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import paperColor from './textures/paper001-color.jpg?url';
-import paperBump from './textures/paper001-bump.jpg?url';
+import {createPaperFallbackMaterial} from './paper-webgl';
 import {PaperPhysics} from './paper-physics';
 import {ClothSim,PAPER_PARAMS} from './vendor/holocloth/cloth';
 
@@ -39,8 +38,6 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  const grabOrigin = new THREE.Vector3();
  let liftProgress = 0;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- const fiber=new THREE.TextureLoader().load(paperColor,invalidate);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
- const bump=new THREE.TextureLoader().load(paperBump,invalidate);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(3,4);
  let sourceAspect:string|undefined;
  function rebuild(){
   const nextHeight=4*canvas.height/canvas.width;
@@ -94,18 +91,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   scene.add(new THREE.HemisphereLight(0xffffff,0xffffff,2.3));
   const light=new THREE.DirectionalLight(0xffffff,1.3);light.position.set(-3,5,7);scene.add(light);
   syncTexture();
-  // Lambert has diffuse lighting only: no specular, clearcoat, iridescence or foil.
-  material=new THREE.MeshLambertMaterial({map:texture,side:THREE.DoubleSide,bumpMap:bump,bumpScale:.002,color:0xffffff});
-  material.onBeforeCompile=shader=>{
-   shader.uniforms.paperFiber={value:fiber};
-   shader.fragmentShader='uniform sampler2D paperFiber;\n'+shader.fragmentShader;
-   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
-    vec3 grain=texture2D(paperFiber,vMapUv*vec2(3.0,4.0)).rgb;
-    // Neutral luminance variation only; never tint the white calendar.
-    float fiberValue=dot(grain,vec3(0.2126,0.7152,0.0722));
-    diffuseColor.rgb *= 1.0-(1.0-fiberValue)*0.025;
-    if(!gl_FrontFacing) diffuseColor.rgb=vec3(1.0-(1.0-fiberValue)*0.025);`);
-  };
+  material=createPaperFallbackMaterial(texture);
   rebuild();
   const el=renderer.domElement;el.addEventListener('webglcontextrestored',invalidate);el.style.touchAction='none';el.style.cursor='grab';
   // The enlarged transparent surface must not block article links. Hit-test

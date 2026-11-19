@@ -8,6 +8,12 @@ const EPS=.0002;
 struct Hit { t:f32, n:vec3f, gn:vec3f, uv:vec2f, kind:i32, triangle:i32, bary:vec2f }
 
 struct Material { r:vec3f,t:vec3f,s:f32,rough:f32 }
+const FORMATION_SCALE = vec2f(1., 1.25);
+const RELIEF_SCALE = vec2f(32., 40.);
+
+fn signedStock(encoded: f32) -> f32 {
+ return (encoded * 255. - 128.) / 127.;
+}
 fn inkColor(hit:Hit)->vec3f {
  let c=textureSampleLevel(inkTex,inkSampler,vec2f(hit.uv.x,1.-hit.uv.y),0.).rgb;
  return select(c/12.92,pow((c+.055)/1.055,vec3f(2.4)),c>vec3f(.04045));
@@ -18,15 +24,26 @@ fn shadingNormal(hit:Hit,wo:vec3f)->vec3f {
  // Keep the interpolated normal in the viewing hemisphere at grazing folds.
  return normalize(mix(gn,ns,smoothstep(0.,.15,dot(ns,wo))));
 }
-fn material(hit:Hit,front:bool)->Material {
- var m:Material;m.rough=param.optical.w;
- if(hit.kind==2){m.r=param.background.rgb*.76;m.t=vec3f(0);m.s=0.;return m;}
- var ink=vec3f(1);
- if(param.flags.z>.5){ink=inkColor(hit);}
- // A weak, deterministic fiber density modulation, not a yellow color texture.
- let fiber=1.-.003*(.5+.5*sin(hit.uv.x*1700.+sin(hit.uv.y*1200.)));
- if(param.flags.y<.5){m.r=ink*.84;m.t=vec3f(0);m.s=0.;return m;}
- m.s=param.optical.z;let reflectedInk=select(mix(vec3f(1),ink,.12),ink,front);m.r=reflectedInk*param.optical.x*(1.-m.s)*fiber;m.t=pow(ink,vec3f(.65))*param.optical.y*(1.-m.s)*fiber;return m;
+fn paperMaterial(hit: Hit, front: bool, formation: f32) -> Material {
+ var ink = vec3f(1);
+ if (param.flags.z > .5) { ink = inkColor(hit); }
+ if (param.flags.y < .5) { return Material(ink * .84, vec3f(0), 0., param.optical.w); }
+ let slab = paperSlab(formation, param.optical.x, param.optical.y);
+ var reflectance = ink * slab.x;
+ if (!front) {
+  reflectance = mix(vec3f(slab.z), vec3f(slab.x), printBackFraction(ink, formation));
+ }
+ let substrate = 1. - param.optical.z;
+ let rough = sqrt(param.optical.w * param.optical.w + MEAN_SLOPE_POWER);
+ return Material(substrate * reflectance, substrate * slab.y * printTransmission(ink, formation), param.optical.z, rough);
+}
+fn traceMaterial(hit: Hit, front: bool, lod: f32) -> Material {
+ if (hit.kind == 2) { return Material(param.background.rgb * .76, vec3f(0), 0., 1.); }
+ let stock = textureSampleLevel(stockTex, stockSampler, hit.uv * FORMATION_SCALE, lod);
+ return paperMaterial(hit, front, signedStock(stock.r));
+}
+fn albedoForFilter(m: Material) -> vec3f {
+ return max(m.r / param.optical.x, vec3f(.002));
 }
 
 // Exact cosine integral over the rectangular emitter, clipped against both

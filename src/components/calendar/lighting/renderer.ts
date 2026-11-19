@@ -5,6 +5,8 @@ import displayShader from './display.wgsl?raw';
 import filterShader from './filter.wgsl?raw';
 import {DynamicBVH} from './bvh';
 import {slabRT} from './material';
+import {getPaperStockLevels, paperMeanSlopePower, paperSlopeScale} from '../paper-stock';
+import {paperOpticsShader} from '../paper-optics';
 import type {PerspectiveCamera} from 'three';
 
 type Frame = {direct:GPUTexture; indirect:GPUTexture; moments:GPUTexture; guide:GPUTexture; surface:GPUTexture};
@@ -24,6 +26,8 @@ export class PaperTracer {
  display!:GPURenderPipeline; paper!:GPURenderPipeline;
  nodes!:GPUBuffer; triangles!:GPUBuffer; previousTriangles!:GPUBuffer; uniform!:GPUBuffer;
  texture!:GPUTexture; sampler!:GPUSampler; depth!:GPUTexture;
+ private stock!:GPUTexture;
+ private stockSampler!:GPUSampler;
  frames:Frame[]=[]; scratch?:FilterTargets;
  groups:GPUBindGroup[]=[]; filterGroups:GPUBindGroup[][]=[]; displayGroups:GPUBindGroup[]=[]; paperGroups:GPUBindGroup[]=[];
  width=0; height=0; lightingWidth=0; lightingHeight=0; samples=0; seed=0; epoch=0; lastReason='initial';
@@ -39,7 +43,9 @@ export class PaperTracer {
    r.device=await adapter.requestDevice({requiredLimits:{maxStorageTexturesPerShaderStage:5}});
    r.context=canvas.getContext('webgpu')!;if(!r.context)throw Error('WebGPU canvas unavailable');
    const format=navigator.gpu.getPreferredCanvasFormat();r.context.configure({device:r.device,format,alphaMode:'premultiplied'});
-   const module=r.device.createShaderModule({code:commonShader+'\n'+shader});
+   const stockConstants=`const SLOPE_SCALE = ${paperSlopeScale};\nconst MEAN_SLOPE_POWER = ${paperMeanSlopePower};`;
+   const materialSource=[stockConstants, paperOpticsShader('wgsl'), commonShader].join('\n');
+   const module=r.device.createShaderModule({code:materialSource+'\n'+shader});
    const info=await module.getCompilationInfo();if(info.messages.some(x=>x.type==='error'))throw Error(info.messages.map(x=>x.message).join('\n'));
    [r.pipeline,r.expand]=await Promise.all([
     r.device.createComputePipelineAsync({layout:'auto',compute:{module,entryPoint:'main'}}),
@@ -47,7 +53,7 @@ export class PaperTracer {
    ]);
    const filtering=r.device.createShaderModule({code:filterShader});
    r.filters=await Promise.all(['tight','wide2','wide4'].map(entryPoint=>r.device.createComputePipelineAsync({layout:'auto',compute:{module:filtering,entryPoint}})));
-   const display=r.device.createShaderModule({code:commonShader+'\n'+displayShader});
+   const display=r.device.createShaderModule({code:materialSource+'\n'+displayShader});
    r.display=await r.device.createRenderPipelineAsync({layout:'auto',vertex:{module:display,entryPoint:'vs'},fragment:{module:display,entryPoint:'fs',targets:[{format}]},primitive:{topology:'triangle-list'},depthStencil:{format:'depth24plus',depthWriteEnabled:false,depthCompare:'always'}});
    r.paper=await r.device.createRenderPipelineAsync({layout:'auto',vertex:{module:display,entryPoint:'vsPaper'},fragment:{module:display,entryPoint:'fsPaper',targets:[{format}]},primitive:{topology:'triangle-list',cullMode:'none'},depthStencil:{format:'depth24plus',depthWriteEnabled:true,depthCompare:'less'}});
    const buffer=(size:number)=>r.device.createBuffer({size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});
@@ -64,6 +70,19 @@ export class PaperTracer {
    }
    r.uniform=r.device.createBuffer({size:176,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
    r.sampler=r.device.createSampler({magFilter:'linear',minFilter:'linear'});
+   const levels = getPaperStockLevels();
+   r.stock = r.device.createTexture({
+    label: 'Paper formation and slope moments', size: [levels[0].width, levels[0].height],
+    mipLevelCount: levels.length, format: 'rgba8unorm',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+   });
+   for (const [mipLevel, level] of levels.entries()) {
+    r.device.queue.writeTexture({texture: r.stock, mipLevel}, level.data,
+     {bytesPerRow: level.width * 4}, [level.width, level.height]);
+   }
+   r.stockSampler = r.device.createSampler({
+    addressModeU: 'repeat', addressModeV: 'repeat', minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear',
+   });
    const rt=slabRT(.25,65,.07);
    r.values.set([-20,30,200,140],8);r.values.set([120,-.04,10.7,-1],12);
    r.values.set([rt.R,rt.T,.001,.75],16);r.values.set([6,1,1,0],20);
@@ -126,7 +145,14 @@ export class PaperTracer {
   this.groups=[];this.filterGroups=[];this.displayGroups=[];this.paperGroups=[];
   for(let i=0;i<2;i++){
    const f=this.frames[i],old=this.frames[1-i];
-   this.groups.push(this.device.createBindGroup({layout:this.pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:this.nodes}},{binding:1,resource:{buffer:this.triangles}},{binding:2,resource:{buffer:this.previousTriangles}},entry(3,f.direct),{binding:4,resource:{buffer:this.uniform}},entry(5,this.texture),{binding:6,resource:this.sampler},entry(7,f.guide),entry(8,f.moments),entry(9,old.indirect),entry(10,old.guide),entry(11,old.surface),entry(12,f.indirect),entry(13,f.surface),entry(14,old.direct),entry(15,old.moments)]}));
+   this.groups.push(this.device.createBindGroup({layout:this.pipeline.getBindGroupLayout(0),entries:[
+    {binding:0,resource:{buffer:this.nodes}}, {binding:1,resource:{buffer:this.triangles}},
+    {binding:2,resource:{buffer:this.previousTriangles}}, entry(3,f.direct), {binding:4,resource:{buffer:this.uniform}},
+    entry(5,this.texture), {binding:6,resource:this.sampler}, entry(7,f.guide), entry(8,f.moments),
+    entry(9,old.indirect), entry(10,old.guide), entry(11,old.surface), entry(12,f.indirect),
+    entry(13,f.surface), entry(14,old.direct), entry(15,old.moments), entry(16,this.stock),
+    {binding:17,resource:this.stockSampler},
+   ]}));
    // The tight pass finishes direct light. Only indirect light alternates in the two wide passes.
    this.filterGroups.push(this.filters.map((pipeline,j)=>{
     const input=j===0?f.indirect:j===1?scratch.indirect:scratch.intermediate;
@@ -136,7 +162,11 @@ export class PaperTracer {
     return this.device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries});
    }));
    this.displayGroups.push(this.device.createBindGroup({layout:this.display.getBindGroupLayout(0),entries:[entry(0,scratch.direct),entry(5,f.surface),{binding:7,resource:{buffer:this.uniform}}]}));
-   this.paperGroups.push(this.device.createBindGroup({layout:this.paper.getBindGroupLayout(0),entries:[entry(0,scratch.direct),entry(1,scratch.indirect),entry(2,this.texture),{binding:3,resource:this.sampler},entry(4,f.guide),entry(5,f.surface),{binding:6,resource:{buffer:this.triangles}},{binding:7,resource:{buffer:this.uniform}}]}));
+   this.paperGroups.push(this.device.createBindGroup({layout:this.paper.getBindGroupLayout(0),entries:[
+    entry(0,scratch.direct), entry(1,scratch.indirect), entry(2,this.texture), {binding:3,resource:this.sampler},
+    entry(4,f.guide), entry(5,f.surface), {binding:6,resource:{buffer:this.triangles}},
+    {binding:7,resource:{buffer:this.uniform}}, entry(8,this.stock), {binding:9,resource:this.stockSampler},
+   ]}));
   }
  }
  upload(bvh:DynamicBVH){
@@ -199,5 +229,5 @@ export class PaperTracer {
   return textures;
  }
  private destroyHistory(){for(const texture of this.historyTextures())texture.destroy();this.frames=[];this.scratch=undefined;}
- dispose(){this.disposed=true;this.meshIndices?.destroy();this.meshVertices?.destroy();this.nodes?.destroy();this.triangles?.destroy();this.previousTriangles?.destroy();this.uniform?.destroy();this.destroyHistory();this.depth?.destroy();this.texture?.destroy();this.context?.unconfigure();this.device?.destroy();}
+ dispose(){this.disposed=true;this.meshIndices?.destroy();this.meshVertices?.destroy();this.nodes?.destroy();this.triangles?.destroy();this.previousTriangles?.destroy();this.uniform?.destroy();this.destroyHistory();this.depth?.destroy();this.texture?.destroy();this.stock?.destroy();this.context?.unconfigure();this.device?.destroy();}
 }

@@ -16,6 +16,8 @@
 @group(0) @binding(13) var surfaceOut:texture_storage_2d<rgba16float,write>;
 @group(0) @binding(14) var previousDirect:texture_2d<f32>;
 @group(0) @binding(15) var previousMoments:texture_2d<f32>;
+@group(0) @binding(16) var stockTex:texture_2d<f32>;
+@group(0) @binding(17) var stockSampler:sampler;
 var<private> rng:u32;
 fn random()->f32 {rng=rng*747796405u+2891336453u;let w=((rng>>((rng>>28u)+4u))^rng)*277803737u;return f32((w>>22u)^w)/4294967296.;}
 fn boxHit(ro:vec3f,inv:vec3f,node:Node,limit:f32)->bool {let a=(node.lo-ro)*inv;let b=(node.hi-ro)*inv;let lo=min(a,b);let hi=max(a,b);return max(max(lo.x,lo.y),max(lo.z,0.))<=min(min(hi.x,hi.y),min(hi.z,limit));}
@@ -164,10 +166,9 @@ fn segmentBlocked(ro:vec3f,rd:vec3f,limit:f32)->bool {
 fn basis(n:vec3f,v:vec3f)->vec3f {let t=normalize(cross(select(vec3f(0,0,1),vec3f(0,1,0),abs(n.z)>.99),n));return t*v.x+cross(n,t)*v.y+n*v.z;}
 fn cosine(n:vec3f)->vec3f {let r=sqrt(random());let a=2.*PI*random();return basis(n,vec3f(r*cos(a),r*sin(a),sqrt(max(0.,1.-r*r))));}
 fn D(nh:f32,a:f32)->f32 {let d=nh*nh*(a*a-1.)+1.;return a*a/(PI*d*d);}
-fn G1(nv:f32,a:f32)->f32 {return 2.*nv/(nv+sqrt(a*a+(1.-a*a)*nv*nv));}
 fn evaluate(m:Material,n:vec3f,wo:vec3f,wi:vec3f)->vec3f {
- let ni=dot(n,wi);let nv=max(.0001,dot(n,wo));if(ni<0.){return m.t/PI;}
- var f=m.r/PI;if(m.s>0.){let h=normalize(wo+wi);let nh=max(0.,dot(n,h));f+=vec3f(m.s*D(nh,m.rough)*G1(nv,m.rough)*G1(max(ni,.0001),m.rough)/(4.*nv*max(ni,.0001)));}return f;
+ if(dot(n,wi)<0.){return m.t/PI;}
+ return m.r/PI + vec3f(surfaceBRDF(m.rough, m.s, n, wo, wi));
 }
 fn pdf(m:Material,n:vec3f,wo:vec3f,wi:vec3f)->f32 {
  let r=dot(m.r,vec3f(.333333));let t=dot(m.t,vec3f(.333333));let total=r+t+m.s;let ni=dot(n,wi);if(ni<0.){return t/total*(-ni)/PI;}
@@ -182,27 +183,37 @@ fn luminance(c:vec3f)->f32 {return dot(c,vec3f(.2126,.7152,.0722));}
 struct Direct { color:vec3f, blocked:f32 }
 fn directCorrection(p:vec3f,n:vec3f,gn:vec3f,wo:vec3f,m:Material,count:i32)->Direct {
  var value=vec3f(0);var blocked=0.;let cols=select(2,4,count>=8);let rows=count/cols;
+ let reference = surfaceBRDF(m.rough, m.s, n, wo, normalize(param.light.xyz - p));
  for(var i=0;i<count;i++){
   let uv=(vec2f(f32(i%cols),f32(i/cols))+vec2f(random(),random()))/vec2f(f32(cols),f32(rows));
   let lp=param.light.xyz+vec3f((uv-.5)*vec2f(param.light.w,param.scene.x),0.);
   let delta=lp-p;let dist=length(delta);let wi=delta/dist;let cosL=max(0.,-wi.z*param.scene.w);
   if(cosL>0.&&dot(n,wi)*dot(gn,wi)>0.){
    let occluded=segmentBlocked(p+gn*select(-EPS*3.,EPS*3.,dot(wi,gn)>0.),wi,dist-EPS*8.);
-   let diffuse=select(m.t,m.r,dot(n,wi)>0.)/PI;var correction=-diffuse;
-   if(!occluded){correction=evaluate(m,n,wo,wi)-diffuse;}else{blocked+=1./f32(count);}
+   let reflecting = dot(n,wi)>0.;
+   var correction = vec3f(0);
+   if(occluded){
+    correction = -select(m.t / PI, m.r / PI + vec3f(reference), reflecting);
+    blocked+=1./f32(count);
+   }else if(reflecting){
+    correction = vec3f(surfaceBRDF(m.rough, m.s, n, wo, wi) - reference);
+   }
    value+=correction*abs(dot(n,wi))*param.scene.z*cosL*param.light.w*param.scene.x/(dist*dist*f32(count));
   }
  }
  return Direct(value,blocked);
 }
 // Only secondary illumination: primary direct light and occlusion have their own signal.
-fn indirectRadiance(ro0:vec3f,rd0:vec3f,primary:Hit)->vec3f {
- var ro=ro0;var rd=rd0;var throughput=vec3f(1);var result=vec3f(0);
+fn indirectRadiance(p0:vec3f,wo0:vec3f,n0:vec3f,gn0:vec3f,primary:Material)->vec3f {
+ var p=p0;var wo=wo0;var n=n0;var gn=gn0;var m=primary;
+ var ro=vec3f(0);var rd=vec3f(0);var throughput=vec3f(1);var result=vec3f(0);
  for(var bounce=0;bounce<i32(param.flags.x);bounce++){
-  var hit=primary;if(bounce>0){hit=trace(ro,rd,1e5);}if(hit.kind==0||hit.kind==3){break;}
-  let p=ro+rd*hit.t;let wo=-rd;let gn=select(-hit.gn,hit.gn,dot(hit.gn,wo)>0.);
-  let n=shadingNormal(hit,wo);let m=material(hit,dot(hit.gn,wo)>0.);
   if(bounce>0){
+   let hit=trace(ro,rd,1e5);if(hit.kind==0||hit.kind==3){break;}
+   p=ro+rd*hit.t;wo=-rd;let front=dot(hit.gn,wo)>0.;
+   gn=select(-hit.gn,hit.gn,front);n=shadingNormal(hit,wo);
+   // Diffuse secondary paths average a wider area of the stock.
+   m=traceMaterial(hit,front,2.);
    let lp=param.light.xyz+vec3f((vec2f(random(),random())-.5)*vec2f(param.light.w,param.scene.x),0.);
    let delta=lp-p;let dist=length(delta);let wi=delta/dist;let cosL=max(0.,-wi.z*param.scene.w);
    if(cosL>0.&&dot(n,wi)*dot(gn,wi)>0.){
@@ -259,8 +270,13 @@ fn wallBlocked(p:vec3f,grid:i32)->f32 {
  var direct=vec4f(0);var indirect=vec4f(0);var moments=vec4f(0);var surface=vec4f(0);var normal=vec3f(0,0,1);
  if(hit.kind==1){
   let p=param.camera.xyz+ray*hit.t;let front=dot(hit.gn,-ray)>0.;let side=select(-1.,1.,front);
-  let gn=hit.gn*side;normal=shadingNormal(hit,-ray);let m=material(hit,front);
-  let ink=inkColor(hit);let albedo=max(select(mix(vec3f(1),ink,.12),ink,front),vec3f(.002));
+  let gn=hit.gn*side;normal=shadingNormal(hit,-ray);
+  // Project the 128-texel formation map of the four-unit sheet onto this
+  // lighting pixel. At grazing incidence the hit covers a longer UV interval.
+  let footprint = 64. * param.projection.x * hit.t /
+    max(.0001, f32(param.size.x) * abs(dot(gn, ray)));
+  let m=traceMaterial(hit,front,log2(max(1., footprint)));
+  let albedo=albedoForFilter(m);
   let old=reproject(hit,normal,side,vec2f(id.xy));
   let dVariance=max(0.,old.moments.y-old.moments.x*old.moments.x);
   let iVariance=max(0.,old.moments.w-old.moments.z*old.moments.z);
@@ -273,7 +289,7 @@ fn wallBlocked(p:vec3f,grid:i32)->f32 {
   if(grazing&&old.indirect.a<2.){paths=3;}
   let correction=directCorrection(p,normal,gn,-ray,m,directSamples);let d=correction.color/albedo;
   var indirectSample=vec3f(0);
-  for(var i=0;i<paths;i++){indirectSample+=indirectRadiance(param.camera.xyz,ray,hit)/f32(paths);}
+  for(var i=0;i<paths;i++){indirectSample+=indirectRadiance(p,-ray,normal,gn,m)/f32(paths);}
   let gi=indirectSample/albedo;let dl=luminance(d);let il=luminance(gi);
   let confidence=exp(-old.motion*.08);
   var dAge=min(old.direct.a,select(127.,mix(4.,24.,confidence),param.temporal.y>.5));
