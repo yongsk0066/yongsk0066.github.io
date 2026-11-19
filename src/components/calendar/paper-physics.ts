@@ -1,4 +1,4 @@
-import type { ClothSim, ClothPhysicsParams } from './vendor/holocloth/cloth';
+import { MAX_PHYSICS_BACKLOG, type ClothSim, type ClothPhysicsParams } from './vendor/holocloth/cloth';
 import type { PhysicsReply, PhysicsRequest } from './physics-worker';
 
 /** The displayed solver remains a complete recovery point, including spring memory. */
@@ -61,7 +61,7 @@ export class PaperPhysics {
       this.spare = this.result.state.buffer;
       this.result = undefined;
     }
-    this.elapsed = Math.min(this.elapsed + dt, .033);
+    this.elapsed = Math.min(this.elapsed + Math.min(Math.max(0, dt), .05), MAX_PHYSICS_BACKLOG);
     if (this.busy) return delta;
     const elapsed = this.elapsed;
     this.elapsed = 0;
@@ -79,8 +79,7 @@ export class PaperPhysics {
       } catch { this.fallback(); }
     }
     this.previous.set(this.sim.positions);
-    this.sim.step(elapsed, params);
-    if (wall !== undefined) this.sim.constrainWall(wall);
+    this.sim.step(elapsed, params, wall);
     let change = delta ?? 0;
     for (let i = 0; i < this.previous.length; i++) change = Math.max(change, Math.abs(this.sim.positions[i] - this.previous[i]));
     return change;

@@ -47,6 +47,14 @@ simulation time. Input, picking, display and GPU submission stay on the main
 thread. If the Worker fails, simulation resumes from the last displayed pose.
 The WebGL fallback can sleep after an uncreased, flat sheet settles.
 
+The solver advances at 120 Hz and resolves wall contact after each substep.
+One update can run four substeps and the clock can hold eight. The same
+alternating triangle diagonals drive bending, pointer picks and lighting.
+For an uncreased, front-facing sheet lying exactly in its initial plane, bending
+has zero residual. The solver checks triangle orientation between stretch
+passes and continues to advance the material clock. A grab starts at the
+picked surface height and reaches its full lift over 7% of the sheet width.
+
 Lighting: the blog lazily loads `lighting/preview.ts` and a WebGPU compute path
 tracer after the existing preview is visible. It uses the same deformed geometry,
 completed calendar Canvas, camera (including overflow view offset), and pointer

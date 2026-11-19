@@ -48,6 +48,7 @@ interface GrabState extends GrabRegion {
 
 const SUBSTEP = 1 / 120;
 const MAX_SUBSTEPS = 4;
+export const MAX_PHYSICS_BACKLOG = 8 * SUBSTEP;
 
 /** Holocloth Verlet integration, grid topology and weighted grabs, extended with
  * XPBD membrane constraints and elastic dihedral hinges for thin paper.
@@ -59,6 +60,7 @@ export class ClothSim {
   readonly rows: number;
   readonly count: number;
   readonly positions: Float32Array;
+  readonly triangleIndices: number[] = [];
   private prev: Float32Array;
   private motion: Uint8Array;
   private rest: Float32Array;
@@ -123,9 +125,10 @@ export class ClothSim {
     this.computeRestLengths();
     this.stretchLambda = new Float64Array(a.length);
     this.stretchAlpha = new Float64Array(a.length);
-    // Match THREE.PlaneGeometry triangles; each shared edge has a signed hinge.
+    // The renderer and signed hinges share this alternating triangulation.
     const edges = new Map<string, number[]>(), hinges:number[]=[];
     const face=(a:number,b:number,c:number)=>{
+      this.triangleIndices.push(a, b, c);
       for(const [u,v,o] of [[a,b,c],[b,c,a],[c,a,b]]){
         const key=Math.min(u,v)+':'+Math.max(u,v),other=edges.get(key);
         if(other) hinges.push(other[2],o,other[0],other[1]);
@@ -134,7 +137,13 @@ export class ClothSim {
     };
     for(let y=0;y<segY;y++)for(let x=0;x<segX;x++){
       const a=idx(x,y),b=idx(x,y+1),c=idx(x+1,y+1),d=idx(x+1,y);
-      face(a,b,d);face(b,c,d);
+      if ((x + y) % 2 === 0) {
+        face(a, b, d);
+        face(b, c, d);
+      } else {
+        face(a, b, c);
+        face(a, c, d);
+      }
     }
     this.hinges=new Int32Array(hinges);
     this.hingeLambda=new Float64Array(hinges.length/4);
@@ -359,21 +368,22 @@ export class ClothSim {
     }
   }
 
-  step(dt: number, params: ClothPhysicsParams) {
+  step(dt: number, params: ClothPhysicsParams, wallMinZ?: number) {
     // Preserve the original Float64 expression and invalidate on live parameter edits.
     if (params.stretchCompliance !== this.cachedStretchCompliance) {
       for (let c = 0; c < this.stretchAlpha.length; c++)
         this.stretchAlpha[c] = params.stretchCompliance / (SUBSTEP * SUBSTEP * this.cMul[c]);
       this.cachedStretchCompliance = params.stretchCompliance;
     }
-    this.accumulator += Math.min(dt, 0.05);
+    // A busy Worker can deliver several display frames in a single batch.
+    this.accumulator = Math.min(MAX_PHYSICS_BACKLOG, this.accumulator + Math.max(0, dt));
     let steps = 0;
     while (this.accumulator >= SUBSTEP && steps < MAX_SUBSTEPS) {
       this.substep(params);
+      if (wallMinZ !== undefined) this.constrainWall(wallMinZ);
       this.accumulator -= SUBSTEP;
       steps++;
     }
-    if (steps === MAX_SUBSTEPS) this.accumulator = 0;
   }
 
   /** Unilateral contact with the lighting scene's wall, without a rebound. */
@@ -419,16 +429,44 @@ export class ClothSim {
       this.bendAlpha[h]=params.bendCompliance/(SUBSTEP*SUBSTEP*this.hingeScale[h]*grain*(1-damage));
     }
     const iters=Math.max(1,Math.round(params.iterations));
+    let planar = !this.grab && this.isFlatWithoutCreases();
     for(let it=0;it<iters;it++){
       this.applyGrab(params);
-      this.solveBending(params,it%2===1);
+      // Stretch can invert an in-plane triangle between iterations.
+      planar = planar && this.facesPointForward();
+      if (!planar) this.solveBending(params,it%2===1);
       // Finish with metric preservation, so grabbing cannot overwrite the paper.
       this.solveStretch(params,it%2===1);
       this.solveStretch(params,it%2===0);
       for(let k=0;k<this.cols*3;k++){p[k]=this.rest[k];prev[k]=this.rest[k];}
     }
     // Constitutive history evolves once per physical substep (not solver pass).
-    this.updateMaterialHistory(params);
+    if (planar && this.facesPointForward()) {
+      for (let h = 0; h < this.releaseAge.length; h++) this.releaseAge[h] += SUBSTEP;
+    } else {
+      this.updateMaterialHistory(params);
+    }
+  }
+
+  private isFlatWithoutCreases() {
+    for (let z = 2; z < this.positions.length; z += 3) {
+      if (this.positions[z] !== 0) return false;
+    }
+    for (let h = 0; h < this.memoryAngle.length; h++) {
+      if (this.memoryAngle[h] !== 0 || this.plasticAngle[h] !== 0) return false;
+    }
+    return true;
+  }
+
+  private facesPointForward() {
+    const p = this.positions, indices = this.triangleIndices;
+    for (let i = 0; i < indices.length; i += 3) {
+      const a = indices[i] * 3, b = indices[i + 1] * 3, c = indices[i + 2] * 3;
+      const area = (p[b] - p[a]) * (p[c + 1] - p[a + 1]) - (p[b + 1] - p[a + 1]) * (p[c] - p[a]);
+      // The full hinge solver treats squared normal lengths below 1e-14 as degenerate.
+      if (!(area > 1e-7)) return false;
+    }
+    return true;
   }
 
   private updateMaterialHistory(params:ClothPhysicsParams){

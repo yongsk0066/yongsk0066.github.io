@@ -18,8 +18,7 @@ self.onmessage = ({data}: MessageEvent<PhysicsRequest>) => {
   if (data.region !== undefined) sim.setGrabRegion(data.region);
   sim.restoreMotion(data.state);
   if (data.cursor) sim.moveGrab(data.cursor);
-  sim.step(data.dt, data.params);
-  if (data.wall !== undefined) sim.constrainWall(data.wall);
+  sim.step(data.dt, data.params, data.wall);
   const previous = new Float32Array(data.state.buffer, 0, sim.positions.length);
   let delta = 0;
   for (let i = 0; i < previous.length; i++) delta = Math.max(delta, Math.abs(previous[i] - sim.positions[i]));

@@ -36,6 +36,8 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  const params={...PAPER_PARAMS};
  const motionEpsilon=1e-6;
  const pointer=new THREE.Vector2(), ray=new THREE.Raycaster(), dragPlane=new THREE.Plane(), hit=new THREE.Vector3();
+ const grabOrigin = new THREE.Vector3();
+ let liftProgress = 0;
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
  const fiber=new THREE.TextureLoader().load(paperColor,invalidate);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
  const bump=new THREE.TextureLoader().load(paperBump,invalidate);bump.wrapS=bump.wrapT=THREE.RepeatWrapping;bump.repeat.set(3,4);
@@ -48,6 +50,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   height=nextHeight;sim=new ClothSim(4,height,24,Math.round(24*height/4));
   physics?.dispose();physics=new PaperPhysics(sim,options.worker===true,start);
   geometry?.dispose();geometry=new THREE.PlaneGeometry(4,height,sim.segX,sim.segY);
+  geometry.setIndex(sim.triangleIndices);
   geometry.setAttribute('position',new THREE.BufferAttribute(sim.positions,3));geometryDirty=true;wake();
   if(mesh)mesh.geometry=geometry;else{mesh=new THREE.Mesh(geometry,material);scene.add(mesh);}
   if(rail){scene.remove(rail);rail.geometry.dispose();(rail.material as THREE.Material).dispose();}
@@ -114,10 +117,32 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   el.addEventListener('pointerleave',()=>calendarPointer('leave'));
   events.addEventListener('pointerdown',(event)=>{
    const e=event as PointerEvent;if(!visible || e.button!==0)return;cast(e);const contact=ray.intersectObject(mesh)[0];if(!contact){canvas.dispatchEvent(new Event('paperoutside'));return;}calendarPointer('move',contact);if(canvas.dataset.interactive==='true'){calendarPointer('click',contact);return;}if(contact.point.y>height/2-.1)return;
-   dragPlane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,0,1),contact.point);
-   if(sim.startGrab(contact.point,.42)){wake();e.preventDefault();el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';}
+   if(sim.startGrab(contact.point,.42)){
+    grabOrigin.copy(contact.point);
+    liftProgress = 0;
+    dragPlane.setComponents(0, 0, 1, -grabOrigin.z);
+    wake();e.preventDefault();el.setPointerCapture(e.pointerId);el.style.cursor='grabbing';
+   }
   });
-  events.addEventListener('pointermove',event=>{const e=event as PointerEvent;if(!visible)return;if(!sim.isGrabbing){cast(e);calendarPointer('move',ray.intersectObject(mesh)[0]);el.style.cursor=canvas.dataset.interactive==='true'?'pointer':'grab';return;}cast(e);if(ray.ray.intersectPlane(dragPlane,hit)){hit.x=THREE.MathUtils.clamp(hit.x,-3.8,3.8);hit.y=THREE.MathUtils.clamp(hit.y,-height*.85,height*.48);hit.z=.7;sim.moveGrab(hit);}});
+  events.addEventListener('pointermove',event=>{
+   const e = event as PointerEvent;
+   if (!visible) return;
+   cast(e);
+   if (!sim.isGrabbing) {
+    calendarPointer('move', ray.intersectObject(mesh)[0]);
+    el.style.cursor = canvas.dataset.interactive === 'true' ? 'pointer' : 'grab';
+    return;
+   }
+   if (!ray.ray.intersectPlane(dragPlane, hit)) return;
+   // Keep the achieved lift for this grab, including when the pointer doubles back.
+   const travel = Math.hypot(hit.x - grabOrigin.x, hit.y - grabOrigin.y) / (sim.width * .07);
+   liftProgress = Math.max(liftProgress, Math.min(1, travel));
+   const lift = liftProgress * liftProgress * (3 - 2 * liftProgress);
+   hit.z = grabOrigin.z + Math.max(0, .7 - grabOrigin.z) * lift;
+   hit.x = THREE.MathUtils.clamp(hit.x, -3.8, 3.8);
+   hit.y = THREE.MathUtils.clamp(hit.y, -height * .85, height * .48);
+   sim.moveGrab(hit);
+  });
   const end=()=>{if(sim?.isGrabbing){sim.endGrab();wake();}el.style.cursor='grab';};
   events.addEventListener('pointerup',end);events.addEventListener('pointercancel',end);el.addEventListener('lostpointercapture',end);
   loaded=true;
@@ -131,7 +156,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  }
  function tick(now:number){
   if(!visible || document.hidden){frame=0;return;}
-  const dt=Math.min((now-last)/1000||1/60,.033);last=now;
+  const dt=(now-last)/1000;last=now;
   if((!paused&&!sleeping) || sim.isGrabbing){
    const delta=physics!.step(dt,params,lighting?.active?lighting.wallMinZ:undefined);
    if(delta!==undefined){
@@ -153,7 +178,11 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
  panel.querySelector('[data-paper-reset]')!.addEventListener('click',()=>{sim?.reset();wake();geometryDirty=true;});
  panel.querySelector('[data-paper-poke]')!.addEventListener('click',()=>{if(!sim)return;wake();geometryDirty=true;for(let i=sim.cols;i<sim.count;i++){const y=Math.floor(i/sim.cols)/sim.segY;sim.positions[i*3+2]+=.075*Math.sin(i%sim.cols/sim.segX*Math.PI)*y*y;}});
  panel.querySelector('[data-paper-pause]')!.addEventListener('click',e=>{paused=!paused;wake();(e.currentTarget as HTMLElement).textContent=paused?'움직임 재개':'일시정지';(e.currentTarget as HTMLElement).setAttribute('aria-pressed',String(paused));});
- document.addEventListener('visibilitychange',start);new ResizeObserver(resize).observe(stage);
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){cancelAnimationFrame(frame);frame=0;}
+  else start();
+ });
+ new ResizeObserver(resize).observe(stage);
  const api={reservePixelRatio(ratio:number){
   if(reservedRatio===ratio)return;
   reservedRatio=ratio;syncDrawingSize();invalidate();
