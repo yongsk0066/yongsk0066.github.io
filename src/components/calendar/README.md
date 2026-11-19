@@ -10,7 +10,7 @@ assets/data by `python3 research/yunjeon-calendar/build.py`.
 The research HTML uses these same runtime sources. After changing paper code:
 
 ```
-node_modules/.bin/esbuild src/components/calendar/paper-preview.ts --bundle --format=iife --minify --legal-comments=inline --loader:.jpg=dataurl --outfile=research/yunjeon-calendar/paper-preview.bundle.js
+node_modules/.bin/esbuild src/components/calendar/paper-preview.ts --bundle --format=iife --minify --legal-comments=inline --loader:.jpg=dataurl --loader:.wgsl=text --outfile=research/yunjeon-calendar/paper-preview.bundle.js
 python3 research/yunjeon-calendar/build.py
 ```
 
@@ -37,7 +37,15 @@ about the projected pinned top edge. Texture and WebGL pixel density follow the
 actual displayed width at 2× (720px texture collapsed, 1344px expanded). The last
 completed texture paint is retained during native canvas resize, and WebGL buffer
 resize is synchronously followed by a redraw. The physical shadow replaces the
-old CSS drop shadow. Reduced-motion disables the transition.
+old CSS drop shadow. A zoom reserves its final lighting target capacity up front.
+The renderer traces only the current size, then releases spare capacity when the
+calendar returns to the rail. Reduced-motion disables the transition.
+
+The desktop mount runs the fixed-step solver in a dedicated module Worker.
+Transferable checkpoints carry positions, previous positions, crease state and
+simulation time. Input, picking, display and GPU submission stay on the main
+thread. If the Worker fails, simulation resumes from the last displayed pose.
+The WebGL fallback can sleep after an uncreased, flat sheet settles.
 
 Lighting: the blog lazily loads `lighting/preview.ts` and a WebGPU compute path
 tracer after the existing preview is visible. It uses the same deformed geometry,
@@ -57,7 +65,10 @@ have separate RGB histories, sample ages and first/second luminance moments.
 Motion, variance, visibility changes and significant illumination changes control
 reuse; moving caps reach 25 frames for direct correction and 49 for GI, while
 stationary history reaches 128. Individual Monte Carlo outliers do not invalidate
-otherwise stationary history. Two frame sets ping-pong without image-history copies.
+otherwise stationary history. Two frame sets alternate on each submission. A capacity-only resize copies the
+last valid history once. The browser uploads the bounding boxes and shared mesh
+vertices for the most recent pose. A compute pass expands them in the fixed BVH
+triangle order before tracing. CPU expansion is available if that pipeline fails.
 
 The primary diffuse term uses the rectangular emitter's cosine integral. The
 smooth unclipped vector irradiance is evaluated per vertex and interpolated over
@@ -77,7 +88,7 @@ joint depth/normal/UV/side-guided light reconstruction preserve thin folds and p
 There is no low-resolution UV/silhouette interpolation. Low-resolution lighting
 can still miss very narrow occlusion details, and temporal filtering can briefly lag
 changing indirect occlusion; neither exact transport nor zero noise is guaranteed.
-Only one GPU submission is kept in flight. Unsupported WebGPU, initialization
+The render loop allows up to three unfinished lighting submissions and tracks one queue completion at a time. It stops when the pose settles and lighting reaches 128 samples. Unsupported WebGPU, initialization
 errors or device loss restore the WebGL preview. Month navigation, expansion,
 Escape, dragging, mobile hide and fixed top attachment retain their existing UI.
 A unilateral wall contact keeps the paper in front of the traced wall. Optical

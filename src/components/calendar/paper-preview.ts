@@ -34,6 +34,7 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   texture.needsUpdate=true;lighting?.paint();invalidate();
  }
  const params={...PAPER_PARAMS};
+ const motionEpsilon=1e-6;
  const pointer=new THREE.Vector2(), ray=new THREE.Raycaster(), dragPlane=new THREE.Plane(), hit=new THREE.Vector3();
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
  const fiber=new THREE.TextureLoader().load(paperColor,invalidate);fiber.colorSpace=THREE.SRGBColorSpace;fiber.wrapS=fiber.wrapT=THREE.RepeatWrapping;fiber.repeat.set(3,4);
@@ -134,8 +135,8 @@ export function createPaperPreview(panel:HTMLElement, canvas:HTMLCanvasElement, 
   if((!paused&&!sleeping) || sim.isGrabbing){
    const delta=physics!.step(dt,params,lighting?.active?lighting.wallMinZ:undefined);
    if(delta!==undefined){
-    if(delta>1e-6){geometryDirty=true;quietFrames=0;}
-    else if(++quietFrames>60 && !sim.isGrabbing && (lighting?.active || sim.flatAndStill)){
+    if(delta>motionEpsilon){geometryDirty=true;quietFrames=0;}
+    else if(++quietFrames>60 && !sim.isGrabbing && (lighting?.active || sim.flatAtRest(motionEpsilon))){
      sleeping=true;physics!.interrupt();
     }
    }

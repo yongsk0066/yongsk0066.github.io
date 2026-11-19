@@ -202,10 +202,11 @@ export class ClothSim {
       lambda: new Float64Array(region.indices.length * 3)};
   }
 
-  get flatAndStill() {
+  /** The uncreased fallback can use the same sub-pixel settling tolerance as the lit mesh. */
+  flatAtRest(tolerance: number) {
     if (this.grab) return false;
     for (let i = 0; i < this.positions.length; i++) {
-      if (this.positions[i] !== this.prev[i] || (i % 3 === 2 && this.positions[i] !== 0)) return false;
+      if (Math.abs(this.positions[i] - this.prev[i]) > tolerance || (i % 3 === 2 && this.positions[i] !== 0)) return false;
     }
     for (let h = 0; h < this.memoryAngle.length; h++) {
       if (this.memoryAngle[h] !== 0 || this.plasticAngle[h] !== 0) return false;
