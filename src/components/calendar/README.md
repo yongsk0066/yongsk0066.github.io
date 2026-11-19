@@ -47,6 +47,10 @@ simulation time. Input, picking, display and GPU submission stay on the main
 thread. If the Worker fails, simulation resumes from the last displayed pose.
 The WebGL fallback can sleep after an uncreased, flat sheet settles.
 
+If a display tick arrives while the Worker is busy, its elapsed time feeds
+the next solve as soon as the reply arrives. A reusable transfer buffer keeps
+the completed pose available for picking and drawing on the next display tick.
+
 The solver advances at 120 Hz and resolves wall contact after each substep.
 One update can run four substeps and the clock can hold eight. The same
 alternating triangle diagonals drive bending, pointer picks and lighting.
