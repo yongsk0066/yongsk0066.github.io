@@ -1,31 +1,17 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { albums, cdn, photoFiles, readManifest } from "../../src/lib/post-media.mjs";
+import { readFile, rm } from "node:fs/promises";
 
-// The first pilot migrates photos which already had public URLs. Keep those URLs working
-// without shipping a second full-size copy, or the original GPS tags, in Workers Assets.
+// Old checkouts can still have the untracked JPEGs in public/. Keep their historical URLs
+// working through _redirects and exclude those duplicate originals from local deployments.
 export default function legacyPhotoLinks() {
   return { name: "legacy-photo-links", hooks: {
     "astro:build:done": async ({ dir }) => {
-      const dist = fileURLToPath(dir);
-      const redirects = [];
-      for (const album of albums) {
-        for (const [name, photo] of Object.entries(readManifest(album).photos)) {
-          const files = photoFiles(photo);
-          for (const [source, key] of [[name, files.full], ["sdr/" + name, files.sdr]]) {
-            const path = "post/images/" + album + "/" + source;
-            if (!key || !existsSync(join("public", path))) continue;
-            await rm(join(dist, path), { force: true });
-            redirects.push("/" + path.split("/").map(encodeURIComponent).join("/") + " " + cdn + "/" + key + " 302");
-          }
+      const rules = await readFile(new URL("_redirects", dir), "utf8");
+      for (const line of rules.split("\n")) {
+        const [path, target] = line.trim().split(/\s+/);
+        if (/^\/post\/images\/svalbard_3\/(?:sdr\/)?oslo_[\d_]+\.(?:jpg|png)$/.test(path) &&
+            target?.startsWith("https://static.yongseok.me/media/v1/")) {
+          await rm(new URL(path.slice(1), dir), { force: true });
         }
-      }
-      if (redirects.length) {
-        const file = join(dist, "_redirects");
-        const previous = existsSync(file) ? (await readFile(file, "utf8")).trimEnd() + "\n" : "";
-        await writeFile(file, previous + redirects.join("\n") + "\n");
       }
     },
   } };

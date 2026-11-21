@@ -85,10 +85,6 @@ export async function makeManifest(album, staged) {
 }
 
 export async function localSource(album, relative, digest) {
-  // The existing Oslo photos are tracked. Look them up by digest for the first CI migration.
-  for (const file of [sourcePath(album, relative), join("public/post/images", album, relative)]) {
-    const bytes = await maybeRead(file);
-    if (bytes && hash(bytes) === digest) return bytes;
-  }
-  return null;
+  const bytes = await maybeRead(sourcePath(album, relative));
+  return bytes && hash(bytes) === digest ? bytes : null;
 }
