@@ -1,5 +1,6 @@
 ---
-import { createHash } from "node:crypto";
+import { blogPostPaths } from "@lib/blog-routes";
+import { prepareArticlePreviews } from "@lib/link-previews.mjs";
 import ArticleProse from "@components/blog/ArticleProse.astro";
 import BackToPrev from "@components/blog/BackToPrev.astro";
 import Comments from "@components/blog/Comments.astro";
@@ -10,89 +11,17 @@ import CopyMenu from "@components/blog/CopyMenu.astro";
 import Share from "@components/blog/Share.astro";
 import TOC from "@components/blog/TOC.astro";
 import { ImageLightbox } from "@components/ImageLightbox";
-import { DEFAULT_LOCALE, OTHER_LOCALES } from "@consts";
 import { useTranslations } from "@i18n/utils";
 import PageLayout from "@layouts/PageLayout.astro";
 import { readingTime } from "@lib/blog";
-import { getCollection, render, type CollectionEntry } from "astro:content";
+import { getCollection, render } from "astro:content";
 
 export async function getStaticPaths() {
-  const _locales = ["en", "ja"];
-  const _getLocale = (id: string) => _locales.find((l) => id.startsWith(`${l}/`)) || "ko";
-
-  const allPosts = (await getCollection("blog"))
-    .filter((post) => import.meta.env.DEV || !post.data.draft)
-    .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
-
-  const collectionCacheKey = createHash("sha256").update(allPosts.map((p) => `${p.id}:${p.digest}`).join("|" )).digest("hex");
-
-  return allPosts.map((post) => {
-    const postLocale = _getLocale(post.id);
-    const sameLangPosts = allPosts.filter((p) => _getLocale(p.id) === postLocale);
-    const langIndex = sameLangPosts.findIndex((p) => p.id === post.id);
-
-    const prevPost = langIndex < sameLangPosts.length - 1
-      ? { slug: sameLangPosts[langIndex + 1].id, title: sameLangPosts[langIndex + 1].data.title }
-      : undefined;
-    const nextPost = langIndex > 0
-      ? { slug: sameLangPosts[langIndex - 1].id, title: sameLangPosts[langIndex - 1].data.title }
-      : undefined;
-
-    return {
-      params: { slug: post.id },
-      props: { post, prevPost, nextPost },
-      // Navigation and translations depend on the entire published collection.
-      cacheKey: `${post.id}:${collectionCacheKey}`,
-    };
-  });
+  const posts = await getCollection("blog", ({ data }) => import.meta.env.DEV || !data.draft);
+  const previews = import.meta.env.DEV ? new Map() : await prepareArticlePreviews(posts);
+  return blogPostPaths(posts, previews);
 }
-type NavPost = { slug: string; title: string };
-type Props = { post: CollectionEntry<"blog">; prevPost?: NavPost; nextPost?: NavPost };
-
-const { post, prevPost, nextPost } = Astro.props;
-const currentLocale = OTHER_LOCALES.find((l) => post.id.startsWith(`${l}/`)) || DEFAULT_LOCALE;
-
-const seriesPosts = (
-  await getCollection("blog", ({ id, data }) => {
-    if (!import.meta.env.DEV && data.draft) return false;
-    if (currentLocale === DEFAULT_LOCALE) {
-      return !id.includes("/");
-    }
-    return id.startsWith(currentLocale);
-  })
-)
-  .filter(
-    (_post) => _post.data.series === post.data.series && !!post.data.series
-  )
-  .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
-
-let hasTranslation = false;
-let translationSlug = "";
-
-const allPosts = (await getCollection("blog")).filter((p) => import.meta.env.DEV || !p.data.draft);
-
-if (currentLocale === DEFAULT_LOCALE) {
-  translationSlug = `en/${post.id}`;
-  hasTranslation = allPosts.some((p) => p.id === translationSlug);
-} else {
-  const baseSlug = post.id.replace(new RegExp(`^${currentLocale}/`), "");
-  translationSlug = baseSlug;
-  hasTranslation = allPosts.some((p) => p.id === translationSlug);
-}
-
-// Compute available locales for language switcher UI
-const availableLocales: string[] = [currentLocale];
-const _baseSlug = currentLocale === DEFAULT_LOCALE
-  ? post.id
-  : post.id.replace(new RegExp(`^${currentLocale}/`), "");
-
-if (currentLocale !== DEFAULT_LOCALE) {
-  if (allPosts.some((p) => p.id === _baseSlug)) availableLocales.push(DEFAULT_LOCALE);
-}
-for (const locale of OTHER_LOCALES) {
-  if (locale === currentLocale) continue;
-  if (allPosts.some((p) => p.id === `${locale}/${_baseSlug}`)) availableLocales.push(locale);
-}
+const { post, currentLocale, availableLocales, translationSlug, hasTranslation, prevPost, nextPost, seriesPosts } = Astro.props;
 
 const { Content, headings } = await render(post);
 const t = useTranslations(currentLocale as any);
@@ -156,11 +85,11 @@ const t = useTranslations(currentLocale as any);
             </div>
             <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
               {seriesPosts.map((seriesPost) => {
-                const link = `/${seriesPost.collection}/${seriesPost.id}`;
+                const link = `/blog/${seriesPost.slug}`;
                 return (
                   <li class="text-sm indent-2 underline hover:text-zinc-800">
                     <a href={link} rel="noopener noreferrer" target="_blank">
-                      {seriesPost.data.title}
+                      {seriesPost.title}
                     </a>
                   </li>
                 );
@@ -184,10 +113,10 @@ const t = useTranslations(currentLocale as any);
           </div>
           <ul class="flex flex-col gap-y-2.5 my-3 border-l-2 border-zinc-300">
             {seriesPosts.map((seriesPost) => {
-              const link = `/${seriesPost.collection}/${seriesPost.id}`;
+              const link = `/blog/${seriesPost.slug}`;
               return (
                 <li class="text-sm indent-2 underline hover:text-zinc-800">
-                  <a href={link}>{seriesPost.data.title}</a>
+                  <a href={link}>{seriesPost.title}</a>
                 </li>
               );
             })}

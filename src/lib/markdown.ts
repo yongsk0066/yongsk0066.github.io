@@ -1,3 +1,4 @@
+import { albumForPost, cdn, requirePhoto } from "./post-media.mjs";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkMdx from "remark-mdx";
@@ -21,7 +22,7 @@ function attribute(node: JsxNode, name: string): string | undefined {
     : undefined;
 }
 
-function cleanNodes(nodes: RootContent[], sourceUrl: string): RootContent[] {
+function cleanNodes(nodes: RootContent[], sourceUrl: string, album?: string): RootContent[] {
   return nodes.flatMap((node): RootContent[] => {
     if (node.type === "mdxjsEsm") return [];
     if (
@@ -42,15 +43,16 @@ function cleanNodes(nodes: RootContent[], sourceUrl: string): RootContent[] {
       node.type === "mdxJsxTextElement"
     ) {
       if (node.name === "script" || node.name === "style") return [];
-      const children = cleanNodes(node.children as RootContent[], sourceUrl);
-      const src = attribute(node, "src") || attribute(node, "url");
+      const children = cleanNodes(node.children as RootContent[], sourceUrl, album);
+      let src = attribute(node, "src") || attribute(node, "url");
+      if (node.name === "PostPhoto" && src && album) src = cdn + "/" + requirePhoto(album, src).files.full;
       const alt =
         attribute(node, "alt") ||
         attribute(node, "caption") ||
         node.name ||
         "Content";
       let replacement: PhrasingContent | undefined;
-      if ((node.name === "img" || node.name === "Image") && src) {
+      if ((node.name === "img" || node.name === "Image" || node.name === "PostPhoto") && src) {
         replacement = {
           type: "image",
           url: src,
@@ -88,7 +90,7 @@ function cleanNodes(nodes: RootContent[], sourceUrl: string): RootContent[] {
     if ("children" in node)
       node.children = cleanNodes(
         node.children as RootContent[],
-        sourceUrl
+        sourceUrl, album
       ) as typeof node.children;
     return [node];
   });
@@ -104,7 +106,8 @@ export async function postMarkdown(
     categories?: string[];
     series?: string;
   },
-  sourceUrl: string
+  sourceUrl: string,
+  postId = ""
 ): Promise<string> {
   const result = await unified()
     .use(remarkParse)
@@ -120,7 +123,7 @@ export async function postMarkdown(
         visit(tree, "heading", (node) => {
           node.depth = Math.min(6, node.depth + 1) as typeof node.depth;
         });
-      tree.children = cleanNodes(tree.children, sourceUrl) as Root["children"];
+      tree.children = cleanNodes(tree.children, sourceUrl, albumForPost(postId)) as Root["children"];
     })
     .use(remarkStringify)
     .process(body);

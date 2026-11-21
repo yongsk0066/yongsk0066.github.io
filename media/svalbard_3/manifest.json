@@ -1,0 +1,55 @@
+{
+  "photos": {
+    "oslo_10.jpg": {
+      "source": "b7a61bfdad5e34252e892b193409e676812ffa9b984884f91a089f9252b0c993",
+      "sdr": "e20d413f54d676dfb247a5bd28d1fbc2df7308b00c83368ec6cb1e6766f66afb",
+      "sdrOrientation": 6,
+      "format": "jpg",
+      "width": 3000,
+      "height": 4000
+    },
+    "oslo_11.jpg": {
+      "source": "ba3d397b2381c03a09212d52d0f7058d3f1eeb40c3ac608f9a346bd739405fc8",
+      "sdr": "d4b884667a1d325660043ed4605127c24fa9541f579bc23d820d4285b21f36ca",
+      "format": "jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "oslo_1_1.png": {
+      "source": "dbbea589ec1c723b52909ae47b530532ebc486adfcbc8a2caa4c1414b77e0b52",
+      "format": "png",
+      "width": 1161,
+      "height": 740
+    },
+    "oslo_3.jpg": {
+      "source": "030ed1685db3d22e6345328eed5133f8c1b782ab3206cdd44f929469bb83d75b",
+      "sdr": "3e66ef8fcf25c009df51c780fcb85285ab1f4f56c1f696d5bca46ce9edacca18",
+      "format": "jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "oslo_37.jpg": {
+      "source": "f5e8eaabfef8d0b301e03389726044df157ea369d887dc650509c378b34a0f50",
+      "sdr": "2a25c8de4998dfd88f291f94127fedadc9a2a9aa204c253794663c872af1582d",
+      "sdrOrientation": 6,
+      "format": "jpg",
+      "width": 3000,
+      "height": 4000
+    },
+    "oslo_6.jpg": {
+      "source": "88ddc76c0eb807c46dc21e6406464f080cccb549ad3b76af2ff256c408414d81",
+      "sdr": "be466e7bb1531f4790cac267fd1ea8524b9ccd1e32adea8a1bdd16ee5fad2904",
+      "format": "jpg",
+      "width": 4000,
+      "height": 3000
+    },
+    "oslo_8.jpg": {
+      "source": "151034ff21012a2c70e91a1340e8e085bfff49a8d34b1199e63d063e8d48d1c7",
+      "sdr": "7a91ad833a359a4c7aaf8ff484032c6a8972e4f0fff0405896abc678752e84a3",
+      "sdrOrientation": 6,
+      "format": "jpg",
+      "width": 3000,
+      "height": 4000
+    }
+  }
+}

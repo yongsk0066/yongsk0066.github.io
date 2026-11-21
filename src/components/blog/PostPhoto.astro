@@ -1,0 +1,28 @@
+---
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { albumForPost, cdn, photoName, requirePhoto } from "../../lib/post-media.mjs";
+interface Props { src: string; alt: string; half?: boolean }
+const { src, alt, half = false } = Astro.props;
+const album = albumForPost(Astro.params.slug);
+if (!album) throw new Error("PostPhoto needs a configured article album");
+photoName(src);
+const local = import.meta.env.DEV && existsSync(join("media", album, "originals", src));
+const preview = "/_local-photo/" + album + "/" + encodeURIComponent(src);
+const asset = local ? null : requirePhoto(album, src);
+const files = asset?.files;
+const inline = files ? cdn + "/" + files.display[0] : preview;
+const srcset = files?.display.map((key, i) => cdn + "/" + key + " " + files.widths[i] + "w").join(", ");
+const full = files ? cdn + "/" + (files.sdr || files.full) : preview;
+const hdr = files?.sdr ? cdn + "/" + files.full : undefined;
+const sizes = half ? "(min-width: 48rem) 360px, calc(50vw - 24px)" : "(min-width: 48rem) 728px, calc(100vw - 40px)";
+---
+<a href={full} data-astro-prefetch="false" class="post-photo">
+  <img src={inline} {srcset} sizes={srcset ? sizes : undefined} {alt}
+    width={asset?.photo.width} height={asset?.photo.height} loading="lazy" decoding="async"
+    data-full-src={full} data-full-hdr={hdr} />
+</a>
+<style>
+  .post-photo { display: block; min-width: 0; }
+  .post-photo img { width: 100%; height: auto; }
+</style>

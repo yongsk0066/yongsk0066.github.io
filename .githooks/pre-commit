@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+if git diff --cached --name-only -- src/content/blog media | grep -Eq '(^|/)svalbard_3(\.mdx|/manifest\.json)$'; then
+  pnpm media:prepare --staged
+  git add -- media/svalbard_3/manifest.json
+fi

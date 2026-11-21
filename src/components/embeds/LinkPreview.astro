@@ -4,8 +4,9 @@ interface Props {
   src: string;
   title?: string;
   description?: string;
-  imagePosition: CSSProperties["objectPosition"];
+  imagePosition?: CSSProperties["objectPosition"];
 }
+import { getLinkPreview } from "../../lib/link-previews.mjs";
 import type { CSSProperties } from "react";
 const {
   src,
@@ -14,37 +15,10 @@ const {
   imagePosition = "center",
 } = Astro.props;
 
-let title = _title;
-let description = _description;
-let image: string | null | undefined;
-
-function extractMeta(html: string, property: string): string | null {
-  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']+)["']|<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${property}["']`, "i");
-  const match = html.match(re);
-  return match ? (match[1] || match[2]) : null;
-}
-
-function extractTitle(html: string): string | null {
-  const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  return match ? match[1].trim() : null;
-}
-
-try {
-  const response = await fetch(src);
-  const html = await response.text();
-
-  title = title || extractMeta(html, "og:title") || extractTitle(html) || src;
-  description =
-    description ||
-    extractMeta(html, "og:description") || extractMeta(html, "description") ||
-    "No description available";
-  const rawImage = extractMeta(html, "og:image");
-  image = rawImage ? new URL(rawImage, src).href : null;
-} catch (error) {
-  console.error(`Failed to fetch or parse ${src}:`, error);
-  title = title || src;
-  description = description || "No description available";
-}
+const card = await getLinkPreview(src);
+const title = _title || card.title || src;
+const description = _description || card.description || "No description available";
+const image = card.image;
 ---
 
 <a

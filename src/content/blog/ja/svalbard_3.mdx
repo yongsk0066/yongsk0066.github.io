@@ -9,6 +9,7 @@ heroImage: "/post/images/svalbard_3/thumb.png"
 ---
 
 import LinkPreview from "../../../components/embeds/LinkPreview.astro";
+import PostPhoto from "../../../components/blog/PostPhoto.astro";
 import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
 
 以下のオーディオは「NotebookLM」で生成したものである。
@@ -62,14 +63,8 @@ import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
 まるで通行人Aにでもなったように、ホテルを出てごく自然に家に電話をかけた。平日の朝だったが、オスロの街は静かだった。
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_3.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_3.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_6.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_6.jpg" />
-  </picture>
+  <PostPhoto src="oslo_3.jpg" alt="飛行機の窓から見た雪景色" half />
+  <PostPhoto src="oslo_6.jpg" alt="荷物棚に置かれたスーツケース" half />
 </figure>
 
 「私、ソグネフィヨルドを見たかったのよ」\
@@ -79,14 +74,8 @@ import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
 父はひとりで遠くへ行く私を心配していた。短い安否の電話を終え、また通行人Aに戻った。
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_37.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_37.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_8.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_8.jpg" />
-  </picture>
+  <PostPhoto src="oslo_37.jpg" alt="オスロの横断歩道に並ぶ二つの赤信号" half />
+  <PostPhoto src="oslo_8.jpg" alt="柱に取り付けられた黄色い押しボタン" half />
 </figure>
 
 赤いランプが一度に二つ点く信号機。当然のように信号機に取り付けられた正体不明のボックスを押す人々。
@@ -99,20 +88,14 @@ import AudioPlayer from "../../../components/embeds/AudioPlayer.astro";
 調べてみると上記のような製品だった。側面もボタンらしい。他の側面の模様は横断歩道の構成を示すための点字だった。
 
 <figure>
-  <img src="/post/images/svalbard_3/oslo_1_1.png" />
+  <PostPhoto src="oslo_1_1.png" alt="押しボタンの触覚記号を示す図" />
 </figure>
 
 オスロ市内を歩き回り、昼時になってマクドナルドを見つけた。まだオスロに慣れておらず、せめて馴染みのある場所に来たのだ。オスロに来て初めての注文。緊張しながらバーガーセットとさつまいもフライを頼んだ。
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_10.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_10.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_11.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_11.jpg" />
-  </picture>
+  <PostPhoto src="oslo_10.jpg" alt="印字されていない白いレシート" half />
+  <PostPhoto src="oslo_11.jpg" alt="ポテトとバーガーの箱が載ったトレー" half />
 </figure>
 
 キオスクで注文して番号は覚えたものの、レシートのインクが切れていたのか、何も印字されていない真っ白な紙が出てきた。最初の食事から早速の試練か。\

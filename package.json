@@ -21,13 +21,17 @@
     "check:seo": "node --test scripts/seo.test.mjs",
     "new:post": "node scripts/create-post.js",
     "cf:dev": "pnpm build && wrangler dev",
-    "cf:deploy": "pnpm build && wrangler deploy",
+    "cf:deploy": "pnpm media:prepare && pnpm media:publish && pnpm build && wrangler deploy",
     "cf:preview": "wrangler dev",
     "playground:prepare": "node scripts/reploom/prepare.mjs",
     "playground:bootstrap": "node scripts/reploom/bootstrap.mjs",
     "test:playground": "playwright test --config tests/reploom/playwright.config.ts",
     "test:playground:modules": "node --test tests/reploom/*.test.mjs",
-    "check:playground": "tsc --project tests/reploom/tsconfig.json"
+    "check:playground": "tsc --project tests/reploom/tsconfig.json",
+    "media:prepare": "node scripts/media/publish.mjs prepare",
+    "media:stage": "node scripts/media/publish.mjs stage",
+    "media:publish": "node scripts/media/publish.mjs publish",
+    "media:restore": "node scripts/media/publish.mjs restore"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.9",
@@ -61,7 +65,11 @@
     "unified": "^11.0.5",
     "unist-util-visit": "^5.2.0",
     "@yongsk0066/reploom": "file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz",
-    "@yongsk0066/reploom-ui": "file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz"
+    "@yongsk0066/reploom-ui": "file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz",
+    "aws4fetch": "1.0.20",
+    "fast-xml-parser": "5.11.2",
+    "parse5": "8.1.1",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

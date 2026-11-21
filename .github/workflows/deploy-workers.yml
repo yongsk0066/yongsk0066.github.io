@@ -54,6 +54,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-astro-${{ hashFiles('pnpm-lock.yaml') }}-
 
+      - name: Restore link preview metadata
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/link-previews-v1
+          key: ${{ runner.os }}-link-previews-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-link-previews-v1-
+
+      - name: Check photo manifest and R2 release
+        id: media
+        env:
+          BLOG_MEDIA_R2_S3: ${{ secrets.BLOG_MEDIA_R2_S3 }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm media:prepare
+          git diff --exit-code -- media
+          node scripts/media/publish.mjs pending >> "$GITHUB_OUTPUT"
+
+      - name: Publish new photos to R2
+        if: steps.media.outputs.pending == 'true'
+        env:
+          BLOG_MEDIA_R2_S3: ${{ secrets.BLOG_MEDIA_R2_S3 }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if ! command -v exiftool >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends libimage-exiftool-perl
+          fi
+          pnpm media:publish
+
       - name: Build site
         run: pnpm build
 

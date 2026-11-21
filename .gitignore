@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # local-only assets
 scripts/404-audio.wav
+
+.cache/
+media/*/originals/

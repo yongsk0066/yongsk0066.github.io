@@ -9,6 +9,7 @@ heroImage: "/post/images/svalbard_3/thumb.png"
 ---
 
 import LinkPreview from "../../components/embeds/LinkPreview.astro";
+import PostPhoto from "../../components/blog/PostPhoto.astro";
 import AudioPlayer from "../../components/embeds/AudioPlayer.astro";
 
 아래 오디오는 'NotebookLM'에서 생성한 오디오이다.
@@ -62,14 +63,8 @@ import AudioPlayer from "../../components/embeds/AudioPlayer.astro";
 행인1이 된 것마냥 호텔을 나와서 자연스럽게 집에 안부 전화를 걸었다. 평일 아침이였으나, 오슬로 시내는 조용했다.
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_3.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_3.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_6.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_6.jpg" />
-  </picture>
+  <PostPhoto src="oslo_3.jpg" alt="비행기 창밖으로 본 눈 덮인 지형" half />
+  <PostPhoto src="oslo_6.jpg" alt="짐 보관 선반 아래 놓인 여행 가방" half />
 </figure>
 
 "내가 송네 피오르드를 보고 싶었는데"\
@@ -79,14 +74,8 @@ import AudioPlayer from "../../components/embeds/AudioPlayer.astro";
 아빠는 내가 혼자 멀리 가는 것을 걱정하셨다. 잠깐의 안부전화를 마치고 다시 행인1로 돌아갔다.
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_37.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_37.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_8.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_8.jpg" />
-  </picture>
+  <PostPhoto src="oslo_37.jpg" alt="오슬로 횡단보도의 두 빨간 신호" half />
+  <PostPhoto src="oslo_8.jpg" alt="기둥에 달린 노란색 횡단보도 버튼" half />
 </figure>
 
 빨간 불이 한번에 두개나 들어오는 신호등. 당연한듯 신호등에 붙은 정체불명의 박스를 누르는 사람들.
@@ -99,20 +88,14 @@ import AudioPlayer from "../../components/embeds/AudioPlayer.astro";
 찾아보니 위와 같은 제품이였다. 옆면도 버튼이라고한다. 다른 옆면의 문양들은 횡단보도의 구성을 설명하기 위한 점자였다.
 
 <figure>
-  <img src="/post/images/svalbard_3/oslo_1_1.png" />
+  <PostPhoto src="oslo_1_1.png" alt="횡단보도 버튼의 촉각 기호 설명" />
 </figure>
 
 오슬로 시내를 돌아다니고 점심 때가 되어 맥도날드를 찾았다. 아직 오슬로가 낯설어 그나마 익숙한 곳을 찾아온것이다. 오슬로에오고 첫 주문이라 긴장하며 햄버거세트와 고구마튀김을 시켰다.
 
 <figure style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_10.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_10.jpg" />
-  </picture>
-  <picture>
-    <source srcset="/post/images/svalbard_3/oslo_11.jpg" type="image/jpeg" />
-    <img src="/post/images/svalbard_3/sdr/oslo_11.jpg" />
-  </picture>
+  <PostPhoto src="oslo_10.jpg" alt="글자가 찍히지 않은 흰 영수증" half />
+  <PostPhoto src="oslo_11.jpg" alt="감자튀김과 햄버거 상자가 놓인 쟁반" half />
 </figure>
 
 키오스크로 주문하고 번호를 외우긴 했으나, 영수증 잉크가 없었는지 영수증은 아무것도 적히지 않은 흰 백지 였다. 첫 끼니 부터 난관인가.\

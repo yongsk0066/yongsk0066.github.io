@@ -32,3 +32,5 @@ React, JavaScript, CSS, 웹 플랫폼, 수학/시각화 등을 주제로 블로�
 - X: [@yongsk0066](https://x.com/yongsk0066)
 - LinkedIn: [yongseok-jang](https://www.linkedin.com/in/yongseok-jang-129267181/)
 - Email: yongsk0066@gmail.com
+
+[오슬로 글에 사진 추가하기](docs/post-photos.md)

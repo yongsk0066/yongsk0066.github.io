@@ -82,7 +82,7 @@ export function ImageLightbox() {
   const openLightbox = useCallback(
     (img: HTMLImageElement) => {
       setActiveImage({
-        src: img.src,
+        src: (window.matchMedia("(dynamic-range: high)").matches && img.dataset.fullHdr) || img.dataset.fullSrc || img.src,
         alt: img.alt || "",
       });
       setIsOpen(true);
@@ -222,7 +222,7 @@ export function ImageLightbox() {
         <motion.div
           id="lightbox-overlay"
           className="fixed inset-0 z-[9999] flex items-center justify-center"
-          style={{ touchAction: "none" }}
+          style={{ touchAction: "pinch-zoom" }}
           onClick={onOverlayClick}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -246,7 +246,7 @@ export function ImageLightbox() {
               y: dragY,
               scale: imageScale,
               cursor: "grab",
-              touchAction: "none",
+              touchAction: "pinch-zoom",
             }}
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}

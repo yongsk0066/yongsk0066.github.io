@@ -1,3 +1,5 @@
+import legacyPhotoLinks from "./scripts/media/legacy.mjs";
+import localPhotos from "./scripts/media/dev.mjs";
 import playgroundRoutes from "./scripts/reploom/astro.mjs";
 import mdx from "@astrojs/mdx";
 import { unified } from "@astrojs/markdown-remark";
@@ -214,6 +216,7 @@ export default defineConfig({
   ],
   integrations: [
     playgroundRoutes(),
+    legacyPhotoLinks(),
     mdx({ optimize: true }),
     sitemap({
       filter: (page) => {
@@ -242,7 +245,7 @@ export default defineConfig({
   site: "https://yongseok.me",
   base: "/",
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), localPhotos()],
     optimizeDeps: {
       exclude: ["toastify-js"],
     },
