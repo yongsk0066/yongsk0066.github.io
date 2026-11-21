@@ -33,7 +33,7 @@ test("one fetch across translations and processes, serve stale metadata after fa
   const cwd = process.cwd(), dir = await mkdtemp(join(tmpdir(),"link-preview-test-"));
   const server = createServer();
   let requests=0, fail=false;
-  server.on("request", (_req,res) => { requests++; res.writeHead(fail?503:200,{"content-type":"text/html"}); res.end("<title>Previous title</title>"); });
+  server.on("request", (_req,res) => { requests++; res.writeHead(fail?503:200,{"content-type":"text/html"}); res.end("<head><style>" + " ".repeat(850 * 1024) + "</style><title>Previous title</title></head>"); });
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
   const url="http://127.0.0.1:"+server.address().port+"/card";
   try {

@@ -65,7 +65,6 @@ jobs:
         id: media
         env:
           BLOG_MEDIA_R2_S3: ${{ secrets.BLOG_MEDIA_R2_S3 }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           pnpm media:prepare
@@ -76,7 +75,6 @@ jobs:
         if: steps.media.outputs.pending == 'true'
         env:
           BLOG_MEDIA_R2_S3: ${{ secrets.BLOG_MEDIA_R2_S3 }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if ! command -v exiftool >/dev/null; then

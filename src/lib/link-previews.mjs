@@ -11,7 +11,8 @@ import { visit } from "unist-util-visit";
 const cacheDir = join(process.cwd(), ".cache", "link-previews-v1");
 const goodFor = 7 * 24 * 60 * 60 * 1000;
 const retryAfter = 6 * 60 * 60 * 1000;
-const headLimit = 512 * 1024;
+// Some Chromium mailing-list pages put the title after 850 KiB of inline styles.
+const headLimit = 1024 * 1024;
 const emptyCard = { title: null, description: null, image: null };
 const memory = new Map();
 const inFlight = new Map();
@@ -106,12 +107,13 @@ async function readRecord(file) {
 async function loadCard(url) {
   const file = join(cacheDir, createHash("sha256").update(url).digest("hex") + ".json");
   const previous = await readRecord(file);
-  if (previous?.checkAfter > Date.now()) return previous;
+  if (previous?.checkAfter > Date.now() &&
+      (Object.values(previous.card).some(Boolean) || previous.headLimit === headLimit)) return previous;
   let next;
   try {
     next = { card: await fetchCard(url), checkAfter: Date.now() + goodFor };
   } catch {
-    next = { card: previous?.card || emptyCard, checkAfter: Date.now() + retryAfter };
+    next = { card: previous?.card || emptyCard, checkAfter: Date.now() + retryAfter, headLimit };
   }
   await mkdir(cacheDir, { recursive: true });
   const temporary = file + "." + randomUUID();
