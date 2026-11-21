@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   Playground as Reploom,
-  PreparedSourceView,
+  PlaygroundPlaceholder,
   type PreparedSource,
   type PlaygroundView,
 } from "@yongsk0066/reploom-ui/react";
 import type { BrowserPlatform } from "@yongsk0066/reploom/browser";
 import { acquirePlatform } from "./platform";
-import { labels, type Locale } from "./labels";
+import { labels, javascript, type Locale } from "./labels";
 import { presentationFor } from "./presentation";
-import "@yongsk0066/reploom-ui/reader.css";
+import "@yongsk0066/reploom-ui/styles.css";
 import "./styles.css";
 
 export type PlaygroundProps = {
@@ -40,30 +40,33 @@ export default function Playground({
     return lease.release;
   }, []);
 
+  const layout = {
+    project,
+    title,
+    locale,
+    labels: labels[locale],
+    showTitle: false,
+    showTools: tools,
+    defaultView: defaultView ?? presentation.view,
+    mobileView: presentation.mobile,
+    preparedSource,
+    highlightLines: presentation.highlight,
+    theme: "light" as const,
+  };
   return (
     <div className="article-playground not-prose" lang={locale}>
       {platform ? (
         <Reploom
-          project={project}
-          title={title}
+          {...layout}
           platform={platform}
-          labels={labels[locale]}
-          showTitle={false}
-          showTools={tools}
           editorActivation="interaction"
-          defaultView={defaultView ?? presentation.view}
           defaultFile={defaultFile ?? presentation.file}
-          preparedSource={preparedSource}
         />
       ) : (
-        <section className="reploom reploom-loading" aria-label={title}>
-          {preparedSource &&
-            (defaultView ?? presentation.view) !== "preview" && (
-              <PreparedSourceView source={preparedSource} />
-            )}
-          <p role="status">{labels[locale].loading}</p>
-          <noscript>{labels[locale].javascript}</noscript>
-        </section>
+        <>
+          <PlaygroundPlaceholder {...layout} />
+          <noscript>{javascript[locale]}</noscript>
+        </>
       )}
     </div>
   );

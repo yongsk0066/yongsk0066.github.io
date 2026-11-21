@@ -1939,18 +1939,18 @@ packages:
     resolution: {integrity: sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ==}
 
   '@yongsk0066/reploom-build@file:.reploom/packages/yongsk0066-reploom-build-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-w11mzBxuvMuZg1sW7vNSS7kS0RuMuV4v7gDhsUMaI+tKmhl9xkP4B0DoP1EWcNq52PBhnkjfQ3vm1ysH2obzwg==, tarball: file:.reploom/packages/yongsk0066-reploom-build-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-tFn+75ix75/n57PSfIJTq5ViGl05Lmj9Bis8dplXLhnf7TI+JKWX7zPqoOSu/s4B09N3fwsN/3N31xUGSdVFAQ==, tarball: file:.reploom/packages/yongsk0066-reploom-build-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
     hasBin: true
     peerDependencies:
-      '@tsrs/wasm': 0.25.0-ts7.1.0-beta
+      '@tsrs/wasm': 7.1.0-beta.tsrs4
     peerDependenciesMeta:
       '@tsrs/wasm':
         optional: true
 
   '@yongsk0066/reploom-ui@file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-iu227owSEhx1hpiSUZmtO9ii0YuhqsfMIcXXp2nPiTchYZ6BUNwB71K4II9CO3NlvUtmZKJFsRpMJiENXCRAhA==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-/tc4pbbhLw1UzS7pZ6ah0CAEUt3sJ5pPEB6UnZIIl1IanogDpoySoBcUfLebWQj6l34kkJoyJXHeovqd62+10Q==, tarball: file:.reploom/packages/yongsk0066-reploom-ui-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
     peerDependencies:
@@ -1963,7 +1963,7 @@ packages:
         optional: true
 
   '@yongsk0066/reploom@file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-5/HkiZS0U8VLfqkN7Y45tLxPfGTrwKAc/nQsTjXHeGPTTfW8JIzx5bZUyhd9jK/tb4A4uJEZJu9dgTFVeJDDMg==, tarball: file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz}
+    resolution: {integrity: sha512-1mYR4PmPmwsoWOSRGdL2sEbmueTkFJKilkV2SU8kYWUr2DEpxgcbV315qEnIpo5II2Ig1yCFzz2cIM3FFPjuxg==, tarball: file:.reploom/packages/yongsk0066-reploom-0.1.0-alpha.0.tgz}
     version: 0.1.0-alpha.0
     engines: {node: '>=26'}
 

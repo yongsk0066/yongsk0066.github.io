@@ -71,6 +71,16 @@ for (const locale of ["ko", "en", "ja"]) {
     const preview = article.frameLocator("iframe");
     await expect(article.locator(".reploom-source-preview")).toBeVisible();
     const reader = article.locator(".reploom-source-preview");
+    await expect(preview.locator("html")).toHaveAttribute("lang", locale);
+    await expect(
+      article.getByRole("button", {
+        name: { ko: "표시 설정", en: "Display settings", ja: "表示設定" }[
+          locale
+        ]!,
+        exact: true,
+      })
+    ).toBeVisible();
+    await expect(reader.locator("[data-emphasis]")).toHaveCount(6);
     const keyword = reader
       .locator(".tok-keyword")
       .filter({ hasText: /^import$/ })
@@ -156,8 +166,11 @@ for (const locale of ["ko", "en", "ja"]) {
 test("the article component fits a mobile viewport", async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const article = await articleExample(page, 3);
-  await article.locator(".reploom-code-editor > button").click();
+  await expect(article.locator(".reploom-editor")).toBeHidden();
+  await article.getByRole("button", { name: "코드", exact: true }).click();
+  await article.locator(".reploom-edit").click();
   await expect(article.locator(".cm-line span").first()).toBeVisible();
+  await article.getByRole("button", { name: "미리보기", exact: true }).click();
   await article.locator("iframe").scrollIntoViewIfNeeded();
   await expect(article.frameLocator("iframe").locator("h1")).toContainText(
     "general"
@@ -189,13 +202,13 @@ test("article chrome stays isolated and the preview preserves authored spacing a
       (element) => element.getRootNode() instanceof ShadowRoot
     )
   ).toBe(true);
-  const tabs = (await article.locator(".reploom-file-tabs").boundingBox())!;
+  const tabs = (await article.locator(".reploom-file-bar").boundingBox())!;
   const bar = (await article.locator(".reploom-preview-bar").boundingBox())!;
   const iframe = (await article.locator("iframe").boundingBox())!;
   expect(tabs.y).toBe(bar.y);
   expect(tabs.height).toBe(40);
   expect(iframe.y).toBe(bar.y + bar.height);
-  expect(iframe.height).toBeCloseTo(300, 0);
+  expect(iframe.height).toBeCloseTo(360, 0);
   await expect(article.locator(".reploom-source-preview")).toHaveCSS(
     "font-size",
     "12px"
@@ -287,7 +300,7 @@ test("the first input reaches the project while CodeMirror is still downloading"
     await route.continue();
   });
   try {
-    await example.locator(".reploom-code-editor > button").click();
+    await example.locator(".reploom-edit").click();
     const input = example.locator(".reploom-code-editor textarea");
     await expect(input).toBeFocused();
     await input.fill(source!.replace("</h1>", " · first input</h1>"));
@@ -310,3 +323,67 @@ test("the first input reaches the project while CodeMirror is still downloading"
   expect(copied).toBe(source!.replace("</h1>", " · first input</h1>"));
   await expect(preview.locator("select")).toHaveValue("travel");
 });
+
+for (const width of [320, 390, 1440]) {
+  test.describe(`Viewport ${width}`, () => {
+    test.use({ hasTouch: width < 560 });
+    test(`the article reserves its first panel throughout hydration at ${width}px`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 844 });
+      let resume!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      await page.route(/\/_astro\/Playground\.[^/]+\.js/, async (route) => {
+        await gate;
+        await route.continue();
+      });
+      await page.goto("/blog/useeffectevent/", {
+        waitUntil: "domcontentloaded",
+      });
+      const wrapper = page.locator(".article-playground").first();
+      await wrapper.scrollIntoViewIfNeeded();
+      const section = wrapper.locator("section[data-project]");
+      let initial = 0;
+      try {
+        await expect(section).toHaveClass(/reploom-loading/);
+        await expect(section.locator(".reploom-preview")).toBeVisible();
+        if (width < 560)
+          await expect(section.locator(".reploom-editor")).toBeHidden();
+        initial = await wrapper.evaluate((el) => {
+          const heights: number[] = [el.getBoundingClientRect().height];
+          const observer = new ResizeObserver(() =>
+            heights.push(el.getBoundingClientRect().height)
+          );
+          observer.observe(el);
+          Object.assign(window, { embedHeights: heights });
+          return heights[0];
+        });
+      } finally {
+        resume();
+      }
+      await expect(section).toHaveAttribute("data-phase", "ready");
+      await section.locator("iframe").waitFor();
+      const heights = await wrapper.evaluate(async (el) => {
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve))
+        );
+        return [
+          ...(window as Window & { embedHeights?: number[] }).embedHeights!,
+          el.getBoundingClientRect().height,
+        ];
+      });
+      await info.attach("embed-heights", {
+        body: JSON.stringify({ width, initial, heights }),
+        contentType: "application/json",
+      });
+      expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(
+        1
+      );
+      await expect(
+        section.frameLocator("iframe").locator("html")
+      ).toHaveAttribute("lang", "ko");
+    });
+  });
+}

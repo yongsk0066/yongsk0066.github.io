@@ -4,9 +4,6 @@
   margin-block: 1.5rem;
   font-family: var(--font-pretendard, system-ui, sans-serif);
   text-align: start;
-  --reploom-background: #18181b;
-  --reploom-text: #e4e4e7;
-  --reploom-border: #3f3f46;
   --reploom-radius: 0px;
   --reploom-control-radius: 0px;
   --reploom-margin: 0px;
@@ -15,28 +12,6 @@
   --reploom-preview-scale: 0.94;
 }
 
-.article-playground > .reploom-loading {
-  padding: 0.75rem;
-  min-height: 26rem;
-  background: var(--reploom-background);
-  color: var(--reploom-text);
-  font-size: 0.8125rem;
-}
-
-.article-playground > .reploom-loading .reploom-source-preview {
-  overflow: auto;
-  max-block-size: 260px;
-  margin: 0;
-  padding: 12px;
-  background: #282c34;
-  color: #e4e4e7;
-  font:
-    var(--reploom-code-size)/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  white-space: pre;
-}
 .playground-selector {
   display: flex;
   flex-wrap: wrap;

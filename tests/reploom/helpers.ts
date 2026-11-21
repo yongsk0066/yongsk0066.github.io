@@ -20,7 +20,7 @@ export async function edit(article: Locator, path: string, source: string) {
       .last()
       .click();
   await article.getByRole("tab", { name: path, exact: true }).click();
-  const activate = article.locator(".reploom-code-editor > button");
+  const activate = article.locator(".reploom-edit");
   if (await activate.count()) await activate.click();
   await writeCode(article.locator(".cm-content"), source);
 }

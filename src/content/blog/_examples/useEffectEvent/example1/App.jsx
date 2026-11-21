@@ -26,7 +26,7 @@ export default function App() {
   return (
     <>
       <label>
-        Choose the chat room:{" "}
+        채팅방 선택{" "}
         <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
           <option value="general">general</option>
           <option value="travel">travel</option>
@@ -39,7 +39,7 @@ export default function App() {
           checked={isDark}
           onChange={(e) => setIsDark(e.target.checked)}
         />
-        Use dark theme
+        다크 테마 사용
       </label>
       <hr />
       <ChatRoom roomId={roomId} theme={isDark ? "dark" : "light"} />
